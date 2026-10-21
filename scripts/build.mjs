@@ -42,3 +42,4 @@ await Promise.all([
 
 await cp(at('src/renderer/index.html'), at('dist/renderer/index.html'));
 await cp(at('src/renderer/styles.css'), at('dist/renderer/styles.css'));
+await cp(at('node_modules/@xterm/xterm/css/xterm.css'), at('dist/renderer/xterm.css'));

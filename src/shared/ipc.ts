@@ -1,5 +1,6 @@
 // ipc.ts
 import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
+import type { OutputSnapshot } from './output-buffer';
 
 export const INVOKE_CHANNELS = {
   listAgents: 'agents:list',
@@ -7,6 +8,7 @@ export const INVOKE_CHANNELS = {
   selectAgent: 'agents:select',
   ptyWrite: 'pty:write',
   ptyResize: 'pty:resize',
+  ptyBacklog: 'pty:backlog',
   siteNav: 'site:nav',
 } as const;
 
@@ -32,7 +34,10 @@ export interface AgentsSnapshot {
 export interface PtyDataEvent {
   id: string;
   data: string;
+  end: number;
 }
+
+export type PtyBacklog = OutputSnapshot;
 
 export interface PtyExitEvent {
   id: string;
@@ -52,6 +57,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.selectAgent]: { id: string };
   [INVOKE_CHANNELS.ptyWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.ptyResize]: { id: string; cols: number; rows: number };
+  [INVOKE_CHANNELS.ptyBacklog]: { id: string };
   [INVOKE_CHANNELS.siteNav]: { id: string; action: SiteAction };
 }
 
@@ -66,6 +72,8 @@ export interface AppApi {
   selectAgent(id: string): Promise<void>;
   ptyWrite(id: string, data: string): Promise<void>;
   ptyResize(id: string, cols: number, rows: number): Promise<void>;
+  ptyBacklog(id: string): Promise<PtyBacklog>;
+  pathForFile(file: File): string;
   siteNav(id: string, action: SiteAction): Promise<void>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
@@ -115,6 +123,7 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       const rows = parseDimension(record['rows']);
       return cols === null || rows === null ? null : { id, cols, rows };
     }),
+  [INVOKE_CHANNELS.ptyBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.siteNav]: (payload) =>
     withId(payload, (record, id) => {
       const action = record['action'];

@@ -18,6 +18,7 @@ function buildHandlers(controller: AgentController): Handlers {
     [INVOKE_CHANNELS.selectAgent]: ({ id }) => controller.select(id),
     [INVOKE_CHANNELS.ptyWrite]: ({ id, data }) => controller.ptyWrite(id, data),
     [INVOKE_CHANNELS.ptyResize]: ({ id, cols, rows }) => controller.ptyResize(id, cols, rows),
+    [INVOKE_CHANNELS.ptyBacklog]: ({ id }) => controller.ptyBacklog(id),
     [INVOKE_CHANNELS.siteNav]: ({ id, action }) => controller.siteNav(id, action),
   };
 }

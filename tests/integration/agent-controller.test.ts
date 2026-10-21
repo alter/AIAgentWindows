@@ -117,4 +117,19 @@ describe('agent controller', () => {
     controller.siteNav(id, 'back');
     expect(siteNav).toHaveBeenCalledWith(id, 'back');
   });
+
+  it('keeps the output of a pane-less agent as a backlog with a running end offset', async () => {
+    await controller.add('claude');
+    const id = controller.snapshot().agents[0]?.id ?? '';
+    await waitForBanner(id);
+    const backlog = controller.ptyBacklog(id);
+    expect(backlog.data).toContain('STUB-CLI BANNER');
+    const lastEvent = events
+      .filter((event) => event.channel === EVENT_CHANNELS.ptyData)
+      .map((event) => event.payload as PtyDataEvent)
+      .filter((payload) => payload.id === id)
+      .at(-1);
+    expect(lastEvent?.end).toBe(backlog.end);
+    expect(controller.ptyBacklog('missing')).toEqual({ data: '', end: 0 });
+  });
 });

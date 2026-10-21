@@ -1,0 +1,52 @@
+// content.ts
+import { isCliKind } from '../shared/agents';
+import type { AgentsSnapshot, PtyDataEvent } from '../shared/ipc';
+import { el } from './dom';
+import { TerminalPane } from './terminal-pane';
+
+export class Content {
+  readonly element = el('main', 'content');
+  private readonly panes = new Map<string, TerminalPane>();
+  private readonly sitePlaceholder = el('div', 'site-area');
+  private readonly empty = el('div', 'content-empty', 'Select an agent or add one with +.');
+  private readonly observer: ResizeObserver;
+  private selectedId: string | null = null;
+
+  constructor() {
+    this.element.append(this.empty, this.sitePlaceholder);
+    this.sitePlaceholder.hidden = true;
+    this.observer = new ResizeObserver(() => this.panes.get(this.selectedId ?? '')?.refit());
+    this.observer.observe(this.element);
+  }
+
+  render(snapshot: AgentsSnapshot): void {
+    const wanted = new Set(snapshot.agents.filter((agent) => isCliKind(agent.kind)).map((agent) => agent.id));
+    for (const [id, pane] of this.panes) {
+      if (wanted.has(id)) continue;
+      pane.dispose();
+      this.panes.delete(id);
+    }
+    for (const id of wanted) {
+      if (this.panes.has(id)) continue;
+      const pane = new TerminalPane(id);
+      this.panes.set(id, pane);
+      this.element.append(pane.element);
+    }
+    this.selectedId = snapshot.selectedId;
+    const selected = snapshot.agents.find((agent) => agent.id === snapshot.selectedId);
+    this.empty.hidden = selected !== undefined;
+    this.sitePlaceholder.hidden = selected === undefined || isCliKind(selected.kind);
+    for (const [id, pane] of this.panes) {
+      if (id === snapshot.selectedId) pane.show();
+      else pane.hide();
+    }
+  }
+
+  ptyData(event: PtyDataEvent): void {
+    this.panes.get(event.id)?.push(event);
+  }
+
+  ptyExit(id: string, exitCode: number): void {
+    this.panes.get(id)?.exited(exitCode);
+  }
+}

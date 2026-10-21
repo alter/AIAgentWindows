@@ -64,6 +64,14 @@ describe('validateRequest', () => {
     expect(validateRequest(INVOKE_CHANNELS.ptyResize, { id: ID, cols: '80', rows: 24 }).ok).toBe(false);
   });
 
+  it('validates backlog requests', () => {
+    expect(validateRequest(INVOKE_CHANNELS.ptyBacklog, { id: ID })).toEqual({ ok: true, value: { id: ID } });
+    expect(validateRequest(INVOKE_CHANNELS.ptyBacklog, {}).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.ptyBacklog, { id: 3 }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.ptyBacklog, null).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.ptyBacklog, ID).ok).toBe(false);
+  });
+
   it('validates site navigation actions', () => {
     for (const action of ['back', 'forward', 'home', 'reload']) {
       expect(validateRequest(INVOKE_CHANNELS.siteNav, { id: ID, action }).ok).toBe(true);

@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { isCliKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn } from '../shared/cli-args';
-import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type SiteAction } from '../shared/ipc';
+import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
+import { OutputBuffer } from '../shared/output-buffer';
 import { PtyManager } from './pty-manager';
 import { saveState } from './state-file';
 
@@ -29,12 +30,13 @@ export class AgentController {
   private agents: Agent[];
   private selectedId: string | null;
   private readonly pty: PtyManager;
+  private readonly backlogs = new Map<string, OutputBuffer>();
 
   constructor(private readonly deps: ControllerDeps, initial: AppState) {
     this.agents = [...initial.agents];
     this.selectedId = this.agents[0]?.id ?? null;
     this.pty = new PtyManager({
-      onData: (id, data) => this.deps.emit(EVENT_CHANNELS.ptyData, { id, data }),
+      onData: (id, data) => this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) }),
       onExit: (id, exitCode) => this.deps.emit(EVENT_CHANNELS.ptyExit, { id, exitCode }),
     });
   }
@@ -74,6 +76,10 @@ export class AgentController {
     this.pty.resize(id, { cols, rows });
   }
 
+  ptyBacklog(id: string): PtyBacklog {
+    return this.backlogs.get(id)?.snapshot() ?? { data: '', end: 0 };
+  }
+
   siteNav(id: string, action: SiteAction): void {
     this.deps.siteNav?.(id, action);
   }
@@ -104,6 +110,15 @@ export class AgentController {
 
   private createSiteAgent(kind: AgentKind): Agent {
     return { id: randomUUID(), kind, title: KIND_LABELS[kind], createdAt: Date.now() };
+  }
+
+  private backlogOf(id: string): OutputBuffer {
+    let buffer = this.backlogs.get(id);
+    if (buffer === undefined) {
+      buffer = new OutputBuffer();
+      this.backlogs.set(id, buffer);
+    }
+    return buffer;
   }
 
   private persist(): Promise<void> {
