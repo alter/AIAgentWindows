@@ -186,6 +186,15 @@ describe('generic adapter: turn', () => {
     expect(await runAdapterTurn(adapter, page.runner, 'two', FAST)).toBe('Only this');
   });
 
+  it('returns an identical repeated answer when the prompt carries the earlier answer and no stop button was seen', async () => {
+    const page = openPage(`?labels=1&nostop=1&reply=${encodeURIComponent('Same answer')}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'first question', FAST)).toBe('Same answer');
+    const history = 'Earlier in the room:\nSame answer\nContinue the discussion.';
+    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer');
+    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer');
+  });
+
   it('returns reply markup as text', async () => {
     const page = openPage();
     const adapter = createGenericAdapter('fixture', OPTIONS);

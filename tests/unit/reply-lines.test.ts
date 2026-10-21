@@ -22,6 +22,33 @@ describe('extractReply', () => {
     expect(extractReply('Ask', '', PROMPT.replace('Ask', 'Please Ask now'))).toBe('Ask');
   });
 
+  it('returns a reply equal to an earlier reply that the prompt also carries', () => {
+    const prompt = 'Room so far:\nSame answer\nContinue.';
+    const before = 'Question one\nSame answer';
+    const now = `${before}\nRoom so far:\nSame answer\nContinue.\nSame answer`;
+    expect(extractReply(now, before, prompt)).toBe('Same answer');
+  });
+
+  it('returns the reply when the page shows the prompt as one collapsed line and the reply equals an earlier one', () => {
+    const prompt = 'Room so far:\nSame answer\nContinue.';
+    const before = 'Question one\nSame answer';
+    const now = `${before}\nRoom so far: Same answer Continue.\nSame answer`;
+    expect(extractReply(now, before, prompt)).toBe('Same answer');
+  });
+
+  it('returns the reply when the collapsed echo carries entry markers and the reply equals an earlier one', () => {
+    const prompt = '<<<entry-abc author="Owner" kind=prompt>>>\nSame answer\n<<<end-abc>>>';
+    const before = 'Question one\nSame answer';
+    const now = `${before}\n${prompt.replace(/\s+/g, ' ')}\nSame answer`;
+    expect(extractReply(now, before, prompt)).toBe('Same answer');
+  });
+
+  it('keeps a reply that equals a middle line of the prompt on a page that never showed it', () => {
+    const prompt = 'Intro line of the room\nA long shared sentence here\nClosing line of the room';
+    const now = 'Intro line of the room\nA long shared sentence here\nClosing line of the room\nA long shared sentence here';
+    expect(extractReply(now, '', prompt)).toBe('A long shared sentence here');
+  });
+
   it('ignores whitespace differences when comparing lines', () => {
     expect(extractReply('  Smart   Search \nNew', 'Smart Search', 'p')).toBe('New');
   });

@@ -251,8 +251,7 @@ setTimeout(() => {
     send.disabled = true;
     say('user', text);
     stop.hidden = false;
-    const n = log.querySelectorAll('.assistant').length;
-    setTimeout(() => say('assistant', n === 0 ? 'LATE-REPLY' : 'LATE-REPLY again ' + n), 60);
+    setTimeout(() => say('assistant', 'LATE-REPLY'), 60);
     setTimeout(() => { stop.hidden = true; }, 90);
   };
   ta.addEventListener('input', () => { send.disabled = ta.value === ''; });

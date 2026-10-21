@@ -7,9 +7,6 @@ function collapse(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
-function pageLines(text: string): string[] {
-  return stripEntryMarkerLines(text).split('\n');
-}
 
 function countLines(lines: readonly string[]): Map<string, number> {
   const counts = new Map<string, number>();
@@ -20,11 +17,14 @@ function countLines(lines: readonly string[]): Map<string, number> {
   return counts;
 }
 
-function isEcho(key: string, promptLines: ReadonlySet<string>, promptText: string): boolean {
-  return promptLines.has(key) || (key.length >= MIN_ECHO_FRAGMENT && promptText.includes(key));
+function takeOne(counts: Map<string, number>, key: string): boolean {
+  const left = counts.get(key) ?? 0;
+  if (left === 0) return false;
+  counts.set(key, left - 1);
+  return true;
 }
 
-function keepNew(lines: readonly string[], known: (key: string) => boolean): string[] {
+function withoutLines(lines: readonly string[], known: (key: string) => boolean): string[] {
   return lines.filter((line) => {
     const key = collapse(line);
     return key === '' || !known(key);
@@ -36,21 +36,30 @@ function joined(lines: readonly string[]): string | null {
   return text === '' ? null : text;
 }
 
-export function extractReply(current: string, before: string, prompt: string): string | null {
+function withoutEcho(lines: readonly string[], prompt: string): string[] {
   const promptText = collapse(prompt);
-  const promptLines = new Set(countLines(prompt.split('\n')).keys());
-  const echoed = (key: string): boolean => isEcho(key, promptLines, promptText);
-  const lines = pageLines(current).filter((line) => !echoed(collapse(line)));
-  const earlier = countLines(pageLines(before));
-  const unseen = joined(keepNew(lines, (key) => earlier.has(key)));
-  if (unseen !== null) return unseen;
-  const remaining = new Map(earlier);
-  return joined(
-    keepNew(lines, (key) => {
-      const left = remaining.get(key) ?? 0;
-      if (left === 0) return false;
-      remaining.set(key, left - 1);
-      return true;
-    }),
-  );
+  const promptLines = countLines(prompt.split('\n'));
+  let rest = promptText;
+  const consume = (key: string): void => {
+    const at = rest.indexOf(key);
+    if (at !== -1) rest = rest.slice(0, at) + rest.slice(at + key.length);
+  };
+  return withoutLines(lines, (key) => {
+    if (rest.includes(key)) {
+      const exact = takeOne(promptLines, key);
+      if (exact || key.length >= MIN_ECHO_FRAGMENT) {
+        consume(key);
+        return true;
+      }
+    }
+    return key.length >= MIN_ECHO_FRAGMENT && promptText.startsWith(key);
+  });
+}
+
+export function extractReply(current: string, before: string, prompt: string): string | null {
+  const earlier = countLines(before.split('\n'));
+  const left = new Map(earlier);
+  const fresh = withoutLines(current.split('\n'), (key) => takeOne(left, key));
+  const candidates = stripEntryMarkerLines(withoutEcho(fresh, prompt).join('\n')).split('\n');
+  return joined(withoutLines(candidates, (key) => earlier.has(key))) ?? joined(candidates);
 }

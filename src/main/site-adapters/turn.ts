@@ -34,8 +34,8 @@ export async function runAdapterTurn(
   options: TurnOptions = DEFAULT_TURN_OPTIONS,
 ): Promise<string> {
   throwIfAborted(options);
-  const baseline = await adapter.lastReply(runner);
   await adapter.insertText(runner, prompt);
+  const baseline = await adapter.lastReply(runner);
   await adapter.submit(runner);
   const started = Date.now();
   let answering = false;
