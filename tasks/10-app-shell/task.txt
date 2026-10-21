@@ -11,7 +11,8 @@ CONTEXT
 
 SCOPE
   + 01-app-skeleton — window, sidebar, agents, terminals, site views, persistence, gate
-  − Forward between windows, shared directory, last-reply adapters — next tasks of this phase
+  + 02-room — Room: broadcast and relay rounds over CLI and web agents, adapters, final result to a working session
+  − Forward between windows, shared directory, last-reply adapters outside the Room — later tasks of this phase
   − Import of existing local CLI sessions — its own task of this phase, after 01
 
 OUTCOME

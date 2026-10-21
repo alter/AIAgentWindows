@@ -1,0 +1,67 @@
+TASK: room — broadcast and relay rounds
+
+GOAL
+  A "Room" above all agents: one prompt to every chosen participant, or a relay
+  A→B→C→…→A for N rounds in which each participant receives the whole room
+  history; CLI and web agents take part; the final result can be carried into
+  a working session. Owner's request and decisions of 2026-10-21 (docs/PROJECT.md §3).
+
+CONTEXT
+  docs/PROJECT.md
+  docs/EVIDENCE.md
+  docs/tech/claude-code@2.1.306.md
+  docs/tech/codex@0.159.2.md
+  docs/tech/electron@44.6.0.md
+  tasks/10-app-shell/01-app-skeleton/NOTES.md
+
+SCOPE
+  + S1 Room model: participants, mode (broadcast | relay), rounds 1..50, relay schedule that returns to the first participant, history entries with author and time
+  + S2 history as markdown in <shared>/rooms/<room-id>.md, written after every reply
+  + S3 room-owned CLI sessions in read-only modes: claude --permission-mode plan, codex --sandbox read-only; prompts are submitted by the app without confirmation
+  + S4 CLI turn driver: send, detect the end of the turn from the transcript, read the reply
+  + S5 web adapters for ChatGPT, Grok, DeepSeek: insert, submit, wait for the end of generation, read the last reply; one isolated adapter per site, run from the main process in an isolated world
+  + S6 Room UI: sidebar item at the top, feed with author labels, prompt box, participant checkboxes, mode, rounds, Start/Stop, progress
+  + S7 "Carry result": the final reply or the whole history pasted (not submitted) into a chosen working session
+  − the owner's working sessions never receive auto-submitted text — S7 pastes only
+  − OpenAI API participants — the OpenAI API provider task
+  − import of existing local sessions — its own task
+  indivisible: the orchestrator, the drivers and the UI share one room state; workers run it as sequential plan tasks
+
+WRITE-SET
+  src/
+  tests/
+  scripts/
+  docs/tech/
+  docs/PROJECT.md
+  docs/EVIDENCE.md
+  AGENTS.md
+  package.json
+  package-lock.json
+  tasks/10-app-shell/02-room/
+
+DATA
+  room.prompt: dir=in; type=text typed by the owner; size=1..100000 chars; null=no; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/context-bridge.md
+  participant.reply: dir=in; type=model output read from a CLI transcript or a site page; size=0..1000000 chars; null=yes; interpretable=yes; source=https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/rollout/src/recorder.rs
+  room.rounds: dir=in; type=integer from the Room UI; range=1..50; null=no; interpretable=no; validated=tests/unit/room-model.test.ts::rejects rounds outside 1..50; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink room-pty: consumes room.prompt, participant.reply; protection=only room-owned sessions in read-only modes receive submitted text, sanitizePaste strips ESC/C1, bracketed paste; test=tests/unit/room-sessions.test.ts::room sessions start read-only
+  sink site-input: consumes room.prompt, participant.reply; protection=inserted as plain text through input events in an isolated world, never as HTML; test=tests/unit/site-adapters.test.ts::inserts markup as literal text
+  sink room-feed: consumes participant.reply; protection=rendered with textContent only; test=tests/full/room.spec.ts::markup in a reply is shown as text
+  sink history-file: consumes room.prompt, participant.reply; protection=written as a file under <shared>/rooms, never rendered as HTML by the app; test=tests/unit/room-history.test.ts::writes replies verbatim
+
+OUTCOME
+  A Room run with two stub CLI participants in relay mode for 2 rounds produces the expected order in <shared>/rooms/<id>.md (smoke); every task of tasks/10-app-shell/02-room/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] reverse control: drop the read-only flag from a room claude session → tests/unit/room-sessions.test.ts::room sessions start read-only
+  3. [fast] tests/unit/room-model.test.ts: relay schedule for 3 participants and 2 rounds is A,B,C,A,B,C and ends back at A when asked to return
+  4. [full] electron-smoke: a relay of two stub participants for 2 rounds, a broadcast, a Stop in the middle, and a carried result pasted but not submitted
+  5. [fast] HUMAN: the owner runs a Room with Claude Code, Codex, ChatGPT, Grok and DeepSeek for 2 rounds and records the result in NOTES.md
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/01-app-skeleton
