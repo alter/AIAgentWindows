@@ -114,6 +114,13 @@ function ascending(values: number[]): boolean {
   return values.every((value, index) => value >= 0 && (index === 0 || value > (values[index - 1] ?? 0)));
 }
 
+function groupsInOrder(text: string, groups: string[][]): boolean {
+  const spans = groups.map((group) => positions(text, group));
+  const flat = spans.flat();
+  if (flat.some((value) => value < 0)) return false;
+  return spans.every((span, index) => index === 0 || Math.min(...span) > Math.max(...(spans[index - 1] ?? [])));
+}
+
 describe('room relay', () => {
   it('runs A,B,C,A,B,C one turn at a time and writes the history after every reply', async () => {
     const t = rig();
@@ -411,16 +418,28 @@ describe('room broadcast', () => {
       expect(first).not.toContain('reply a1');
       expect(first).not.toContain('reply b1');
       const second = driver?.requests[1]?.historyText ?? '';
-      expect(ascending(positions(second, ['the question', 'reply a1', 'reply b1']))).toBe(true);
+      expect(groupsInOrder(second, [['the question'], ['reply a1', 'reply b1']])).toBe(true);
       expect(second).not.toContain('reply a2');
       expect(second).not.toContain('reply b2');
       const third = driver?.requests[2]?.historyText ?? '';
-      expect(ascending(positions(third, ['the question', 'reply a1', 'reply b1', 'reply a2', 'reply b2']))).toBe(true);
+      expect(groupsInOrder(third, [['the question'], ['reply a1', 'reply b1'], ['reply a2', 'reply b2']])).toBe(true);
       expect(third).not.toContain('reply a3');
     }
     expect(a?.requests[1]?.text).not.toBe(a?.requests[0]?.text);
     const total = t.events.filter((event) => event.type === 'progress').map((event) => event.total);
     expect(new Set(total)).toEqual(new Set([6]));
+  });
+
+  it('keeps each round before the next when the first participant answers last', async () => {
+    const slowFirst: Behaviour = async (_request, call) => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return `reply a${call}`;
+    };
+    const t = rig({ a: slowFirst });
+    await t.room.start(config([A, B], { mode: 'broadcast', rounds: 2 })).done;
+    const second = t.drivers.get('b')?.requests[1]?.historyText ?? '';
+    expect(groupsInOrder(second, [['the question'], ['reply a1', 'reply b1']])).toBe(true);
+    expect(second.indexOf('reply b1')).toBeLessThan(second.indexOf('reply a1'));
   });
 
   it('stops between rounds when the owner presses Stop', async () => {
