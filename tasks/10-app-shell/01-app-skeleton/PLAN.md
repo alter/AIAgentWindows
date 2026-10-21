@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Application skeleton — one Slack-like window with CLI and web agents
@@ -127,3 +127,4 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 - 2026-10-21 T21a done: dockHidden(env, platform) in src/shared/window-visibility.ts (darwin and test mode, not with AIAW_SHOW_WINDOWS=1); main calls app.dock?.hide() right after the userData override, before ready; no app.focus()/app.show() exists in src/main; unit test red first (dockHidden undefined, 1 failed) then 4 passed; smoke test 'main window stays hidden' asserts app.dock.isVisible() false, red without the hide line (Received: true), restored; electron-smoke 8 passed, fast tier 11/11 rc=0, tsc/eslint rc=0, integrity 0 findings
 - 2026-10-21 coordinator: T19, T20, T21, T21a verified (electron-smoke 8/8 hidden, fast tier rc=0, coverage 100.00%). Owner's run 18:10: Grok sign-in now reaches accounts.x.ai (sites.log check line 14:10:41Z) and is then stopped by Cloudflare; a hidden probe from this machine loads grok.com itself with status 200 and no challenge. Waiting for the owner's screenshot of the block page. Paused on AC10.
 - 2026-10-21 T22 done: black band was `.xterm-viewport` (xterm.css background #000, host 748 px mod row 15 px = 13 px strip under the last row; evidence in NOTES.md); `.terminal-host .xterm-viewport { background-color: var(--content-bg) }`; smoke test 'area below the last terminal row' red first (Received rgb(0, 0, 0)) then green; electron-smoke 9 passed hidden (AIAW_USER_DATA set), fast tier 11/11 rc=0; integrity 1 pre-existing finding (tests/scripts/test_evidence_check.py noqa, not from this task)
+- 2026-10-21 coordinator: T22 verified (electron-smoke 9/9 hidden, fast tier rc=0). Paused on AC10.
