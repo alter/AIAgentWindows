@@ -25,6 +25,12 @@ function labeled(text: string, control: HTMLElement): HTMLLabelElement {
   return label;
 }
 
+function field(text: string, control: HTMLElement): HTMLLabelElement {
+  const label = el('label');
+  label.append(el('span', undefined, text), control);
+  return label;
+}
+
 export class RoomPane {
   readonly element = el('section', 'room-pane');
   private readonly feed = el('div', 'room-feed');
@@ -148,14 +154,14 @@ export class RoomPane {
     this.stop.type = 'button';
     this.stop.dataset['room'] = 'stop';
     const settings = el('div', 'room-row');
-    settings.append(labeled('Mode', this.mode), labeled('Rounds', this.rounds), labeled('Turn timeout, minutes', this.timeout), this.start, this.stop);
+    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), this.start, this.stop);
     const carry = el('div', 'room-row');
     this.target.dataset['room'] = 'carry-target';
     this.carryFinal.type = 'button';
     this.carryFinal.dataset['room'] = 'carry-final';
     this.carryHistory.type = 'button';
     this.carryHistory.dataset['room'] = 'carry-history';
-    carry.append(labeled('Working session', this.target), this.carryFinal, this.carryHistory);
+    carry.append(field('Working session', this.target), this.carryFinal, this.carryHistory);
     box.append(this.prompt, people, settings, this.status, this.message, carry);
     this.start.addEventListener('click', () => void this.onStart());
     this.stop.addEventListener('click', () => void api.roomStop());

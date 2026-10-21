@@ -81,6 +81,32 @@ test('a relay of two stub participants for 2 rounds writes the history in the re
   }
 });
 
+test('every settings label precedes its control and rounds stays enabled in both modes', async () => {
+  const { app, page } = await open();
+  try {
+    for (const name of ['mode', 'rounds', 'timeout']) {
+      const info = await field(page, name).evaluate((control) => {
+        const label = control.closest('label');
+        const text = label?.querySelector('span');
+        return {
+          labelled: label !== null && text !== null && text !== undefined,
+          labelFirst: text ? Boolean(text.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING) : false,
+          text: text?.textContent ?? '',
+        };
+      });
+      expect(info.labelled, name).toBe(true);
+      expect(info.labelFirst, name).toBe(true);
+      if (name === 'timeout') expect(info.text).toMatch(/min/i);
+    }
+    for (const mode of ['broadcast', 'relay'] as const) {
+      await field(page, 'mode').selectOption(mode);
+      await expect(field(page, 'rounds')).toBeEnabled();
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 test('a broadcast sends the prompt to every participant once', async () => {
   const { app, page } = await open();
   try {
