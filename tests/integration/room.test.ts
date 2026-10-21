@@ -6,7 +6,7 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { OwnerPause, Room, type DriverFactory, type ParticipantDriver, type RoomEvent, type TurnRequest } from '../../src/main/room';
-import { createRoomDrivers } from '../../src/main/room-drivers';
+import { DEFAULT_ROOM_TIMING, createRoomDrivers } from '../../src/main/room-drivers';
 import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
 import type { PageRunner } from '../../src/main/site-adapters/types';
 import { escapeBody, historyNonce } from '../../src/shared/room-history';
@@ -782,6 +782,11 @@ describe('room folder trust pause', () => {
 });
 
 describe('room with a web participant', () => {
+  it('keeps the production web-turn timing at a 500 ms poll and a 1500 ms settle', () => {
+    expect(DEFAULT_ROOM_TIMING.pollMs).toBe(500);
+    expect(DEFAULT_ROOM_TIMING.settleMs).toBe(1500);
+  });
+
   it('inserts the prompt as text, reads the reply and attaches a long history as a file', async () => {
     const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
     const attached: string[][] = [];
@@ -799,6 +804,7 @@ describe('room with a web participant', () => {
       platform: 'win32',
       envFor: () => ({}),
       siteFor: () => ({ adapter, runner }),
+      timing: { pollMs: 20, settleMs: 40 },
     });
     const room = new Room({ roomsDir, driverFor: drivers.factory });
     rooms.push(room);

@@ -14,10 +14,14 @@ import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
 export interface RoomTiming {
   killGraceMs: number;
+  pollMs: number;
+  settleMs: number;
 }
 
 export const DEFAULT_ROOM_TIMING: RoomTiming = {
   killGraceMs: 3000,
+  pollMs: DEFAULT_TURN_OPTIONS.pollMs,
+  settleMs: DEFAULT_TURN_OPTIONS.settleMs,
 };
 
 export interface SiteSeat {
@@ -111,12 +115,17 @@ class CliDriver implements ParticipantDriver {
 }
 
 class SiteDriver implements ParticipantDriver {
-  constructor(private readonly seat: SiteSeat) {}
+  constructor(
+    private readonly seat: SiteSeat,
+    private readonly timing: RoomTiming,
+  ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
     if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
     return runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
       ...DEFAULT_TURN_OPTIONS,
+      pollMs: this.timing.pollMs,
+      settleMs: this.timing.settleMs,
       timeoutMs: request.timeoutMs,
       signal: request.signal,
     });
@@ -157,7 +166,7 @@ export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
     if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
-    return new SiteDriver(seat);
+    return new SiteDriver(seat, timing);
   };
   return {
     factory,
