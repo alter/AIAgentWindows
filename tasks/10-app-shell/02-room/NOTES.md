@@ -118,3 +118,6 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - `src/main/room.ts` Room.append: one limit for every entry kind; `errorText` and `src/shared/turn-signal.ts` `errorReason` cut at `MAX_ERROR_CHARS` (500, room-model.ts). A truncated entry past the budget is the bare `[truncated N chars]` marker (<= 64 chars), so the history bound is MAX_HISTORY_CHARS + 64 per entry.
 - Tests: `tests/integration/room.test.ts` "room reply size and history file" (error cap, budget boundary), `tests/unit/turn-signal.test.ts` (codex error message cap); red first (3 failed).
 - Reverse control (2026-10-21): error kind exempted from the budget again -> `npx vitest run tests/integration/room.test.ts` -> `expected 4007175 to be less than or equal to 4002624`, restored.
+
+## T12k reverse control
+Sources reverted to HEAD with the T12k tests in place: room-model 7 failed (renderer label accepted), integration 'keeps the nonce and appends' failed, room-history forgery tests never finished (freshNonce redraws forever when the draw is constant and the body contains it; process killed). Sources restored; room-history/room-model/room.test 79/79 green.

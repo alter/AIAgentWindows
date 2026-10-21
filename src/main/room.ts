@@ -4,8 +4,7 @@ import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   buildParticipantPrompt,
-  entryCollides,
-  freshNonce,
+  newNonce,
   renderEntryBlock,
   renderHistory,
 } from '../shared/room-history';
@@ -127,13 +126,12 @@ class RunState {
   add(entry: RoomEntry): void {
     this.entries.push(entry);
     this.chars += entry.text.length;
-    const nonce = this.nonce;
-    if (nonce !== null && !entryCollides(nonce, entry)) {
-      const block = renderEntryBlock(nonce, entry);
+    if (this.nonce !== null) {
+      const block = renderEntryBlock(this.nonce, entry);
       this.enqueue(() => appendFile(this.historyPath, block, 'utf8'));
       return;
     }
-    const fresh = freshNonce(this.entries, this.random);
+    const fresh = newNonce(this.random);
     this.nonce = fresh;
     const text = renderHistory(this.id, this.entries, () => fresh);
     this.enqueue(() => writeAtomic(this.historyPath, text));
