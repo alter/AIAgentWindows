@@ -1,0 +1,8 @@
+Owner's run of `npx electron signin.js` (signin.js at dc13631), 2026-10-21 11:37–11:38, as pasted by the owner.
+Owner's report: signed in to all three sites (ChatGPT, Grok, DeepSeek) by a non-Google method; Google sign-in had been refused earlier.
+
+sandbox_extension_issue_file failed for …/Electron Helper.app/Contents/Resources: 1 (Operation not permitted)
+[12368:1021/113721.831097:ERROR:services/network/p2p/socket_manager.cc:145] Failed to resolve address for stun.l.google.com., errorcode: -105
+… (31 such lines between 11:37:21 and 11:38:19 for stun.l.google.com, stun1.l.google.com, stun.cloudflare.com)
+[chatgpt] permission geolocation from https://chatgpt.com/ -> denied
+[chatgpt] permission persistent-storage from https://chatgpt.com/ -> denied

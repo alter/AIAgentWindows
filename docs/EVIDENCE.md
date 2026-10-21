@@ -82,7 +82,9 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | W5 | chat.deepseek.com requires sign-in (redirects to `/sign_in`) | run | `tasks/05-feasibility/01-evidence-table/spikes/web-report.json` | confirmed |
 | W6 | Loading the sites logged out shows a bot challenge (a Cloudflare script is present in DeepSeek's HTML, none is shown) | run | `tasks/05-feasibility/01-evidence-table/spikes/web-report.json`, `tasks/05-feasibility/01-evidence-table/spikes/web-chatgpt.png`, `tasks/05-feasibility/01-evidence-table/spikes/web-grok.png`, `tasks/05-feasibility/01-evidence-table/spikes/web-deepseek-plain-ua.png` | refuted |
 | W7 | Google sign-in is refused inside an embedded view | doc | https://developers.google.com/identity/protocols/oauth2/policies | confirmed |
-| W8 | Email/password sign-in works by hand in the app's views | assumption | HUMAN: VERIFY item 6 of tasks/05-feasibility/01-evidence-table | open |
+| W8 | Sign-in by a non-Google method works by hand in the app's views on all three sites | run | `tasks/05-feasibility/01-evidence-table/spikes/owner-signin-log.txt` | confirmed |
+| W16 | Signed-in pages ask for `geolocation` and `persistent-storage` (ChatGPT) and open WebRTC connections to STUN servers (Google, Cloudflare) | run | `tasks/05-feasibility/01-evidence-table/spikes/owner-signin-log.txt` | confirmed |
+| W17 | A signed-in partition is still signed in after the app restarts | assumption | HUMAN: restart of signin.js, VERIFY item 6 of tasks/05-feasibility/01-evidence-table | open |
 | W9 | A `persist:` partition keeps the sign-in across restarts | doc | https://github.com/electron/electron/blob/v44.6.0/docs/api/session.md | confirmed |
 | W10 | Adapter code runs from the main process in an isolated world, with no preload in the remote page | run | `tasks/05-feasibility/01-evidence-table/spikes/web-report.json` | confirmed |
 | W11 | The `<webview>` tag is discouraged; remote pages go into `WebContentsView` | doc | https://github.com/electron/electron/blob/v44.6.0/docs/api/webview-tag.md | confirmed |

@@ -56,3 +56,9 @@ The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
 - Owner ran `npx electron signin.js`: the windows opened; "Sign in with Google" answered "Couldn't sign you in. This browser or app may not be secure. Try using a different browser." This is W7 as predicted by Google's policy.
 - The run printed `sandbox_extension_issue_file failed … (Operation not permitted)`; the windows still rendered. The same line appears when Electron starts inside the Claude Code harness sandbox; in a normal terminal it should not.
 - Still open for VERIFY item 6: sign-in by email, Apple or the site's own account on each site, and whether it survives a restart.
+
+# NOTES — owner's sign-in check, second run (2026-10-21 11:37)
+
+- Signed in to ChatGPT, Grok and DeepSeek by hand (non-Google). Log in `spikes/owner-signin-log.txt`. Persistence after a restart is still to be reported (W17).
+- `errorcode: -105` is `ERR_NAME_NOT_RESOLVED` for STUN hosts. The same run also printed the harness-sandbox line, so it most likely ran through `!` inside the Claude Code session, whose network allowlist does not resolve those hosts. Sign-in worked anyway; WebRTC (STUN) matters for the sites' voice modes and some bot checks, so V6 must be checked from a normal terminal.
+- The handler denied `geolocation` and `persistent-storage` to chatgpt.com. Product consequence: grant `persistent-storage` to the configured site origins (it only protects their storage from eviction), keep `geolocation` denied.
