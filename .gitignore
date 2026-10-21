@@ -1,0 +1,5 @@
+.claude/scratch/
+.claude/plan-pause
+node_modules/
+dist/
+out/
