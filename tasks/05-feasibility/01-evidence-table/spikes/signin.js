@@ -3,7 +3,7 @@ const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
 
 const SITES = { chatgpt: 'https://chatgpt.com/', grok: 'https://grok.com/', deepseek: 'https://chat.deepseek.com/' };
-const PLAIN_UA = process.env.SPIKE_DEEPSEEK_PLAIN_UA === '1';
+const PLAIN_UA = process.env.SPIKE_DEEPSEEK_ELECTRON_UA !== '1';
 
 app.setPath('userData', path.join(__dirname, 'ud-signin'));
 
