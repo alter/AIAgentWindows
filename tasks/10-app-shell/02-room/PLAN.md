@@ -1,5 +1,5 @@
 ---
-status: paused
+status: running
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -25,6 +25,7 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - D3 Web chats in the loop -> yes, terms risk is the owner's (owner, 2026-10-21; EVIDENCE W12–W14).
 - D4 Context passed on -> the whole room history, in order, with author labels (owner, 2026-10-21).
 - D5 UI -> a "Room" item at the top of the sidebar, like #general (owner, 2026-10-21).
+- D6 Who runs the site capture -> the session may run it with the owner's profile, from existing chats only, sending nothing; a site without an existing chat is skipped and reported (owner, 2026-10-21).
 - Branch: `room`, created from `app-shell-skeleton` (the skeleton is not merged to main yet).
 
 ## Assumptions
@@ -85,6 +86,7 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - [x] T13 fix (owner's live run 2026-10-21 22:58, room-20261021-185819-bd4c22.md): Codex answered "I can't read that history file: the filesystem is read-only and limited to the current workspace" — the history lives in `<shared>/rooms/<id>.md`, outside the participant's folder `<shared>/rooms/codex-1`; EVIDENCE CX8 (whole-disk read) was measured on 0.159.2 with `codex sandbox`, not on 0.163.0 inside a session. Before every CLI turn write the current history into the participant's own folder (`<participant folder>/history.md`, same nonce-fenced content) and point the prompt at `./history.md`, for Claude and Codex alike; integration test that the prompt names a path inside the participant's cwd and the file there matches the room history (red first); mark CX8 as not holding for 0.163.0 sessions in docs/EVIDENCE.md — verify: `npx vitest run tests/integration/room.test.ts` + fast tier
 - [x] T14 fix (owner's live run): a ticked web participant without an adapter fails with "DeepSeek has no open chat page", which reads like a page problem. Until T07 lands, the Room shows web participants as unavailable ("needs `npm run capture-sites`") and does not let them be ticked; the error text for a missing adapter says exactly that; unit test of the view model (red first) — verify: `npx vitest run tests/unit/room-view.test.ts` + fast tier
 - [x] T15 fix (owner's live run, history file): the T12l escape puts a backslash before every markdown line that starts with `-`, `*`, `#`, `>` (`\- Детали…`), so "Carry history" pastes those backslashes into the owner's session. Escape only in the text sent to participants and the history file; "Carry history" and the feed show the unescaped text; unit test (red first) — verify: `npx vitest run tests/unit/room-history.test.ts tests/unit/room-view.test.ts` + fast tier
+- [ ] T16 Unattended capture (D6): `npm run capture-sites -- --auto` starts the app with the owner's profile, windows hidden and no Dock icon, refuses to run while another instance holds that profile, opens each signed-in site view, picks the most recent existing conversation from the page's own links (same-origin href of a conversation path: chatgpt `/c/<id>`, grok `/c/<id>` or `/chat/<id>`, deepseek `/a/chat/s/<id>`; first match in document order), loads it without typing or clicking anything else, waits for the reply markup to render, writes the sanitized capture (T12b/T12i/T12m sanitizer and findLeaks), and exits with a per-site report (saved / no existing chat / not signed in / leak refused); never sends, never types, never reads cookies or storage; unit tests for the link picker on fixture pages and for the refusal while the profile is in use (red first) — verify: `npx vitest run tests/unit/capture-auto.test.ts tests/unit/capture-sanitize.test.ts` + fast tier
 ## Log
 - 2026-10-21 19:13 T00 done: branch room from app-shell-skeleton (ba0376b); baseline fast tier 11/11 green in 28s (FASTRUN-2026-10-21-191149909265), full tier 2/2 green in 74s (FULLRUN-2026-10-21-191223519599, smoke in test mode)
 - 2026-10-21 T01 done: no prompt sent; docs/tech/codex@0.163.0.md written, claude-code@2.1.306.md extended, EVIDENCE CC18-CC24 and CX17-CX22 added (artefacts in tasks/10-app-shell/02-room/spikes/); findings in ## Assumptions: Claude `end_turn` needs a `text` block (thinking-only end_turn comes first), plan mode needs `--disallowedTools` and never a bypass flag, codex needs `-a never`; evidence_check 97 rows 0 problems, tasks/check.py 0 problems
