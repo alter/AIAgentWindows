@@ -29,3 +29,11 @@ Guard: `buildSpawn` throws in test mode (`AIAW_USER_DATA` set) unless `AIAW_CLAU
 # NOTES — attack round 1 (2026-10-21)
 
 - PLAUSIBLE (ATTACK.md, A02:2025): the main window has no `will-navigate` lock and no `setWindowOpenHandler`; a foreign document loaded as its top-level page keeps the `aiaw` bridge and can drive the pty (shown with a forced load); no attacker-reachable trigger was reproduced (OS file drop onto non-terminal areas is the suspect). By the review rules this is an observation, not a task. Coordinator's recommendation to the owner: add the navigation lock and a root-level drop guard in the next task of this phase — a few lines, closes the class.
+
+# NOTES — attack round 2 (2026-10-21)
+
+attack:passed on the T16a fix. Recorded for the next tasks, not fixed here (PLAUSIBLE / low):
+- A multi-line paste submits when the CLI has switched bracketed-paste mode off (`ESC[?2004l`, RIS, DECSTR) or before it switched it on; then there is no ESC to strip and the raw `\r` is Enter. Suggested fix: when `terminal.modes.bracketedPasteMode` is false and the paste holds a line break, ask the user to confirm or join the lines.
+- A dropped path containing a C1 character is silently turned into a different path by `sanitizePaste`; `hasControlCharacter` should reject 0x80–0x9f so such a path is refused instead.
+- The 256 KB backlog could drop the CLI's `ESC[?2004h` for a pane rebuilt after long output (no reload path exists today).
+- Round 1's navigation-lock finding (main window) remains open as a recommendation.

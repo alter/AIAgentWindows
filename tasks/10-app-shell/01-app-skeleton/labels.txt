@@ -2,9 +2,9 @@ phase:app-shell
 role:APP
 type:feature
 priority:P0
-status:in_progress
+status:done
 verify:pending
-attack:failed
+attack:passed
 depends:05-feasibility/01-evidence-table
 milestone:M2
 format:2
