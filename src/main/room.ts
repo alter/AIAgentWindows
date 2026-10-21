@@ -3,7 +3,18 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { buildParticipantPrompt, renderHistory } from '../shared/room-history';
-import { relaySchedule, type RoomConfig, type RoomEntry, type RoomEntryKind, type RoomParticipant } from '../shared/room-model';
+import {
+  relaySchedule,
+  type RoomConfig,
+  type RoomEntry,
+  type RoomEntryKind,
+  type RoomEvent,
+  type RoomParticipant,
+  type RoomStatus,
+  type StepState,
+} from '../shared/room-model';
+
+export type { RoomEvent, RoomStatus, StepState } from '../shared/room-model';
 
 export interface TurnRequest {
   text: string;
@@ -19,15 +30,6 @@ export interface ParticipantDriver {
 }
 
 export type DriverFactory = (participant: RoomParticipant) => Promise<ParticipantDriver>;
-
-export type RoomStatus = 'done' | 'stopped' | 'failed';
-export type StepState = 'running' | 'replied' | 'failed';
-
-export type RoomEvent =
-  | { type: 'started'; roomId: string; historyPath: string; total: number }
-  | { type: 'progress'; roomId: string; participantId: string; state: StepState; completed: number; total: number }
-  | { type: 'entry'; roomId: string; entry: RoomEntry }
-  | { type: 'finished'; roomId: string; status: RoomStatus };
 
 export interface RoomDeps {
   roomsDir: string;

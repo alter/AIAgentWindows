@@ -1,6 +1,7 @@
 // ipc-handlers.ts
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { AgentController } from './agent-controller';
+import type { RoomService } from './room-service';
 import {
   INVOKE_CHANNELS,
   validateRequest,
@@ -11,7 +12,7 @@ import {
 
 type Handlers = { [C in InvokeChannel]: (payload: InvokeRequests[C]) => Promise<unknown> | unknown };
 
-function buildHandlers(controller: AgentController): Handlers {
+function buildHandlers(controller: AgentController, room: RoomService): Handlers {
   return {
     [INVOKE_CHANNELS.listAgents]: (): AgentsSnapshot => controller.snapshot(),
     [INVOKE_CHANNELS.addAgent]: ({ kind }) => controller.add(kind),
@@ -22,11 +23,16 @@ function buildHandlers(controller: AgentController): Handlers {
     [INVOKE_CHANNELS.ptyResize]: ({ id, cols, rows }) => controller.ptyResize(id, cols, rows),
     [INVOKE_CHANNELS.ptyBacklog]: ({ id }) => controller.ptyBacklog(id),
     [INVOKE_CHANNELS.siteNav]: ({ id, action }) => controller.siteNav(id, action),
+    [INVOKE_CHANNELS.roomState]: () => room.state(),
+    [INVOKE_CHANNELS.roomSelect]: () => controller.selectRoom(),
+    [INVOKE_CHANNELS.roomStart]: (config) => room.start(config),
+    [INVOKE_CHANNELS.roomStop]: () => room.stop(),
+    [INVOKE_CHANNELS.roomCarry]: ({ id, what }) => room.carry(id, what),
   };
 }
 
-export function registerIpc(controller: AgentController, appContents: () => WebContents | null): () => void {
-  const handlers = buildHandlers(controller);
+export function registerIpc(controller: AgentController, room: RoomService, appContents: () => WebContents | null): () => void {
+  const handlers = buildHandlers(controller, room);
   const channels = Object.keys(handlers) as InvokeChannel[];
   for (const channel of channels) {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, payload: unknown) => {

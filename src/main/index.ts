@@ -9,6 +9,10 @@ import { AgentController } from './agent-controller';
 import { CAPTURE_ENV, captureSites, summarizeCapture } from './capture-sites';
 import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
+import { createRoomDrivers, type RoomDrivers } from './room-drivers';
+import { RoomService } from './room-service';
+import { createSiteSeats } from './site-seats';
+import { adapterFor } from './site-adapters/registry';
 import { installMenu } from './menu';
 import { createSiteLogger } from './site-log-file';
 import { SiteViews } from './site-views';
@@ -23,6 +27,8 @@ const smokeExit = process.argv.includes('--smoke-exit');
 let mainWindow: BrowserWindow | null = null;
 let controller: AgentController | null = null;
 let sites: SiteViews | null = null;
+let room: RoomService | null = null;
+let roomDrivers: RoomDrivers | null = null;
 
 async function pickFolder(): Promise<string | null> {
   const preset = process.env['AIAW_TEST_FOLDER'];
@@ -89,7 +95,29 @@ async function start(): Promise<void> {
   );
   const active = controller;
   await active.restore();
-  registerIpc(active, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
+  const roomsDir = path.join(sharedDir, 'rooms');
+  const drivers = createRoomDrivers({
+    cwd: path.join(roomsDir, 'sessions'),
+    sharedDir,
+    platform: process.platform,
+    envFor: () => process.env,
+    siteFor: createSiteSeats({
+      agents: () => active.snapshot().agents,
+      page: (agent) => siteViews.pageFor(agent.id, agent.kind),
+      adapterFor,
+    }),
+  });
+  roomDrivers = drivers;
+  const roomService = new RoomService({
+    roomsDir,
+    driverFor: drivers.factory,
+    emit: (event) => {
+      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.roomEvent, event);
+    },
+    paste: (id, text) => active.paste(id, text),
+  });
+  room = roomService;
+  registerIpc(active, roomService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(
     process.platform === 'darwin',
@@ -110,13 +138,15 @@ app.on('before-quit', (event) => {
   const active = controller;
   if (quitting || active === null) {
     active?.shutdown();
+    roomDrivers?.shutdown();
     sites?.closeAll();
     return;
   }
   quitting = true;
   event.preventDefault();
-  void active
-    .flush()
+  void (room?.shutdown() ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => active.flush())
     .catch(() => undefined)
     .finally(() => app.quit());
 });

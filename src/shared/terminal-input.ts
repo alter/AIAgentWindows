@@ -48,3 +48,10 @@ export function sanitizePaste(text: string): string {
     .filter((char) => !isEscapeOrC1(char.charCodeAt(0)))
     .join('');
 }
+
+const PASTE_START = '\x1b[200~';
+const PASTE_END = '\x1b[201~';
+
+export function bracketedPaste(text: string): string {
+  return `${PASTE_START}${sanitizePaste(text)}${PASTE_END}`;
+}

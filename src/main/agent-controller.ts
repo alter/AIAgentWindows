@@ -1,23 +1,16 @@
 // agent-controller.ts
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { isCliKind, isSiteKind, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
+import { AGENT_LABELS, isCliKind, isSiteKind, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { OutputBuffer } from '../shared/output-buffer';
 import { claimForAgents, restoreSpawn } from '../shared/restore';
+import { bracketedPaste } from '../shared/terminal-input';
 import { claudeTranscriptExists } from './claude-transcripts';
 import { PtyManager } from './pty-manager';
 import { saveState } from './state-file';
-
-const KIND_LABELS: Readonly<Record<AgentKind, string>> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-  chatgpt: 'ChatGPT',
-  grok: 'Grok',
-  deepseek: 'DeepSeek',
-};
 
 export interface ControllerDeps {
   stateFile: string;
@@ -35,6 +28,7 @@ export interface ControllerDeps {
 export class AgentController {
   private agents: Agent[];
   private selectedId: string | null;
+  private roomOpen = false;
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
   private readonly spawnedAt = new Map<string, number>();
@@ -53,7 +47,7 @@ export class AgentController {
   }
 
   snapshot(): AgentsSnapshot {
-    return { agents: [...this.agents], selectedId: this.selectedId };
+    return { agents: [...this.agents], selectedId: this.selectedId, roomOpen: this.roomOpen };
   }
 
   agentById(id: string): Agent | undefined {
@@ -69,6 +63,7 @@ export class AgentController {
     if (agent === null) return;
     this.agents.push(agent);
     this.selectedId = agent.id;
+    this.roomOpen = false;
     await this.persist();
     this.emitChanged();
   }
@@ -76,7 +71,19 @@ export class AgentController {
   async select(id: string): Promise<void> {
     if (this.agentById(id) === undefined) return;
     this.selectedId = id;
+    this.roomOpen = false;
     this.emitChanged();
+  }
+
+  selectRoom(): void {
+    this.roomOpen = true;
+    this.emitChanged();
+  }
+
+  paste(id: string, text: string): boolean {
+    const agent = this.agentById(id);
+    if (agent === undefined || !isCliKind(agent.kind)) return false;
+    return this.pty.write(id, bracketedPaste(text));
   }
 
   async close(id: string): Promise<void> {
@@ -117,7 +124,7 @@ export class AgentController {
   }
 
   syncSelection(): void {
-    this.deps.showSite?.(this.selectedSiteAgent());
+    this.deps.showSite?.(this.roomOpen ? null : this.selectedSiteAgent());
   }
 
   siteNav(id: string, action: SiteAction): void {
@@ -153,14 +160,14 @@ export class AgentController {
         env: this.deps.env,
       }),
     );
-    const title = `${KIND_LABELS[kind]} · ${path.basename(cwd) || cwd}`;
+    const title = `${AGENT_LABELS[kind]} · ${path.basename(cwd) || cwd}`;
     return sessionId === undefined
       ? { id, kind, title, cwd, createdAt: Date.now() }
       : { id, kind, title, cwd, sessionId, createdAt: Date.now() };
   }
 
   private createSiteAgent(kind: AgentKind): Agent {
-    return { id: randomUUID(), kind, title: KIND_LABELS[kind], createdAt: Date.now() };
+    return { id: randomUUID(), kind, title: AGENT_LABELS[kind], createdAt: Date.now() };
   }
 
   private backlogOf(id: string): OutputBuffer {

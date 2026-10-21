@@ -1,21 +1,25 @@
 // content.ts
 import { isCliKind } from '../shared/agents';
 import type { AgentsSnapshot, PtyDataEvent, SiteStateEvent } from '../shared/ipc';
+import type { RoomEvent } from '../shared/room-model';
+import type { RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 import { NavBar } from './nav-bar';
+import { RoomPane } from './room-pane';
 import { TerminalPane } from './terminal-pane';
 
 export class Content {
   readonly element = el('main', 'content');
   private readonly panes = new Map<string, TerminalPane>();
   private readonly navBar = new NavBar();
+  private readonly room = new RoomPane();
   private readonly sitePlaceholder = el('div', 'site-area');
   private readonly empty = el('div', 'content-empty', 'Select an agent or add one with +.');
   private readonly observer: ResizeObserver;
   private selectedId: string | null = null;
 
   constructor() {
-    this.element.append(this.empty, this.navBar.element, this.sitePlaceholder);
+    this.element.append(this.empty, this.navBar.element, this.sitePlaceholder, this.room.element);
     this.sitePlaceholder.hidden = true;
     this.observer = new ResizeObserver(() => this.panes.get(this.selectedId ?? '')?.refit());
     this.observer.observe(this.element);
@@ -36,14 +40,25 @@ export class Content {
       this.element.append(pane.element);
       this.observer.observe(pane.element);
     }
-    this.selectedId = snapshot.selectedId;
-    const selected = snapshot.agents.find((agent) => agent.id === snapshot.selectedId);
-    this.empty.hidden = selected !== undefined;
+    this.selectedId = snapshot.roomOpen ? null : snapshot.selectedId;
+    this.room.setAgents(snapshot.agents);
+    if (snapshot.roomOpen) this.room.show();
+    else this.room.hide();
+    const selected = snapshot.roomOpen ? undefined : snapshot.agents.find((agent) => agent.id === snapshot.selectedId);
+    this.empty.hidden = selected !== undefined || snapshot.roomOpen;
     const site = selected !== undefined && !isCliKind(selected.kind);
     this.sitePlaceholder.hidden = !site;
     this.navBar.setAgent(site ? selected.id : null);
-    for (const [id, pane] of this.panes) if (id !== snapshot.selectedId) pane.hide();
-    this.panes.get(snapshot.selectedId ?? '')?.show();
+    for (const [id, pane] of this.panes) if (id !== this.selectedId) pane.hide();
+    this.panes.get(this.selectedId ?? '')?.show();
+  }
+
+  roomLoad(snapshot: RoomSnapshot): void {
+    this.room.load(snapshot);
+  }
+
+  roomEvent(event: RoomEvent): void {
+    this.room.apply(event);
   }
 
   ptyData(event: PtyDataEvent): void {

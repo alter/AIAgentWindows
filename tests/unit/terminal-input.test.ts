@@ -1,6 +1,6 @@
 // terminal-input.test.ts
 import { describe, expect, it } from 'vitest';
-import { dropPastePayload, quotePathForShell, rawKeySequence, sanitizePaste, type KeyLike } from '../../src/shared/terminal-input';
+import { bracketedPaste, dropPastePayload, quotePathForShell, rawKeySequence, sanitizePaste, type KeyLike } from '../../src/shared/terminal-input';
 
 function key(overrides: Partial<KeyLike>): KeyLike {
   return { type: 'keydown', key: 'v', code: 'KeyV', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...overrides };
@@ -63,5 +63,15 @@ describe('sanitizePaste', () => {
 
   it('keeps ordinary text, tabs, newlines and non-Latin characters', () => {
     expect(sanitizePaste('line one\n\tline два')).toBe('line one\n\tline два');
+  });
+});
+
+describe('bracketedPaste', () => {
+  it('wraps the text in bracketed-paste markers and never adds Enter', () => {
+    expect(bracketedPaste('hello\nworld')).toBe('\x1b[200~hello\nworld\x1b[201~');
+  });
+
+  it('strips escape and C1 characters from the pasted text', () => {
+    expect(bracketedPaste('a\x1b[201~b\x9bc')).toBe('\x1b[200~a[201~bc\x1b[201~');
   });
 });

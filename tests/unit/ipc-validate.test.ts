@@ -106,3 +106,39 @@ describe('channel tables', () => {
     }
   });
 });
+
+describe('room channels', () => {
+  const config = {
+    prompt: 'hello',
+    mode: 'relay',
+    rounds: 2,
+    participants: [{ id: 'claude', kind: 'claude', label: 'Claude Code' }],
+    turnTimeoutMs: 600000,
+  };
+
+  it('accepts a valid room config and rejects an invalid one', () => {
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, config)).toEqual({ ok: true, value: config });
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, rounds: 51 }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, prompt: '' }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, null).ok).toBe(false);
+  });
+
+  it('takes no payload for state, select and stop', () => {
+    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop]) {
+      expect(validateRequest(channel, undefined).ok).toBe(true);
+      expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
+    }
+  });
+
+  it('validates carry as an agent id and a known kind of text', () => {
+    expect(validateRequest(INVOKE_CHANNELS.roomCarry, { id: ID, what: 'final' })).toEqual({ ok: true, value: { id: ID, what: 'final' } });
+    expect(validateRequest(INVOKE_CHANNELS.roomCarry, { id: ID, what: 'history' }).ok).toBe(true);
+    expect(validateRequest(INVOKE_CHANNELS.roomCarry, { id: ID, what: 'text' }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomCarry, { id: '', what: 'final' }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomCarry, { what: 'final' }).ok).toBe(false);
+  });
+
+  it('the room event channel is an event, not an invoke', () => {
+    expect(isEventChannel(EVENT_CHANNELS.roomEvent)).toBe(true);
+  });
+});

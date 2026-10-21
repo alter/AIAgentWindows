@@ -1,11 +1,9 @@
 // cli-turn.ts
 import { readFile } from 'node:fs/promises';
 import type { CliKind } from '../shared/agents';
-import { sanitizePaste } from '../shared/terminal-input';
+import { bracketedPaste } from '../shared/terminal-input';
 import { readClaudeTurn, readCodexTurn, type TurnSignal } from '../shared/turn-signal';
 
-const PASTE_START = '\x1b[200~';
-const PASTE_END = '\x1b[201~';
 const ENTER = '\r';
 
 export type CliTurnErrorCode = 'timeout' | 'failed' | 'unavailable' | 'aborted';
@@ -50,8 +48,7 @@ async function readText(file: string | null): Promise<string> {
 }
 
 async function send(options: CliTurnOptions): Promise<void> {
-  const body = `${PASTE_START}${sanitizePaste(options.prompt)}${PASTE_END}`;
-  if (!options.write(body)) throw new CliTurnError('unavailable', 'the session is not running');
+  if (!options.write(bracketedPaste(options.prompt))) throw new CliTurnError('unavailable', 'the session is not running');
   await sleep(options.submitDelayMs ?? DEFAULT_SUBMIT_DELAY_MS);
   if (!options.write(ENTER)) throw new CliTurnError('unavailable', 'the session ended before the prompt was submitted');
 }

@@ -53,6 +53,10 @@ export class SiteViews {
     else if (action === 'reload') contents.reload();
   }
 
+  pageFor(id: string, kind: SiteKind): WebContents {
+    return this.ensure(id, kind).view.webContents;
+  }
+
   openPages(): Array<{ kind: SiteKind; contents: WebContents }> {
     return [...this.entries.values()].map((entry) => ({ kind: entry.kind, contents: entry.view.webContents }));
   }

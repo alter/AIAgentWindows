@@ -1,5 +1,5 @@
 // room-model.ts
-import { AGENT_KINDS, type AgentKind } from './agents';
+import { AGENT_KINDS, AGENT_LABELS, type AgentKind } from './agents';
 
 export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 50;
@@ -35,6 +35,21 @@ export interface RoomEntry {
   kind: RoomEntryKind;
   text: string;
 }
+
+export type RoomStatus = 'done' | 'stopped' | 'failed';
+export type StepState = 'running' | 'replied' | 'failed';
+
+export type RoomEvent =
+  | { type: 'started'; roomId: string; historyPath: string; total: number }
+  | { type: 'progress'; roomId: string; participantId: string; state: StepState; completed: number; total: number }
+  | { type: 'entry'; roomId: string; entry: RoomEntry }
+  | { type: 'finished'; roomId: string; status: RoomStatus };
+
+export const ROOM_PARTICIPANTS: readonly RoomParticipant[] = AGENT_KINDS.map((kind) => ({
+  id: kind,
+  kind,
+  label: AGENT_LABELS[kind],
+}));
 
 export type RoomConfigResult = { ok: true; config: RoomConfig } | { ok: false; error: string };
 
