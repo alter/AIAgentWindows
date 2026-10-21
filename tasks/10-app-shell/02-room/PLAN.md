@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -155,3 +155,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 02:28 T23 done: CLI prompt = intro + whole nonce-fenced history inline (`cliPrompt` in room-history.ts), no file instruction, history.md still written; unit (CLI inline incl. above web limit) and integration (relay request text has every earlier entry in order, no `history.md`) tests red first (3 failed), 3 stale assertions on './history.md' updated; vitest room.test+room-history 96/96, coverage 100.00% (526 tests), fast tier commands all rc=0, integrity 0 findings
 - 2026-10-22 02:31 T23a done: cause = since T23 each CLI prompt carries the whole history, so the budget test that fills 4,000,000 chars rebuilt ever larger prompts; `RoomDeps.maxHistoryChars` (default `MAX_HISTORY_CHARS`, unchanged) added, the two budget tests run with budgets of 4,000 and 3,000 chars, one test pins the default 4,000,000; timing of `charges error entries...` alone: 3453 ms before, 70 ms after (5151 ms under coverage before); coverage 100.00% (527 tests), fast tier 11/11 (FASTRUN-2026-10-22-023053737703), tsc/eslint rc=0, integrity 0 findings; side note: `room with a web participant > inserts the prompt...` takes ~4.2 s alone (jsdom adapter polling, unrelated to T23a) and is the next candidate to hit the 5 s timeout
 - 2026-10-22 02:37 T23b done: cause = `runAdapterTurn` polls every 500 ms and settles 1500 ms per turn, two turns in the test; `RoomTiming` got `pollMs`/`settleMs` (defaults = `DEFAULT_TURN_OPTIONS`) used by the web driver, the test runs with 20/40 ms, one test pins 500/1500 (red with a mutated default, restored); timing of `inserts the prompt as text...` alone: 4657 ms before, 362 ms after; fast tier 11/11 (FASTRUN-2026-10-22-023429828942), vitest room.test+generic-adapter 64/64
+- 2026-10-22 coordinator: T23 (CLI history inline), T23a, T23b verified (room+history 96, room+generic-adapter 64, fast tier rc=0 with 527 tests). Paused on AC7.
