@@ -48,3 +48,8 @@ attack:passed on the T16a fix. Recorded for the next tasks, not fixed here (PLAU
 
 - The STUN `-105` lines (`stun.l.google.com`) appeared again with the app started from iTerm2, so they are not caused by the Claude Code sandbox either; the earlier attribution in 05-feasibility NOTES and in this file is wrong for them too. Cause not known yet: name resolution of STUN hosts fails for Chromium on this machine (DNS filter, VPN or Chromium's resolver). Sites loaded and signed in regardless during the spike; T20's log will show whether it matters for Grok.
 - Last terminal row cut off and no gaps → T19. Grok sign-in stuck after the email → T20.
+
+# NOTES — T22 black band under the last terminal row (2026-10-21)
+
+Finding (hidden test-mode probe, Claude pane, stub CLI): host height 748 px, row 15 px, host mod row = 13 px; `.xterm-screen` is 735 px, so a 13 px strip of the host lies under the last row. `document.elementsFromPoint` at the middle of that strip returned, topmost first: `DIV.xterm-viewport` background `rgb(0, 0, 0)` (xterm.css: `.xterm .xterm-viewport { background-color: #000 }`, absolutely positioned over the whole `.xterm`), then `.terminal` (transparent), `.terminal-host` (transparent), `.terminal-pane` `rgb(26, 29, 33)`. No box-shadow on any of them. The `theme.background` option does not reach the viewport element in this build.
+Fix: `.terminal-host .xterm-viewport { background-color: var(--content-bg); }` in src/renderer/styles.css. Smoke test "the area below the last terminal row is painted in the pane colour" was red first (Received rgb(0, 0, 0)) and is green after.

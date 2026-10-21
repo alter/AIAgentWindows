@@ -167,6 +167,7 @@ body {
 .terminal-pane { position: relative; flex: 1; min-height: 0; background: var(--content-bg); }
 .terminal-host { position: absolute; inset: 10px; }
 .terminal-host .xterm { height: 100%; }
+.terminal-host .xterm-viewport { background-color: var(--content-bg); }
 
 .agent-list li { position: relative; }
 .agent-item { padding-right: 30px; }

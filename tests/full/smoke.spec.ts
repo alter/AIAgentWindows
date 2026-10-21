@@ -153,6 +153,40 @@ test('the terminal text keeps a gap of at least 4 px from every edge of the pane
   }
 });
 
+test('the area below the last terminal row is painted in the pane colour, not black, for a Claude and a Codex agent', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder);
+  try {
+    const page = await app.firstWindow();
+    for (const kind of ['claude', 'codex']) {
+      await addAgent(page, kind);
+      await expect(page.locator('.terminal-pane:not([hidden]) .xterm-rows')).toContainText('STUB-CLI BANNER');
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const pane = document.querySelector<HTMLElement>('.terminal-pane:not([hidden])');
+            const host = pane?.querySelector<HTMLElement>('.terminal-host');
+            const screen = pane?.querySelector<HTMLElement>('.xterm-screen');
+            if (!pane || !host || !screen) return 'missing';
+            const hostBox = host.getBoundingClientRect();
+            const screenBox = screen.getBoundingClientRect();
+            const x = screenBox.left + screenBox.width / 2;
+            const y = (screenBox.bottom + hostBox.bottom) / 2;
+            const painted = document
+              .elementsFromPoint(x, y)
+              .map((element) => getComputedStyle(element).backgroundColor)
+              .find((colour) => colour !== 'rgba(0, 0, 0, 0)');
+            return painted === getComputedStyle(pane).backgroundColor ? 'same' : String(painted);
+          }),
+        )
+        .toBe('same');
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 test('closing an agent asks for confirmation in the app, removes it, and it stays gone after a relaunch', async () => {
   const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
   const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
