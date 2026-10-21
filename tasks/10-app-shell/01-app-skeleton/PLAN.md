@@ -1,5 +1,5 @@
 ---
-status: draft
+status: running
 created: 2026-10-21
 ---
 # Application skeleton — one Slack-like window with CLI and web agents
