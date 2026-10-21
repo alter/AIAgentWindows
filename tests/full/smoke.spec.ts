@@ -68,6 +68,43 @@ test('a Claude Code agent shows the stub banner and is listed again after a rela
   await second.close();
 });
 
+test('switching between two terminal agents keeps the visible pane filling the whole content height', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder);
+  try {
+    const page = await app.firstWindow();
+    await addAgent(page, 'claude');
+    await expect(page.locator('.agent-item')).toHaveCount(1);
+    await addAgent(page, 'codex');
+    await expect(page.locator('.agent-item')).toHaveCount(2);
+    const items = page.locator('.agent-item');
+    const measureGap = (): Promise<{ gap: number; row: number }> =>
+      page.evaluate(() => {
+        const pane = Array.from(document.querySelectorAll<HTMLElement>('.terminal-pane')).find((node) => !node.hidden);
+        const screen = pane?.querySelector<HTMLElement>('.xterm-screen');
+        const rows = pane?.querySelector<HTMLElement>('.xterm-rows');
+        if (!pane || !screen || !rows) return { gap: Number.POSITIVE_INFINITY, row: 1 };
+        const style = getComputedStyle(pane);
+        const inner = pane.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+        const row = rows.firstElementChild?.getBoundingClientRect().height ?? 1;
+        return { gap: inner - screen.getBoundingClientRect().height, row };
+      });
+    for (const index of [0, 1, 0, 1, 0]) {
+      await items.nth(index).click();
+      await expect(page.locator('.terminal-pane:not([hidden]) .xterm-rows')).toContainText('STUB-CLI BANNER');
+      await expect
+        .poll(async () => {
+          const { gap, row } = await measureGap();
+          return gap < row;
+        })
+        .toBe(true);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 test('a DeepSeek agent shows a visible view without the Electron token and Home returns to the start URL', async () => {
   const fixture = await startFixtureServer();
   const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));

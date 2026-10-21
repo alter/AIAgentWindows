@@ -25,6 +25,7 @@ export class Content {
     const wanted = new Set(snapshot.agents.filter((agent) => isCliKind(agent.kind)).map((agent) => agent.id));
     for (const [id, pane] of this.panes) {
       if (wanted.has(id)) continue;
+      this.observer.unobserve(pane.element);
       pane.dispose();
       this.panes.delete(id);
     }
@@ -33,6 +34,7 @@ export class Content {
       const pane = new TerminalPane(id);
       this.panes.set(id, pane);
       this.element.append(pane.element);
+      this.observer.observe(pane.element);
     }
     this.selectedId = snapshot.selectedId;
     const selected = snapshot.agents.find((agent) => agent.id === snapshot.selectedId);
@@ -40,10 +42,8 @@ export class Content {
     const site = selected !== undefined && !isCliKind(selected.kind);
     this.sitePlaceholder.hidden = !site;
     this.navBar.setAgent(site ? selected.id : null);
-    for (const [id, pane] of this.panes) {
-      if (id === snapshot.selectedId) pane.show();
-      else pane.hide();
-    }
+    for (const [id, pane] of this.panes) if (id !== snapshot.selectedId) pane.hide();
+    this.panes.get(snapshot.selectedId ?? '')?.show();
   }
 
   ptyData(event: PtyDataEvent): void {
