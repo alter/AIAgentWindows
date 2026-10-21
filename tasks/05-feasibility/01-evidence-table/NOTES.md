@@ -83,3 +83,7 @@ Residual minor items from the fourth VERIFY.md, left as they are so the verified
 - The owner's navigation message is quoted in English; the original (Russian) is "я и назад выйти к обычной авторизации не могу".
 - W16: no record says which window made the STUN lookups.
 Gate 1 still needs the owner's confirmation (tasks/README.md, "Order of work", step 3).
+
+# NOTES — gate 1 (2026-10-21)
+
+The owner read the verify:passed summary and answered "ну запускай" (go ahead) with the next step, T00 of 10-app-shell. Recorded as the owner's acceptance of gate 1.

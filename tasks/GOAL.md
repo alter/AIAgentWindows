@@ -25,6 +25,7 @@ described before code is written against it.
 | Milestone | What it means | Entry condition |
 |---|---|---|
 | **M1** | the design rests on evidence, not reasoning | now |
+| **M2** | the app runs: window, CLI and web agents, restart restores them | gate 1 passed |
 
 ## Signs that we are getting closer
 
