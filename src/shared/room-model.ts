@@ -86,10 +86,12 @@ function isAgentKind(value: unknown): value is AgentKind {
   return typeof value === 'string' && (AGENT_KINDS as readonly string[]).includes(value);
 }
 
+const UNSAFE_LABEL = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}|]/u;
+
 function parseParticipant(value: unknown): RoomParticipant | null {
   if (!isRecord(value)) return null;
   const { id, kind, label } = value;
-  if (!isBoundedString(id, MAX_ID_CHARS) || !isAgentKind(kind) || !isBoundedString(label, MAX_LABEL_CHARS)) return null;
+  if (!isBoundedString(id, MAX_ID_CHARS) || !isAgentKind(kind) || !isBoundedString(label, MAX_LABEL_CHARS) || UNSAFE_LABEL.test(label)) return null;
   return { id, kind, label };
 }
 

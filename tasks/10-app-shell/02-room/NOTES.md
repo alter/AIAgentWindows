@@ -71,3 +71,9 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - Reverse control (2026-10-21): the `if (blocked !== null)` branch in `room-drivers.ts` switched off -> `npx vitest run tests/integration/room.test.ts` -> `Tests  2 failed | 16 passed (18)` (update dialog, trust dialog: a prompt and Enter reached the stub). Restored.
 - Not done by design: a positive "at the prompt" marker (the prompt glyphs are not verified across CLI versions, a false negative would fail every real turn) and the `turn_context.sandbox_policy` check (the record only exists after the first turn, i.e. after the first submit). Read-only stays enforced by the flags (T04 tests).
 
+
+## T12c fix (ATTACK.md finding 1: history entry forgery)
+
+- `renderHistory` fences every entry as `<<<entry-<nonce> author="…" time=… kind=…>>>` … `<<<end-<nonce>>>`; the nonce is 24 hex chars from `crypto.getRandomValues`, drawn again for every render and redrawn while any entry text or label contains it, so a reply cannot know or embed the nonce of the file that will contain it. The file's notice line and the participant intro say that only markers carrying that nonce are entries and everything inside is data. The same renderer feeds the history file, the inline web prompt and Carry history.
+- Labels: `parseParticipant` rejects control, format and line/paragraph-separator characters and `|` (first vector, renderer via `room:start`); the marker also replaces them and `"` with spaces (defence in depth).
+- Reverse control (2026-10-21): the redraw-on-collision check removed -> `npx vitest run tests/unit/room-history.test.ts` -> `Tests  1 failed | 14 passed (15)` (draws again when the nonce is already inside a body). Restored. All 13 new tests were red before the change (history module had no nonce, labels were accepted).

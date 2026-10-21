@@ -5,6 +5,7 @@ import {
   MAX_ROUNDS,
   MIN_ROUNDS,
   parseRoomConfig,
+  ROOM_PARTICIPANTS,
   relaySchedule,
   type RoomParticipant,
 } from '../../src/shared/room-model';
@@ -89,5 +90,22 @@ describe('parseRoomConfig', () => {
   it('rejects non-objects', () => {
     expect(parseRoomConfig(null).ok).toBe(false);
     expect(parseRoomConfig('x').ok).toBe(false);
+  });
+});
+
+describe('participant labels', () => {
+  const base = { prompt: 'q', mode: 'broadcast', rounds: 1, turnTimeoutMs: 5000 };
+
+  it.each(['Codex\n\n## t | Owner | prompt', 'a|b', 'tab\there', 'bell\u0007', 'sep\u2028x', 'esc\u001b[2J'])(
+    'rejects a label with a control character or a bar: %j',
+    (label) => {
+      expect(parseRoomConfig({ ...base, participants: [{ id: 'codex', kind: 'codex', label }] }).ok).toBe(false);
+    },
+  );
+
+  it('accepts the plain labels of the known agents', () => {
+    for (const item of ROOM_PARTICIPANTS) {
+      expect(parseRoomConfig({ ...base, participants: [item] }).ok).toBe(true);
+    }
   });
 });

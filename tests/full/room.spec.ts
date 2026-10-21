@@ -58,8 +58,9 @@ async function historyHeadings(page: Page): Promise<string[]> {
   expect(file).toMatch(/\.md$/);
   return readFileSync(file, 'utf8')
     .split('\n')
-    .filter((line) => line.startsWith('## '))
-    .map((line) => line.split(' | ').slice(1).join(' | '));
+    .map((line) => /^<<<entry-\w+ author="(.*)" time=\S+ kind=(\w+)>>>$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => `${match[1]} | ${match[2]}`);
 }
 
 test('a relay of two stub participants for 2 rounds writes the history in the relay order', async () => {

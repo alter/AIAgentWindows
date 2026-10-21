@@ -325,7 +325,7 @@ describe('room with stub CLIs', () => {
     ]);
     expect(result.entries[1]?.text).toContain(`The history is in the file: ${run.historyPath}`);
     const history = await readFile(run.historyPath, 'utf8');
-    expect(ascending(positions(history, ['## ', 'Claude Code | reply', 'Codex | reply']))).toBe(true);
+    expect(ascending(positions(history, ['<<<entry-', 'author="Claude Code" time', 'author="Codex" time']))).toBe(true);
     const banners = [...output.values()].join('\n');
     expect(banners).toContain('"--permission-mode","plan"');
     expect(banners).toContain('"--sandbox","read-only"');
