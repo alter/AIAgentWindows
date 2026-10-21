@@ -49,3 +49,16 @@ describe('start-up screen kinds', () => {
     expect(startScreenIssue(CLAUDE_PROMPT)).toBeNull();
   });
 });
+
+describe('generic selection dialogs', () => {
+  it('flags a numbered list with a selection marker that no known phrase names', () => {
+    expect(startScreenIssue('  Pick one\r\n\r\n❯ 1. Option alpha\r\n  2. Option beta')?.kind).toBe('choice');
+    expect(startScreenIssue('› 2) Something else')?.kind).toBe('choice');
+  });
+
+  it('leaves a plain numbered list and an unnumbered prompt alone', () => {
+    expect(startScreenIssue('Steps:\r\n1. first\r\n2. second')).toBeNull();
+    expect(startScreenIssue('› Ask Codex to do anything')).toBeNull();
+    expect(startScreenIssue('> 1. quoted item')).toBeNull();
+  });
+});

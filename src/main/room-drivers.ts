@@ -7,6 +7,7 @@ import { buildRoomSpawn } from '../shared/cli-args';
 import { rolloutId } from '../shared/codex-claim';
 import type { RoomParticipant } from '../shared/room-model';
 import { OutputBuffer, type OutputSnapshot } from '../shared/output-buffer';
+import { ScreenReader } from '../shared/screen-reader';
 import { startScreenIssue } from '../shared/start-screen';
 import { claudeTranscriptPath } from './claude-transcripts';
 import { runCliTurn, CliTurnError } from './cli-turn';
@@ -70,11 +71,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const START_SCREEN_LIMIT = 32768;
+const SCREEN_COLS = 120;
+const SCREEN_ROWS = 40;
 
 class SessionHost {
   private readonly lastData = new Map<string, number>();
-  private readonly startScreens = new Map<string, string>();
+  private readonly screens = new Map<string, ScreenReader>();
   private readonly buffers = new Map<string, OutputBuffer>();
   private readonly pty: PtyManager;
 
@@ -82,8 +84,7 @@ class SessionHost {
     this.pty = new PtyManager({
       onData: (id, data) => {
         this.lastData.set(id, Date.now());
-        const seen = this.startScreens.get(id) ?? '';
-        if (seen.length < START_SCREEN_LIMIT) this.startScreens.set(id, seen + data);
+        this.screens.get(id)?.write(data);
         const end = this.bufferOf(id).append(data);
         onOutput?.(id, data, end);
       },
@@ -108,19 +109,24 @@ class SessionHost {
 
   forget(id: string): void {
     this.buffers.delete(id);
+    this.screens.get(id)?.dispose();
+    this.screens.delete(id);
   }
 
   resize(id: string, cols: number, rows: number): boolean {
-    return this.pty.resize(id, { cols, rows });
+    const resized = this.pty.resize(id, { cols, rows });
+    if (resized) this.screens.get(id)?.resize(cols, rows);
+    return resized;
   }
 
-  startScreen(id: string): string {
-    return this.startScreens.get(id) ?? '';
+  async screen(id: string): Promise<string> {
+    return (await this.screens.get(id)?.text()) ?? '';
   }
 
   spawn(id: string, spec: Parameters<PtyManager['spawn']>[1]): void {
-    this.startScreens.delete(id);
-    this.pty.spawn(id, spec, { cols: 120, rows: 40 });
+    this.screens.get(id)?.dispose();
+    this.screens.set(id, new ScreenReader(SCREEN_COLS, SCREEN_ROWS));
+    this.pty.spawn(id, spec, { cols: SCREEN_COLS, rows: SCREEN_ROWS });
   }
 
   has(id: string): boolean {
@@ -174,6 +180,7 @@ class CliDriver implements ParticipantDriver {
       settleMs: this.timing.settleMs,
       submitDelayMs: this.timing.submitDelayMs,
       signal: request.signal,
+      guard: () => this.checkScreen(ptyId),
     });
   }
 
@@ -218,13 +225,15 @@ class CliDriver implements ParticipantDriver {
         ? async () => claudeTranscriptPath(env, sessionId)
         : this.claiming(codexRolloutLocator(env, { cwd, spawnedAtMs, claimed: this.claimed }));
     await this.untilReady(ptyId, signal);
-    const issue = startScreenIssue(this.host.startScreen(ptyId));
-    if (issue?.kind === 'trust') throw new OwnerPause(ptyId, `${this.participant.label}: ${TRUST_NOTE}`);
-    if (issue !== null) {
-      await this.reset();
-      throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${issue.reason}`);
-    }
+    await this.checkScreen(ptyId);
     return ptyId;
+  }
+
+  private async checkScreen(ptyId: string): Promise<void> {
+    const issue = startScreenIssue(await this.host.screen(ptyId));
+    if (issue === null) return;
+    if (issue.kind === 'trust') throw new OwnerPause(ptyId, `${this.participant.label}: ${TRUST_NOTE}`);
+    throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${issue.reason}`);
   }
 
   private claiming(locate: () => Promise<string | null>): () => Promise<string | null> {

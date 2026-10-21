@@ -532,6 +532,86 @@ describe('room folder trust pause', () => {
   });
 });
 
+const DIALOG_STUB = path.resolve(__dirname, '..', 'fixtures', 'dialog-stub-cli.mjs');
+
+function screenDrivers(mode: string, log: string, extra: Record<string, string> = {}, submitDelayMs = 40) {
+  return createRoomDrivers({
+    cwd: roomsDir,
+    sharedDir: dir,
+    platform: 'win32',
+    envFor: () => ({
+      PATH: process.env.PATH,
+      AIAW_CLAUDE_BIN: DIALOG_STUB,
+      AIAW_CODEX_BIN: DIALOG_STUB,
+      AIAW_USER_DATA: path.join(dir, 'user-data'),
+      CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
+      CODEX_HOME: path.join(dir, 'codex-home'),
+      AIAW_STUB_MODE: mode,
+      AIAW_STUB_STDIN_LOG: log,
+      ...extra,
+    }),
+    siteFor: () => null,
+    timing: { quietMs: 200, startMaxMs: 3000, pollMs: 40, settleMs: 40, submitDelayMs, killWaitMs: 3000 },
+  });
+}
+
+describe('room CLI dialogs decided on the rendered screen', () => {
+  async function runOnce(mode: string, participants: RoomParticipant[], extra: Record<string, string> = {}, submitDelayMs = 40, rounds = 1) {
+    const log = path.join(dir, `stdin-${mode}.log`);
+    const drivers = screenDrivers(mode, log, extra, submitDelayMs);
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const result = await room.start(config(participants, { turnTimeoutMs: 1500, rounds })).done;
+    await room.shutdown();
+    drivers.shutdown();
+    return { result, typed: await readFile(log, 'utf8').catch(() => '') };
+  }
+
+  it('never presses Enter on a dialog that opens between two turns of a live session', async () => {
+    const { result, typed } = await runOnce('between', [A], {}, 40, 2);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error']);
+    expect(typed).not.toContain('DIALOG-ACCEPTED-DEFAULT');
+  });
+
+  it('never presses Enter on a dialog drawn after 32 KB of start-up output', async () => {
+    const { result, typed } = await runOnce('flood', [B]);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(typed).toBe('');
+  });
+
+  it('never presses Enter on a dialog that opens after the quiet window and before the Enter', async () => {
+    const { result, typed } = await runOnce('late', [B], { AIAW_STUB_LATE_MS: '450' }, 600);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(typed).not.toContain('DIALOG-ACCEPTED-DEFAULT');
+    expect(typed).not.toContain('\\r');
+  });
+
+  it('never presses Enter on a dialog split across chunks and drawn out of order', async () => {
+    const split = await runOnce('split', [B]);
+    expect(split.result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(split.typed).toBe('');
+    const reorder = await runOnce('reorder', [B]);
+    expect(reorder.result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(reorder.typed).toBe('');
+  });
+
+  it('pauses the owner, with nothing pressed, on a trust dialog that opens between two turns', { timeout: 20000 }, async () => {
+    const log = path.join(dir, 'stdin-between-trust.log');
+    const drivers = screenDrivers('between', log, { AIAW_STUB_DIALOG_KIND: 'trust' });
+    const events: RoomEvent[] = [];
+    const room = new Room({ roomsDir, driverFor: drivers.factory, emit: (event) => events.push(event) });
+    rooms.push(room);
+    const run = room.start(config([A], { turnTimeoutMs: 5000, rounds: 2 }));
+    await until(() => events.some((event) => event.type === 'paused'), 'the pause');
+    room.stop();
+    const result = await run.done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error']);
+    expect(await readFile(log, 'utf8')).not.toContain('DIALOG-ACCEPTED-DEFAULT');
+  });
+});
+
 describe('room with a web participant', () => {
   it('inserts the prompt as text, reads the reply and attaches a long history as a file', async () => {
     const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });

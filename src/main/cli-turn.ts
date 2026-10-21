@@ -28,6 +28,7 @@ export interface CliTurnOptions {
   settleMs?: number;
   submitDelayMs?: number;
   signal?: AbortSignal;
+  guard?(): Promise<void>;
 }
 
 const DEFAULT_POLL_MS = 250;
@@ -48,8 +49,10 @@ async function readText(file: string | null): Promise<string> {
 }
 
 async function send(options: CliTurnOptions): Promise<void> {
+  await options.guard?.();
   if (!options.write(bracketedPaste(options.prompt))) throw new CliTurnError('unavailable', 'the session is not running');
   await sleep(options.submitDelayMs ?? DEFAULT_SUBMIT_DELAY_MS);
+  await options.guard?.();
   if (!options.write(ENTER)) throw new CliTurnError('unavailable', 'the session ended before the prompt was submitted');
 }
 
