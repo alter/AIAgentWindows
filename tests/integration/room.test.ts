@@ -819,3 +819,61 @@ describe('room with a web participant', () => {
     expect(attached).toEqual([[long.historyPath]]);
   });
 });
+
+describe('room with a web participant that is not ready at first', () => {
+  const READY = { pollMs: 20, settleMs: 40, readyMs: 400, readyPollMs: 10 };
+
+  function webRig(composerReady: (call: number) => boolean, prepare?: () => Promise<void>) {
+    const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+    const trace: string[] = [];
+    let calls = 0;
+    const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
+    const base = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+    const adapter = {
+      ...base,
+      composerReady: () => {
+        calls += 1;
+        trace.push('ready?');
+        return Promise.resolve(composerReady(calls));
+      },
+      insertText: (target: PageRunner, text: string) => {
+        trace.push('insert');
+        return base.insertText(target, text);
+      },
+    };
+    const seat = prepare === undefined ? { adapter, runner } : { adapter, runner, prepare };
+    const drivers = createRoomDrivers({ cwd: roomsDir, sharedDir: dir, platform: 'win32', envFor: () => ({}), siteFor: () => seat, timing: READY });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    return { room, trace };
+  }
+
+  it('waits for the composer to exist and only then inserts the prompt', async () => {
+    const { room, trace } = webRig((call) => call >= 4);
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    expect(trace).toEqual(['ready?', 'ready?', 'ready?', 'ready?', 'insert']);
+  });
+
+  it('reports "page not ready" and inserts nothing when the composer never appears', async () => {
+    const { room, trace } = webRig(() => false);
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('error');
+    expect(result.entries[1]?.text).toContain('page not ready');
+    expect(trace).not.toContain('insert');
+  });
+
+  it('prepares the page before every turn and reports its failure as an error entry', async () => {
+    const order: string[] = [];
+    const prepare = (): Promise<void> => {
+      order.push('prepare');
+      return order.length > 1 ? Promise.reject(new Error('fixture page not ready')) : Promise.resolve();
+    };
+    const { room, trace } = webRig(() => true, prepare);
+    const result = await room.start(config([C], { rounds: 2, turnTimeoutMs: 20000 })).done;
+    expect(order).toEqual(['prepare', 'prepare']);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error']);
+    expect(result.entries[2]?.text).toContain('page not ready');
+    expect(trace.filter((item) => item === 'insert')).toHaveLength(1);
+  });
+});

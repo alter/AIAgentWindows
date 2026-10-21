@@ -9,6 +9,7 @@ import type { SiteAdapter } from './site-adapters/types';
 export interface SiteSeatDeps {
   agents(): readonly Agent[];
   page(agent: Agent & { kind: SiteKind }): IsolatedContents;
+  prepare(agent: Agent & { kind: SiteKind }, timeoutMs: number, signal: AbortSignal): Promise<void>;
   adapterFor(kind: SiteKind): SiteAdapter | null;
 }
 
@@ -20,6 +21,11 @@ export function createSiteSeats(deps: SiteSeatDeps): (participant: RoomParticipa
     if (adapter === null) throw new Error(missingAdapterNote(participant.label));
     const agent = deps.agents().find((item) => item.kind === kind);
     if (agent === undefined) return null;
-    return { adapter, runner: createIsolatedRunner(deps.page({ ...agent, kind })) };
+    const site = { ...agent, kind };
+    return {
+      adapter,
+      runner: createIsolatedRunner(deps.page(site)),
+      prepare: (timeoutMs, signal) => deps.prepare(site, timeoutMs, signal),
+    };
   };
 }

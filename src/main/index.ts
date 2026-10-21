@@ -108,6 +108,7 @@ async function start(): Promise<void> {
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,
       page: (agent) => siteViews.pageFor(agent.id, agent.kind),
+      prepare: (agent, timeoutMs, signal) => siteViews.prepare(agent.id, agent.kind, timeoutMs, signal),
       adapterFor,
     }),
   });

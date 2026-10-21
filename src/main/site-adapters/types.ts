@@ -19,6 +19,7 @@ export interface SiteAdapter {
   isGenerating(runner: PageRunner): Promise<boolean>;
   lastReply(runner: PageRunner): Promise<string | null>;
   attachFile(runner: PageRunner, path: string): Promise<void>;
+  composerReady?(runner: PageRunner): Promise<boolean>;
 }
 
 export type SiteAdapterErrorCode =
@@ -29,6 +30,7 @@ export type SiteAdapterErrorCode =
   | 'page-gone'
   | 'no-response'
   | 'timeout'
+  | 'not-ready'
   | 'aborted';
 
 export class SiteAdapterError extends Error {

@@ -1,6 +1,8 @@
 // room.spec.ts
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
 import { mkdtempSync, readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -165,5 +167,104 @@ test('markup in a reply is shown as text', async () => {
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
   } finally {
     await app.close();
+  }
+});
+
+const LATE_SITE = `<!doctype html>
+<html><head><meta charset="utf-8"><title>late chat</title></head>
+<body>
+<main id="log"></main>
+<script>
+setTimeout(() => {
+  const ta = document.createElement('textarea');
+  ta.setAttribute('aria-label', 'Message');
+  const send = document.createElement('button');
+  send.type = 'button';
+  send.textContent = 'Send';
+  send.disabled = true;
+  const stop = document.createElement('button');
+  stop.type = 'button';
+  stop.textContent = 'Stop';
+  stop.hidden = true;
+  const log = document.getElementById('log');
+  const say = (role, text) => {
+    const node = document.createElement('div');
+    node.className = 'msg ' + role;
+    node.textContent = text;
+    log.appendChild(node);
+  };
+  const submit = () => {
+    const text = ta.value;
+    if (text === '') return;
+    ta.value = '';
+    send.disabled = true;
+    say('user', text);
+    stop.hidden = false;
+    setTimeout(() => say('assistant', 'LATE-REPLY'), 60);
+    setTimeout(() => { stop.hidden = true; }, 90);
+  };
+  ta.addEventListener('input', () => { send.disabled = ta.value === ''; });
+  ta.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
+  });
+  send.addEventListener('click', submit);
+  document.body.append(ta, send, stop);
+}, 1500);
+</script>
+</body></html>`;
+
+test('a web participant whose view was never opened answers on its first turn', async () => {
+  const server = createServer((_request, response) => {
+    response.setHeader('content-type', 'text/html; charset=utf-8');
+    response.end(LATE_SITE);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  const base = mkdtempSync(path.join(tmpdir(), 'aiaw-room-site-'));
+  const profile = path.join(base, 'profile');
+  const env = {
+    ...process.env,
+    AIAW_USER_DATA: profile,
+    AIAW_ROOM_FAST: '1',
+    AIAW_CLAUDE_BIN: stubCli,
+    AIAW_CODEX_BIN: stubCli,
+    AIAW_TEST_FOLDER: mkdtempSync(path.join(base, 'folder-')),
+    CLAUDE_CONFIG_DIR: path.join(base, 'claude'),
+    CODEX_HOME: path.join(base, 'codex'),
+    AIAW_SITE_URL_DEEPSEEK: `http://127.0.0.1:${port}/`,
+  };
+  const first = await electron.launch({ args: [root], env });
+  try {
+    const page = await first.firstWindow();
+    for (const kind of ['claude', 'deepseek']) {
+      await page.locator('button[aria-haspopup="menu"]').click();
+      await page.locator(`.menu-item[data-kind="${kind}"]`).click();
+    }
+    await expect(page.locator('.agent-item')).toHaveCount(2);
+  } finally {
+    await first.close();
+  }
+  const second = await electron.launch({ args: [root], env });
+  try {
+    const page = await second.firstWindow();
+    await expect(page.locator('.agent-item')).toHaveCount(2);
+    await page.locator('[data-room="open"]').click();
+    await expect(page.locator('[data-room="pane"]')).toBeVisible();
+    const views = await second.evaluate(({ webContents }) => webContents.getAllWebContents().map((item) => item.getURL()));
+    expect(views.filter((url) => url.startsWith('http://127.0.0.1'))).toEqual([]);
+    await field(page, 'prompt').fill('first turn question');
+    await page.locator('input[data-participant="deepseek"]').check();
+    await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'rounds').fill('1');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done');
+    expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'DeepSeek | reply']);
+    await expect(page.locator('.room-entry.kind-reply .room-entry-text').first()).toContainText('LATE-REPLY');
+  } finally {
+    await second.close();
+    server.close();
   }
 });

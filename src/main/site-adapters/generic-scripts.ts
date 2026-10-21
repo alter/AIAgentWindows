@@ -204,6 +204,11 @@ export function genericInsertScript(text: string): string {
     return JSON.stringify({ ok: true, value: collapse(fieldText(composer)).trim() === collapse(text).trim() });`);
 }
 
+export function genericComposerScript(): string {
+  return wrap(`
+    return JSON.stringify({ ok: true, value: findComposer() !== null });`);
+}
+
 export function genericEnterScript(): string {
   return wrap(`
     const composer = findComposer();

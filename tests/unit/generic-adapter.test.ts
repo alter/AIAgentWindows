@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createGenericAdapter } from '../../src/main/site-adapters/generic-adapter';
 import { adapterFor } from '../../src/main/site-adapters/registry';
 import { runAdapterTurn } from '../../src/main/site-adapters/turn';
-import type { PageRunner } from '../../src/main/site-adapters/types';
+import { SiteAdapterError, type PageRunner } from '../../src/main/site-adapters/types';
 import { SITE_KINDS_WITH_ADAPTER } from '../../src/shared/agents';
 
 const FIXTURE = readFileSync(new URL('../fixtures/sites/composer.html', import.meta.url), 'utf8');
@@ -62,6 +62,30 @@ describe('generic adapter: insert', () => {
     page.dom.window.document.querySelector('#ta')?.setAttribute('hidden', '');
     const adapter = createGenericAdapter('fixture', OPTIONS);
     await expect(adapter.insertText(page.runner, 'x')).rejects.toMatchObject({ code: 'input-missing' });
+  });
+});
+
+describe('generic adapter: composer readiness', () => {
+  it('is ready when a visible composer exists and not ready when it is absent or hidden', async () => {
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const page = openPage();
+    expect(await adapter.composerReady?.(page.runner)).toBe(true);
+    page.dom.window.document.querySelector('#ta')?.setAttribute('hidden', '');
+    expect(await adapter.composerReady?.(page.runner)).toBe(false);
+    page.dom.window.document.body.replaceChildren();
+    expect(await adapter.composerReady?.(page.runner)).toBe(false);
+  });
+
+  it('is not ready while the page cannot run scripts yet', async () => {
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const runner: PageRunner = { run: () => Promise.reject(new Error('Script failed to execute')) };
+    expect(await adapter.composerReady?.(runner)).toBe(false);
+  });
+
+  it('does not hide a closed page', async () => {
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const runner: PageRunner = { run: () => Promise.reject(new SiteAdapterError('page-gone', 'the page is closed')) };
+    await expect(adapter.composerReady?.(runner)).rejects.toMatchObject({ code: 'page-gone' });
   });
 });
 

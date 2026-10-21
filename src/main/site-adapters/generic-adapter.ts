@@ -1,6 +1,7 @@
 // generic-adapter.ts
 import { MAX_REPLY_CHARS } from '../../shared/room-model';
 import {
+  genericComposerScript,
   genericEnterScript,
   genericInsertScript,
   genericSendButtonScript,
@@ -73,6 +74,14 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     },
     async lastReply(runner) {
       return (await readState(runner)).reply;
+    },
+    async composerReady(runner) {
+      try {
+        return (await callPage(runner, genericComposerScript())).value === true;
+      } catch (error) {
+        if (error instanceof SiteAdapterError && error.code === 'page-gone') throw error;
+        return false;
+      }
     },
     async attachFile(runner, path) {
       if (runner.setInputFiles === undefined) {

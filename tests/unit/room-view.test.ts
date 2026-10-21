@@ -237,8 +237,27 @@ describe('participants without an adapter', () => {
     expect(formToConfig(form).ok).toBe(true);
   });
 
+  it('the seat prepares the agent page through the dependency with the given bound', async () => {
+    const calls: Array<[string, number]> = [];
+    const agent = { id: 'ds-1', kind: 'deepseek' as const, title: 'DeepSeek', createdAt: 0 };
+    const seats = createSiteSeats({
+      agents: () => [agent],
+      page: () => ({ executeJavaScriptInIsolatedWorld: () => Promise.resolve(null), isDestroyed: () => false }),
+      prepare: (item, timeoutMs) => {
+        calls.push([item.id, timeoutMs]);
+        return Promise.resolve();
+      },
+      adapterFor,
+    });
+    const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
+    if (deepseek === undefined) throw new Error('no deepseek participant');
+    const seat = seats(deepseek);
+    await seat?.prepare?.(1234, new AbortController().signal);
+    expect(calls).toEqual([['ds-1', 1234]]);
+  });
+
   it('the driver error for a missing adapter names the missing adapter, not the chat page', () => {
-    const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, adapterFor: () => null });
+    const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, prepare: () => Promise.resolve(), adapterFor: () => null });
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
     expect(() => seats(deepseek)).toThrow(/DeepSeek has no site adapter/);

@@ -10,23 +10,29 @@ import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
 import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
 import type { PageRunner, SiteAdapter } from './site-adapters/types';
+import { waitUntilReady } from './site-adapters/ready';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
 export interface RoomTiming {
   killGraceMs: number;
   pollMs: number;
   settleMs: number;
+  readyMs: number;
+  readyPollMs: number;
 }
 
 export const DEFAULT_ROOM_TIMING: RoomTiming = {
   killGraceMs: 3000,
   pollMs: DEFAULT_TURN_OPTIONS.pollMs,
   settleMs: DEFAULT_TURN_OPTIONS.settleMs,
+  readyMs: 30000,
+  readyPollMs: 250,
 };
 
 export interface SiteSeat {
   adapter: SiteAdapter;
   runner: PageRunner;
+  prepare?(timeoutMs: number, signal: AbortSignal): Promise<void>;
 }
 
 export interface RoomDriverDeps {
@@ -121,6 +127,12 @@ class SiteDriver implements ParticipantDriver {
   ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
+    await this.seat.prepare?.(this.timing.readyMs, request.signal);
+    await waitUntilReady(this.seat.adapter, this.seat.runner, {
+      timeoutMs: this.timing.readyMs,
+      pollMs: this.timing.readyPollMs,
+      signal: request.signal,
+    });
     if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
     return runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
       ...DEFAULT_TURN_OPTIONS,

@@ -12,11 +12,13 @@ import {
   siteStartUrl,
   userAgentFor,
 } from '../shared/site-policy';
+import { SiteAdapterError } from './site-adapters/types';
 import type { SiteLogger } from './site-log-file';
 
 interface SiteEntry {
   kind: SiteKind;
   view: WebContentsView;
+  loaded: Promise<void>;
 }
 
 export class SiteViews {
@@ -57,6 +59,26 @@ export class SiteViews {
     return this.ensure(id, kind).view.webContents;
   }
 
+  async prepare(id: string, kind: SiteKind, timeoutMs: number, signal: AbortSignal): Promise<void> {
+    const entry = this.ensure(id, kind);
+    this.layout();
+    let timer: NodeJS.Timeout | undefined;
+    let onAbort: (() => void) | undefined;
+    const failure = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new SiteAdapterError('not-ready', `${kind}: page not ready`)), timeoutMs);
+      onAbort = () => reject(new SiteAdapterError('aborted', 'the turn was stopped'));
+      if (signal.aborted) onAbort();
+      else signal.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      await Promise.race([entry.loaded, failure]);
+    } finally {
+      clearTimeout(timer);
+      if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
+      failure.catch(() => undefined);
+    }
+  }
+
   openPages(): Array<{ kind: SiteKind; contents: WebContents }> {
     return [...this.entries.values()].map((entry) => ({ kind: entry.kind, contents: entry.view.webContents }));
   }
@@ -84,7 +106,7 @@ export class SiteViews {
     const partition = `persist:${id}`;
     this.configureSession(partition, kind);
     const view = new WebContentsView({
-      webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: !this.unattended() },
+      webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
     });
     const contents = view.webContents;
     contents.setWindowOpenHandler(({ url }) => {
@@ -101,6 +123,7 @@ export class SiteViews {
         },
       };
     });
+    const loaded = new Promise<void>((resolve) => contents.once('did-finish-load', () => resolve()));
     const refresh = (): void => {
       if (this.visibleId === id) this.publish(id, view);
     };
@@ -112,8 +135,9 @@ export class SiteViews {
     contents.on('did-finish-load', refresh);
     view.setVisible(false);
     this.window.contentView.addChildView(view);
-    const entry = { kind, view };
+    const entry = { kind, view, loaded };
     this.entries.set(id, entry);
+    this.layout();
     void contents.loadURL(siteStartUrl(kind, this.env));
     return entry;
   }
@@ -132,10 +156,6 @@ export class SiteViews {
       this.log(kind, 'check', { permission, origin: requestingOrigin, allowed });
       return allowed;
     });
-  }
-
-  private unattended(): boolean {
-    return (this.env['AIAW_CAPTURE_AUTO'] ?? '').length > 0;
   }
 
   private layout(): void {
