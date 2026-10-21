@@ -2,7 +2,7 @@ phase:app-shell
 role:APP
 type:feature
 priority:P0
-status:done
+status:in_progress
 verify:pending
 attack:passed
 depends:05-feasibility/01-evidence-table
