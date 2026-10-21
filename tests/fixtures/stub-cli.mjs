@@ -29,6 +29,10 @@ function appendRecords(file, records) {
   appendFileSync(file, records.map((record) => JSON.stringify(record)).join('\n') + '\n');
 }
 
+function replyFor(prompt) {
+  return process.env.AIAW_STUB_REPLY ?? `stub reply to: ${prompt}`;
+}
+
 function claudeRecords(reply) {
   const message = (id, stop, content) => ({ type: 'assistant', timestamp: stamp(), message: { id, role: 'assistant', stop_reason: stop, content } });
   const id = `msg_${randomUUID()}`;
@@ -42,7 +46,7 @@ function claudeRecords(reply) {
 function writeClaudeTranscript(prompt) {
   const dir = path.join(process.env.CLAUDE_CONFIG_DIR ?? '.', 'projects', 'stub');
   const user = { type: 'user', timestamp: stamp(), message: { role: 'user', content: prompt } };
-  appendRecords(path.join(dir, `${claudeSessionId}.jsonl`), [user, ...claudeRecords(`stub reply to: ${prompt}`)]);
+  appendRecords(path.join(dir, `${claudeSessionId}.jsonl`), [user, ...claudeRecords(replyFor(prompt))]);
 }
 
 function codexEvent(payload) {
@@ -64,7 +68,7 @@ function codexFile_() {
 }
 
 function writeCodexTranscript(prompt) {
-  const reply = `stub reply to: ${prompt}`;
+  const reply = replyFor(prompt);
   const file = codexFile_();
   const records = [codexEvent({ type: 'task_started' }), codexItem('commentary', 'working'), codexItem('final_answer', reply)];
   const complete = { type: 'task_complete', last_agent_message: process.env.AIAW_STUB_CODEX_NULL_REPLY ? null : reply };

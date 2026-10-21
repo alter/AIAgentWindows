@@ -53,3 +53,11 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - Feed: every entry is built with `textContent` (`room-pane.ts`); markup in a reply stays text (checked once in a hidden Electron run with `<b>x</b>` in the prompt; the smoke test of it is T10).
 - Reverse control (2026-10-21): `AgentController.paste` writing `bracketedPaste(text) + '\r'` -> `× pastes the text into a CLI session without submitting it` (`expected ... not to contain 'SUBMITTED:'`); restored, 8/8 green.
 - Checked once in test mode (AIAW_USER_DATA tmp, windows hidden, stub CLI, no real CLI or site): Room item opens the pane, Start with nothing ticked shows a message, a relay of one stub claude ends `done`, the history file holds prompt then reply.
+
+## T10 room smoke
+
+- `tests/full/room.spec.ts` (5 tests, hidden windows, test mode, stub CLI for both room participants): relay of claude+codex stubs for 2 rounds (history headings Owner, Claude Code, Codex, Claude Code, Codex), broadcast, Stop in the middle (stub reply delay 1.5 s, status `stopped`, `Room | error` entry, fewer than 6 replies), carried result pasted into a working stub session without `SUBMITTED:`, markup in a reply shown as text (no img/b in the feed, `window.__pwned` unset).
+- Test-mode override: `AIAW_ROOM_FAST=1` (only honoured when `AIAW_USER_DATA` is set; `src/shared/room-test-mode.ts`) shortens room poll/settle/submit/kill timing and sets `AIAW_STUB_TRANSCRIPT=<kind>` for room CLI sessions so the stub writes Claude/Codex transcripts. `quietMs` is deliberately not shortened: with 300 ms the prompt was pasted while the login shell was still starting (cooked tty, Enter arrived as `\n`, stub never submitted) — root cause found from the stub's stdin log.
+- Stub CLI gained `AIAW_STUB_REPLY` (fixed reply text).
+- Reverse controls (2026-10-21), both red then restored: (1) `AgentController.paste` writing `bracketedPaste(text) + '\r'` -> carried test `not.toContainText('SUBMITTED:')` failed; (2) feed entry built with `innerHTML` -> markup test `toHaveText` failed (received `bold`).
+- Verify: `PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit` exit 0, 14 tests; fast tier 11/11 (FASTRUN-2026-10-21-202108444464).
