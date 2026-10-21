@@ -1,5 +1,5 @@
 // site-views.ts
-import { session, WebContentsView, type BrowserWindow } from 'electron';
+import { session, WebContentsView, type BrowserWindow, type WebContents } from 'electron';
 import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
 import { siteBounds } from '../shared/site-layout';
@@ -51,6 +51,10 @@ export class SiteViews {
     else if (action === 'forward' && contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
     else if (action === 'home') void contents.loadURL(siteStartUrl(entry.kind, this.env));
     else if (action === 'reload') contents.reload();
+  }
+
+  openPages(): Array<{ kind: SiteKind; contents: WebContents }> {
+    return [...this.entries.values()].map((entry) => ({ kind: entry.kind, contents: entry.view.webContents }));
   }
 
   close(id: string): void {

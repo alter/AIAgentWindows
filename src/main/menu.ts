@@ -2,7 +2,7 @@
 import { Menu, type MenuItemConstructorOptions } from 'electron';
 import type { SiteAction } from '../shared/ipc';
 
-export function installMenu(isMac: boolean, navigate: (action: SiteAction) => void): void {
+export function installMenu(isMac: boolean, navigate: (action: SiteAction) => void, capture?: () => void): void {
   const goItem = (label: string, accelerator: string, action: SiteAction): MenuItemConstructorOptions => ({
     label,
     accelerator,
@@ -20,6 +20,9 @@ export function installMenu(isMac: boolean, navigate: (action: SiteAction) => vo
         goItem('Reload', 'CmdOrCtrl+R', 'reload'),
       ],
     },
+    ...(capture === undefined
+      ? []
+      : [{ label: 'Capture', submenu: [{ label: 'Capture site structure', accelerator: 'CmdOrCtrl+Shift+K', click: capture }] }]),
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

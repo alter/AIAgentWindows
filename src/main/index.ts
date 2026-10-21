@@ -6,11 +6,13 @@ import { windowTitle } from '../shared/app-info';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
+import { CAPTURE_ENV, captureSites, summarizeCapture } from './capture-sites';
 import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { installMenu } from './menu';
 import { createSiteLogger } from './site-log-file';
 import { SiteViews } from './site-views';
+import { createIsolatedRunner } from './site-adapters/isolated-runner';
 import { loadState } from './state-file';
 
 const userDataOverride = process.env['AIAW_USER_DATA'];
@@ -49,6 +51,14 @@ function createWindow(): BrowserWindow {
   return window;
 }
 
+async function captureStructure(siteViews: SiteViews, outDir: string): Promise<void> {
+  const targets = siteViews.openPages().map((page) => ({ kind: page.kind, runner: createIsolatedRunner(page.contents) }));
+  const results = await captureSites(targets, outDir);
+  const options = { type: 'info' as const, message: 'Site structure capture', detail: summarizeCapture(results) };
+  if (mainWindow) await dialog.showMessageBox(mainWindow, options);
+  else await dialog.showMessageBox(options);
+}
+
 async function start(): Promise<void> {
   const userData = app.getPath('userData');
   const sharedDir = path.join(userData, 'shared');
@@ -80,10 +90,15 @@ async function start(): Promise<void> {
   const active = controller;
   await active.restore();
   registerIpc(active, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
-  installMenu(process.platform === 'darwin', (action) => {
-    const selected = active.selectedAgent();
-    if (selected) active.siteNav(selected.id, action);
-  });
+  const captureDir = process.env[CAPTURE_ENV];
+  installMenu(
+    process.platform === 'darwin',
+    (action) => {
+      const selected = active.selectedAgent();
+      if (selected) active.siteNav(selected.id, action);
+    },
+    captureDir !== undefined && path.isAbsolute(captureDir) ? () => void captureStructure(siteViews, captureDir) : undefined,
+  );
   if (smokeExit) window.webContents.once('did-finish-load', () => app.quit());
   await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   active.syncSelection();
