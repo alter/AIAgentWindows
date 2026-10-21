@@ -50,3 +50,9 @@ The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
 - V2 became an open assumption: the Apple thread could not be read.
 - The harness-only observation (Electron renderers fail inside the Claude Code sandbox with `UnknownVizError`) moved out of `docs/tech/electron@44.6.0.md`; it is about this session's tooling, not Electron.
 - While writing this note an unquoted shell heredoc ran its backticks: `npm run release` executed in the repository root (no package.json: "Missing script") and a few words were tried as commands; nothing was changed by it.
+
+# NOTES — owner's sign-in check, partial (2026-10-21)
+
+- Owner ran `npx electron signin.js`: the windows opened; "Sign in with Google" answered "Couldn't sign you in. This browser or app may not be secure. Try using a different browser." This is W7 as predicted by Google's policy.
+- The run printed `sandbox_extension_issue_file failed … (Operation not permitted)`; the windows still rendered. The same line appears when Electron starts inside the Claude Code harness sandbox; in a normal terminal it should not.
+- Still open for VERIFY item 6: sign-in by email, Apple or the site's own account on each site, and whether it survives a restart.
