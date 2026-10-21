@@ -42,7 +42,7 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - Windows and Ubuntu verification — per-OS tasks closed by the owner
 
 ## Tasks
-- [ ] T00 Baseline: create branch `room` from `app-shell-skeleton`; run the fast tier and the full tier once, record results in `## Log` — verify: `git branch --show-current` = `room` and the Log line exists
+- [x] T00 Baseline: create branch `room` from `app-shell-skeleton`; run the fast tier and the full tier once, record results in `## Log` — verify: `git branch --show-current` = `room` and the Log line exists
 - [ ] T01 Study the owner's CLI versions: claude 2.1.306 `--permission-mode plan` (what it allows, that it still answers), the end-of-turn signal in its transcript; codex 0.163.0 `--sandbox read-only`, `resume`, the end-of-turn event and the rollout form (paginated, EVIDENCE CX15); write `docs/tech/codex@0.163.0.md`, extend `docs/tech/claude-code@2.1.306.md`, add EVIDENCE rows (run rows only from a session that sends no prompt, or doc rows) — verify: `python3 scripts/evidence_check.py && python3 tasks/check.py`
 - [ ] T02 `src/shared/room-model.ts` (participants, mode, rounds 1..50, relay schedule with return to the first, history entries) and `src/shared/room-history.ts` (markdown render, prompt builder per participant kind with the 12,000-character rule) + `tests/unit/room-model.test.ts`, `tests/unit/room-history.test.ts` (red first) — verify: `npx vitest run tests/unit/room-model.test.ts tests/unit/room-history.test.ts` + fast tier
 - [ ] T03 CLI turn driver `src/main/cli-turn.ts`: send through the pty (sanitized bracketed paste, then Enter), watch the transcript for the end-of-turn signal from T01, return the reply or a timeout error; extend the stub CLI to write Claude-format and Codex-format transcript records on submit + `tests/integration/cli-turn.test.ts` (red first) — verify: `npx vitest run tests/integration/cli-turn.test.ts` + fast tier
@@ -57,3 +57,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - [ ] T12 Final: fast and full tier against the T00 baseline; `/attack` on the Room (auto-submit boundary, read-only room sessions, adapters, history file, feed) by the attacker agent; confirmed findings become fix tasks — verify: all §6 commands exit 0 and ATTACK.md exists in the task directory
 
 ## Log
+- 2026-10-21 19:13 T00 done: branch room from app-shell-skeleton (ba0376b); baseline fast tier 11/11 green in 28s (FASTRUN-2026-10-21-191149909265), full tier 2/2 green in 74s (FULLRUN-2026-10-21-191223519599, smoke in test mode)
