@@ -50,6 +50,8 @@ const ROOM_CODEX_ARGS: readonly string[] = [
   '--ask-for-approval',
   'never',
   '--no-daemon',
+  '-c',
+  'check_for_update_on_startup=false',
 ];
 
 function cliArgs(kind: CliKind, options: SpawnOptions, room: boolean): string[] {

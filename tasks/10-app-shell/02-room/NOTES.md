@@ -64,3 +64,10 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 
 ## T12b reverse control (capture sanitizer closed vocabulary)
 `isClosedValue` made to accept every value (`parts.length >= 0 ||`): `npx vitest run tests/unit/capture-sanitize.test.ts` -> 6 failed (token-shaped value kept, free-word class / data-state / aria / test id / free-text attribute not flagged by findLeaks). Restored; 32 passed.
+
+## T12a start-up dialogs (ATTACK finding 2)
+- Room codex sessions start with `-c check_for_update_on_startup=false` (key verified in the 0.163.0 `config.schema.json` and `tui/src/updates.rs`, docs/tech/codex@0.163.0.md, EVIDENCE CX26); the flag sits before `resume`.
+- `src/shared/start-screen.ts` `blockingStartScreen(output)` (escape codes and whitespace removed, case-folded) names update, folder-trust and "enter continue/confirm" dialogs. `CliDriver.session` runs it on the output captured from spawn until the session went quiet; a hit kills the session and fails the turn (`unavailable`, error entry in the feed) before anything is written to the pty. The stub CLI has `AIAW_STUB_DIALOG=update|trust` and `AIAW_STUB_STDIN_LOG` (records every byte written to its stdin).
+- Reverse control (2026-10-21): the `if (blocked !== null)` branch in `room-drivers.ts` switched off -> `npx vitest run tests/integration/room.test.ts` -> `Tests  2 failed | 16 passed (18)` (update dialog, trust dialog: a prompt and Enter reached the stub). Restored.
+- Not done by design: a positive "at the prompt" marker (the prompt glyphs are not verified across CLI versions, a false negative would fail every real turn) and the `turn_context.sandbox_policy` check (the record only exists after the first turn, i.e. after the first submit). Read-only stays enforced by the flags (T04 tests).
+

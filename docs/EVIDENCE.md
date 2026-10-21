@@ -60,6 +60,7 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | CX23 | A room codex session started with `--no-daemon --sandbox read-only` records `sandbox_policy.type == read-only` in its `turn_context` | assumption | T04 integration test on the stub, HUMAN: AC7 | open |
 | CX24 | The room's CLI turn driver reads a Codex reply from `task_complete` and a Claude reply from `end_turn` records with text, on stub transcripts in both formats, and a turn that never ends times out with an error | run | `tests/integration/cli-turn.test.ts` | confirmed |
 | CX25 | The room's turn signals hold on real Claude Code 2.1.306 and Codex 0.163.0 sessions started by the Room | assumption | HUMAN: AC7 Room run, NOTES.md | open |
+| CX26 | `check_for_update_on_startup = false` (config key, boolean, default true, settable with `-c`) turns off codex's start-up update check and its dialog; a room codex session passes it, and the driver refuses to submit when a known start-up dialog is on screen | doc | https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/config.schema.json | confirmed |
 
 ## Files, images, clipboard
 

@@ -57,6 +57,14 @@ describe('room sessions start read-only', () => {
     expect(args).toContain('--no-daemon');
   });
 
+  it('starts codex with the update check off, so no update dialog takes the first Enter', () => {
+    const args = cliArgs('codex', { sessionId: undefined });
+    expect(valueAfter(args, '-c')).toBe('check_for_update_on_startup=false');
+    const resumed = cliArgs('codex', { resume: true });
+    expect(valueAfter(resumed, '-c')).toBe('check_for_update_on_startup=false');
+    expect(resumed.indexOf('-c')).toBeLessThan(resumed.indexOf('resume'));
+  });
+
   it('keeps the read-only sandbox when a codex room session is resumed', () => {
     const args = cliArgs('codex', { resume: true });
     expect(args.slice(args.indexOf('resume'))).toEqual(['resume', SESSION]);
@@ -82,5 +90,6 @@ describe('room sessions start read-only', () => {
     const args = buildSpawn('claude', options()).args.join(' ');
     expect(args).not.toContain('--permission-mode');
     expect(buildSpawn('codex', options({ sessionId: undefined })).args.slice(SCRIPT_END)).toEqual(['codex']);
+    expect(buildSpawn('codex', options({ sessionId: undefined })).args.join(' ')).not.toContain('check_for_update');
   });
 });

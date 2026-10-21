@@ -349,6 +349,46 @@ describe('room with stub CLIs', () => {
   });
 });
 
+describe('room CLI start-up screens', () => {
+  const screens: Array<[string, string, 'claude' | 'codex']> = [
+    ['update', 'a codex update dialog with "Update now" preselected', 'codex'],
+    ['trust', 'a claude folder trust dialog', 'claude'],
+  ];
+
+  for (const [dialog, title, kind] of screens) {
+    it(`types nothing into ${title} and fails the turn`, async () => {
+      const log = path.join(dir, `stdin-${dialog}.log`);
+      const drivers = createRoomDrivers({
+        cwd: roomsDir,
+        sharedDir: dir,
+        platform: 'win32',
+        envFor: () => ({
+          PATH: process.env.PATH,
+          AIAW_CLAUDE_BIN: STUB,
+          AIAW_CODEX_BIN: STUB,
+          AIAW_USER_DATA: path.join(dir, 'user-data'),
+          CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
+          CODEX_HOME: path.join(dir, 'codex-home'),
+          AIAW_STUB_TRANSCRIPT: kind,
+          AIAW_STUB_DIALOG: dialog,
+          AIAW_STUB_STDIN_LOG: log,
+        }),
+        siteFor: () => null,
+        timing: { quietMs: 150, startMaxMs: 10000, pollMs: 25, settleMs: 50, submitDelayMs: 40, killWaitMs: 5000 },
+      });
+      const room = new Room({ roomsDir, driverFor: drivers.factory });
+      rooms.push(room);
+      const participant = kind === 'codex' ? B : A;
+      const result = await room.start(config([participant], { turnTimeoutMs: 3000 })).done;
+      await room.shutdown();
+      drivers.shutdown();
+      expect(result.entries.map((entry) => `${entry.kind}`)).toEqual(['prompt', 'error']);
+      const typed = await readFile(log, 'utf8').catch(() => '');
+      expect(typed).toBe('');
+    });
+  }
+});
+
 describe('room with a web participant', () => {
   it('inserts the prompt as text, reads the reply and attaches a long history as a file', async () => {
     const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });

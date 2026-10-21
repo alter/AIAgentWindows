@@ -6,11 +6,19 @@ import path from 'node:path';
 
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
+const STDIN_LOG = process.env.AIAW_STUB_STDIN_LOG;
+const DIALOG = process.env.AIAW_STUB_DIALOG;
 const childSession = process.env.CLAUDE_CODE_CHILD_SESSION === undefined ? 'unset' : 'set';
 
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdout.write('\x1b[?2004h');
 process.stdout.write(`STUB-CLI BANNER argv=${JSON.stringify(process.argv.slice(2))} CLAUDE_CODE_CHILD_SESSION=${childSession}\r\n`);
+
+const DIALOGS = {
+  update: '  Update available \u00b7 0.159.2 \u2192 0.163.0\r\n\r\n\u203a 1. Update now (runs `probe-installer`)\r\n  2. Skip\r\n  3. Skip until next version\r\n\r\n  enter continue \u00b7 esc skip\r\n',
+  trust: ' Quick safety check: Is this a project you created or one you trust?\r\n\r\n \u276f No, exit\r\n   Yes, I trust this folder\r\n\r\n Enter to confirm \u00b7 Esc to cancel\r\n',
+};
+if (DIALOG && DIALOGS[DIALOG]) process.stdout.write(DIALOGS[DIALOG]);
 
 const TRANSCRIPT = process.env.AIAW_STUB_TRANSCRIPT;
 const REPLY_DELAY_MS = Number(process.env.AIAW_STUB_REPLY_DELAY_MS ?? '50');
@@ -86,6 +94,7 @@ let line = '';
 let inPaste = false;
 
 function feed(chunk) {
+  if (STDIN_LOG) appendFileSync(STDIN_LOG, JSON.stringify(chunk) + '\n');
   let rest = chunk;
   while (rest.length > 0) {
     if (rest.startsWith(PASTE_START)) {

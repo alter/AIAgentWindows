@@ -6,6 +6,7 @@ import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomSpawn } from '../shared/cli-args';
 import { rolloutId } from '../shared/codex-claim';
 import type { RoomParticipant } from '../shared/room-model';
+import { blockingStartScreen } from '../shared/start-screen';
 import { claudeTranscriptPath } from './claude-transcripts';
 import { runCliTurn, CliTurnError } from './cli-turn';
 import { codexRolloutLocator } from './codex-rollouts';
@@ -56,14 +57,19 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const START_SCREEN_LIMIT = 32768;
+
 class SessionHost {
   private readonly lastData = new Map<string, number>();
+  private readonly startScreens = new Map<string, string>();
   private readonly pty: PtyManager;
 
   constructor(onOutput: RoomDriverDeps['onOutput']) {
     this.pty = new PtyManager({
       onData: (id, data) => {
         this.lastData.set(id, Date.now());
+        const seen = this.startScreens.get(id) ?? '';
+        if (seen.length < START_SCREEN_LIMIT) this.startScreens.set(id, seen + data);
         onOutput?.(id, data);
       },
       onExit: (id) => {
@@ -72,7 +78,12 @@ class SessionHost {
     });
   }
 
+  startScreen(id: string): string {
+    return this.startScreens.get(id) ?? '';
+  }
+
   spawn(id: string, spec: Parameters<PtyManager['spawn']>[1]): void {
+    this.startScreens.delete(id);
     this.pty.spawn(id, spec, { cols: 120, rows: 40 });
   }
 
@@ -169,6 +180,11 @@ class CliDriver implements ParticipantDriver {
         ? async () => claudeTranscriptPath(env, sessionId)
         : this.claiming(codexRolloutLocator(env, { cwd, spawnedAtMs, claimed: this.claimed }));
     await this.untilReady(ptyId, signal);
+    const blocked = blockingStartScreen(this.host.startScreen(ptyId));
+    if (blocked !== null) {
+      await this.reset();
+      throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${blocked}`);
+    }
     return ptyId;
   }
 
