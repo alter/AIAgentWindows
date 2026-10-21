@@ -1,0 +1,9 @@
+# @playwright/test@1.63.0
+
+Pinned 2026-10-21 (published 2026-09-04; Node `>=20`). `docs/tech/playwright@1.63.0.md` holds the reporter notes; this one holds the Electron automation.
+
+- `_electron` is exported by `@playwright/test` (it re-exports `playwright/test`, which re-exports `playwright-core`): `import { _electron as electron } from '@playwright/test'` — https://github.com/microsoft/playwright/blob/v1.63.0/packages/playwright-test/index.d.ts#L17-L18 and https://github.com/microsoft/playwright/blob/v1.63.0/packages/playwright-core/types/types.d.ts#L19251
+- `electron.launch({ args, executablePath, cwd, env, timeout })`: `args` normally holds the app path (`['.']`), `executablePath` defaults to the installed `electron`, `env` defaults to `process.env` (so `AIAW_USER_DATA` and `AIAW_CLAUDE_BIN` go through `env`), `timeout` defaults to 30000 ms — https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/electron-api/class-electron.md#L86-L118
+- `electronApp.firstWindow()` returns the first window as a `Page`; `electronApp.evaluate(fn, arg)` runs `fn({ app, dialog, ... }, arg)` in the main process; `electronApp.close()` ends the app — https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/electron-api/class-electronapplication.md#L94-L154
+- Native dialogs are not intercepted; stub `dialog.showOpenDialog` with `electronApp.evaluate(({ dialog }, paths) => { dialog.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: paths }) }, [folder])` — https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/electron-api/class-electron.md#L52-L80
+- Launch timeouts can come from the electron fuse `EnableNodeCliInspectArguments` set to `false`; the fuse must stay on — https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/electron-api/class-electron.md#L50-L52
