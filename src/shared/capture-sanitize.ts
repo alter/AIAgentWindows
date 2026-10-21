@@ -63,6 +63,7 @@ export interface SanitizePolicy {
   idLists: readonly string[];
   words: readonly string[];
   sitePattern: string;
+  maxNodes: number;
 }
 
 export const SANITIZE_POLICY: SanitizePolicy = {
@@ -72,6 +73,7 @@ export const SANITIZE_POLICY: SanitizePolicy = {
   idLists: ID_LISTS,
   words: CLOSED_WORDS,
   sitePattern: '^[a-z]{1,20}$',
+  maxNodes: 60000,
 };
 
 export const ID_PLACEHOLDER = /^id-\d{1,6}$/;
@@ -84,7 +86,7 @@ export function isClosedValue(value: string, words: ReadonlySet<string>): boolea
 
 export function sanitizePage(source: Document, site: string, policy: SanitizePolicy): string {
   const TEXT = 'x';
-  const MAX_NODES = 60000;
+  const MAX_NODES = policy.maxNodes;
   const MAX_DEPTH = 400;
   const skip = new Set(['script', 'style', 'noscript', 'template', 'link', 'meta', 'title', 'base', 'head']);
   const hollow = new Set(['svg', 'math', 'canvas', 'iframe', 'object', 'embed', 'video', 'audio']);

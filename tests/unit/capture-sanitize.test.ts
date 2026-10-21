@@ -181,8 +181,16 @@ describe('capture sanitizer limits', () => {
   it('stops at the node limit', () => {
     const dom = new JSDOM('<body></body>');
     const { document } = dom.window;
-    for (let index = 0; index < 60100; index += 1) document.body.appendChild(document.createElement('i'));
-    expect(sanitizePage(document, 'x', SANITIZE_POLICY)).toContain('data-aiaw-truncated="true"');
+    for (let index = 0; index < 120; index += 1) document.body.appendChild(document.createElement('i'));
+    const html = sanitizePage(document, 'x', { ...SANITIZE_POLICY, maxNodes: 50 });
+    expect(html).toContain('data-aiaw-truncated="true"');
+    expect(html.match(/<i>/g)).toHaveLength(49);
+    expect(sanitizePage(document, 'x', { ...SANITIZE_POLICY, maxNodes: 500 })).not.toContain('data-aiaw-truncated');
+  });
+
+  it('runs the page with the production node limit', () => {
+    expect(SANITIZE_POLICY.maxNodes).toBe(60000);
+    expect(sanitizeScript('x')).toContain('"maxNodes":60000');
   });
 
   it('skips an element whose name cannot be recreated and a class with no safe token', () => {
