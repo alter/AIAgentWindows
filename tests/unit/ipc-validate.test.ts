@@ -96,4 +96,13 @@ describe('channel tables', () => {
     for (const name of invoke) expect(isEventChannel(name)).toBe(false);
     expect(isEventChannel('nope')).toBe(false);
   });
+
+  it('validates close and restart ids', () => {
+    for (const channel of [INVOKE_CHANNELS.closeAgent, INVOKE_CHANNELS.restartAgent]) {
+      expect(validateRequest(channel, { id: ID })).toEqual({ ok: true, value: { id: ID } });
+      expect(validateRequest(channel, { id: '' }).ok).toBe(false);
+      expect(validateRequest(channel, {}).ok).toBe(false);
+      expect(validateRequest(channel, undefined).ok).toBe(false);
+    }
+  });
 });

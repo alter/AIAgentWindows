@@ -43,6 +43,15 @@ export class SiteViews {
     else if (action === 'reload') contents.reload();
   }
 
+  close(id: string): void {
+    const entry = this.entries.get(id);
+    if (entry === undefined) return;
+    this.entries.delete(id);
+    if (this.visibleId === id) this.visibleId = null;
+    this.window.contentView.removeChildView(entry.view);
+    if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
+  }
+
   closeAll(): void {
     for (const entry of this.entries.values()) {
       if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();

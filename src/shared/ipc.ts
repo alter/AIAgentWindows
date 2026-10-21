@@ -6,6 +6,8 @@ export const INVOKE_CHANNELS = {
   listAgents: 'agents:list',
   addAgent: 'agents:add',
   selectAgent: 'agents:select',
+  closeAgent: 'agents:close',
+  restartAgent: 'agents:restart',
   ptyWrite: 'pty:write',
   ptyResize: 'pty:resize',
   ptyBacklog: 'pty:backlog',
@@ -55,6 +57,8 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.listAgents]: undefined;
   [INVOKE_CHANNELS.addAgent]: { kind: AgentKind };
   [INVOKE_CHANNELS.selectAgent]: { id: string };
+  [INVOKE_CHANNELS.closeAgent]: { id: string };
+  [INVOKE_CHANNELS.restartAgent]: { id: string };
   [INVOKE_CHANNELS.ptyWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.ptyResize]: { id: string; cols: number; rows: number };
   [INVOKE_CHANNELS.ptyBacklog]: { id: string };
@@ -70,6 +74,8 @@ export interface AppApi {
   listAgents(): Promise<AgentsSnapshot>;
   addAgent(kind: AgentKind): Promise<void>;
   selectAgent(id: string): Promise<void>;
+  closeAgent(id: string): Promise<void>;
+  restartAgent(id: string): Promise<boolean>;
   ptyWrite(id: string, data: string): Promise<void>;
   ptyResize(id: string, cols: number, rows: number): Promise<void>;
   ptyBacklog(id: string): Promise<PtyBacklog>;
@@ -111,6 +117,8 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
     return (AGENT_KINDS as readonly unknown[]).includes(kind) ? { kind: kind as AgentKind } : null;
   },
   [INVOKE_CHANNELS.selectAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.closeAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.restartAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.ptyWrite]: (payload) =>
     withId(payload, (record, id) => {
       const data = record['data'];

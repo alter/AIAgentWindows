@@ -16,6 +16,7 @@ const content = new Content();
 const sidebar = new Sidebar({
   onSelect: (id) => void api.selectAgent(id),
   onAdd: (kind) => void api.addAgent(kind),
+  onClose: (id) => void api.closeAgent(id),
 });
 root.append(sidebar.element, content.element);
 

@@ -16,6 +16,8 @@ function buildHandlers(controller: AgentController): Handlers {
     [INVOKE_CHANNELS.listAgents]: (): AgentsSnapshot => controller.snapshot(),
     [INVOKE_CHANNELS.addAgent]: ({ kind }) => controller.add(kind),
     [INVOKE_CHANNELS.selectAgent]: ({ id }) => controller.select(id),
+    [INVOKE_CHANNELS.closeAgent]: ({ id }) => controller.close(id),
+    [INVOKE_CHANNELS.restartAgent]: ({ id }) => controller.restart(id),
     [INVOKE_CHANNELS.ptyWrite]: ({ id, data }) => controller.ptyWrite(id, data),
     [INVOKE_CHANNELS.ptyResize]: ({ id, cols, rows }) => controller.ptyResize(id, cols, rows),
     [INVOKE_CHANNELS.ptyBacklog]: ({ id }) => controller.ptyBacklog(id),

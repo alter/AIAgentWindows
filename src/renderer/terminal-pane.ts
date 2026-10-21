@@ -17,6 +17,7 @@ export class TerminalPane {
     theme: { background: '#1a1d21', foreground: '#d1d2d3' },
   });
   private readonly fit = new FitAddon();
+  private readonly restartButton = el('button', 'restart-button', 'Restart');
   private opened = false;
   private hydrated = false;
   private hydratedEnd = 0;
@@ -24,6 +25,10 @@ export class TerminalPane {
 
   constructor(private readonly id: string) {
     this.element.hidden = true;
+    this.restartButton.type = 'button';
+    this.restartButton.hidden = true;
+    this.restartButton.addEventListener('click', () => void this.restart());
+    this.element.append(this.restartButton);
     this.terminal.loadAddon(this.fit);
     this.terminal.attachCustomKeyEventHandler((event) => this.handleKey(event));
     this.terminal.onData((data) => void api.ptyWrite(this.id, data));
@@ -44,6 +49,15 @@ export class TerminalPane {
 
   exited(exitCode: number): void {
     this.terminal.write(`\r\n\x1b[2m[process exited with code ${exitCode}]\x1b[0m\r\n`);
+    this.restartButton.hidden = false;
+  }
+
+  private async restart(): Promise<void> {
+    this.restartButton.disabled = true;
+    const started = await api.restartAgent(this.id);
+    this.restartButton.disabled = false;
+    if (started) this.restartButton.hidden = true;
+    this.terminal.focus();
   }
 
   show(): void {

@@ -105,6 +105,74 @@ test('switching between two terminal agents keeps the visible pane filling the w
   }
 });
 
+test('closing an agent asks for confirmation in the app, removes it, and it stays gone after a relaunch', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const first = await launch(userData, folder);
+  try {
+    const page = await first.firstWindow();
+    await addAgent(page, 'claude');
+    await expect(page.locator('.agent-item')).toHaveCount(1);
+    await addAgent(page, 'codex');
+    await expect(page.locator('.agent-item')).toHaveCount(2);
+    await addAgent(page, 'grok');
+    await expect(page.locator('.agent-item')).toHaveCount(3);
+
+    await page.locator('.agent-list li').first().hover();
+    await page.locator('.agent-close').first().click();
+    await expect(page.locator('.close-confirm')).toBeVisible();
+    await page.locator('.confirm-no').click();
+    await expect(page.locator('.close-confirm')).toBeHidden();
+    await expect(page.locator('.agent-item')).toHaveCount(3);
+
+    await page.locator('.agent-list li').first().hover();
+    await page.locator('.agent-close').first().click();
+    await page.locator('.confirm-yes').click();
+    await expect(page.locator('.agent-item')).toHaveCount(2);
+
+    await page.locator('.agent-item').first().click({ button: 'right' });
+    await page.locator('.context-item').click();
+    await expect(page.locator('.close-confirm')).toBeVisible();
+    await page.locator('.confirm-yes').click();
+    await expect(page.locator('.agent-item')).toHaveCount(1);
+  } finally {
+    await first.close();
+  }
+  const second = await launch(userData, folder);
+  try {
+    const page = await second.firstWindow();
+    await expect(page.locator('.agent-item')).toHaveCount(1);
+    await expect(page.locator('.agent-item .agent-title')).toHaveText('Grok');
+  } finally {
+    await second.close();
+  }
+});
+
+test('an exited CLI agent offers Restart and starts again in the same pane', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder);
+  try {
+    const page = await app.firstWindow();
+    await addAgent(page, 'claude');
+    const rows = page.locator('.terminal-pane:not([hidden]) .xterm-rows');
+    await expect(rows).toContainText('STUB-CLI BANNER');
+    await expect(page.locator('.restart-button')).toBeHidden();
+    await page.locator('.terminal-pane:not([hidden]) .xterm').click();
+    await page.keyboard.type('/exit');
+    await page.keyboard.press('Enter');
+    await expect(rows).toContainText('process exited with code 0');
+    await expect(page.locator('.restart-button')).toBeVisible();
+    await page.locator('.restart-button').click();
+    await expect(page.locator('.restart-button')).toBeHidden();
+    await expect
+      .poll(async () => ((await rows.textContent()) ?? '').split('STUB-CLI BANNER').length - 1)
+      .toBe(2);
+  } finally {
+    await app.close();
+  }
+});
+
 test('a DeepSeek agent shows a visible view without the Electron token and Home returns to the start URL', async () => {
   const fixture = await startFixtureServer();
   const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));

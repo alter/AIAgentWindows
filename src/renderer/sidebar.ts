@@ -1,5 +1,5 @@
 // sidebar.ts
-import type { AgentKind } from '../shared/agents';
+import type { Agent, AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
 import { el } from './dom';
 import { kindIcon } from './icons';
@@ -7,6 +7,7 @@ import { kindIcon } from './icons';
 export interface SidebarHandlers {
   onSelect(id: string): void;
   onAdd(kind: AgentKind): void;
+  onClose(id: string): void;
 }
 
 const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
@@ -22,6 +23,15 @@ export class Sidebar {
   private readonly list = el('ul', 'agent-list');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
+  private readonly contextMenu = el('div', 'context-menu');
+  private readonly contextItem = el('button', 'context-item', 'Close agent');
+  private readonly confirm = el('div', 'close-confirm');
+  private readonly confirmText = el('span', 'close-confirm-text');
+  private readonly confirmYes = el('button', 'confirm-yes', 'Close agent');
+  private readonly confirmNo = el('button', 'confirm-no', 'Cancel');
+  private agents: Agent[] = [];
+  private pendingId: string | null = null;
+  private contextId: string | null = null;
   private menuOpen = false;
 
   constructor(private readonly handlers: SidebarHandlers) {
@@ -34,18 +44,27 @@ export class Sidebar {
     this.menu.hidden = true;
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
-    this.element.append(header, this.menu, this.list);
+    this.setupClose();
+    this.element.append(header, this.menu, this.list, this.confirm, this.contextMenu);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
     });
-    document.addEventListener('click', () => this.setMenuOpen(false));
+    document.addEventListener('click', () => {
+      this.setMenuOpen(false);
+      this.hideContextMenu();
+    });
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') this.setMenuOpen(false);
+      if (event.key !== 'Escape') return;
+      this.setMenuOpen(false);
+      this.hideContextMenu();
+      this.setPending(null);
     });
   }
 
   render(snapshot: AgentsSnapshot): void {
+    this.agents = snapshot.agents;
+    if (this.pendingId !== null && !snapshot.agents.some((agent) => agent.id === this.pendingId)) this.setPending(null);
     this.list.replaceChildren();
     if (snapshot.agents.length === 0) {
       this.list.append(el('li', 'agent-empty', 'No agents yet. Use + to add one.'));
@@ -59,9 +78,64 @@ export class Sidebar {
       if (agent.id === snapshot.selectedId) button.classList.add('selected');
       button.append(kindIcon(agent.kind), el('span', 'agent-title', agent.title));
       button.addEventListener('click', () => this.handlers.onSelect(agent.id));
-      item.append(button);
+      const close = el('button', 'agent-close', '×');
+      close.type = 'button';
+      close.title = 'Close agent';
+      close.setAttribute('aria-label', `Close ${agent.title}`);
+      close.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.setPending(agent.id);
+      });
+      item.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        this.showContextMenu(agent.id, event.clientX, event.clientY);
+      });
+      item.append(button, close);
       this.list.append(item);
     }
+  }
+
+  private setupClose(): void {
+    this.contextMenu.hidden = true;
+    this.contextMenu.setAttribute('role', 'menu');
+    this.contextItem.type = 'button';
+    this.contextItem.setAttribute('role', 'menuitem');
+    this.contextMenu.append(this.contextItem);
+    this.contextItem.addEventListener('click', () => {
+      const id = this.contextId;
+      this.hideContextMenu();
+      if (id !== null) this.setPending(id);
+    });
+    this.confirm.hidden = true;
+    this.confirm.setAttribute('role', 'alertdialog');
+    this.confirmYes.type = 'button';
+    this.confirmNo.type = 'button';
+    this.confirm.append(this.confirmText, this.confirmYes, this.confirmNo);
+    this.confirmYes.addEventListener('click', () => {
+      const id = this.pendingId;
+      this.setPending(null);
+      if (id !== null) this.handlers.onClose(id);
+    });
+    this.confirmNo.addEventListener('click', () => this.setPending(null));
+  }
+
+  private setPending(id: string | null): void {
+    this.pendingId = id;
+    const agent = this.agents.find((item) => item.id === id);
+    this.confirm.hidden = agent === undefined;
+    this.confirmText.textContent = agent === undefined ? '' : `Close ${agent.title}? Its session files stay on disk.`;
+  }
+
+  private showContextMenu(id: string, x: number, y: number): void {
+    this.contextId = id;
+    this.contextMenu.style.left = `${x}px`;
+    this.contextMenu.style.top = `${y}px`;
+    this.contextMenu.hidden = false;
+  }
+
+  private hideContextMenu(): void {
+    this.contextId = null;
+    this.contextMenu.hidden = true;
   }
 
   private menuItem(kind: AgentKind, label: string): HTMLButtonElement {

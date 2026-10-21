@@ -16,6 +16,7 @@ let events: { channel: string; payload: unknown }[];
 let controller: AgentController;
 let siteNav: Mock<NonNullable<ControllerDeps['siteNav']>>;
 let showSite: Mock<NonNullable<ControllerDeps['showSite']>>;
+let closeSite: Mock<NonNullable<ControllerDeps['closeSite']>>;
 
 function build(): AgentController {
   const deps: ControllerDeps = {
@@ -27,6 +28,7 @@ function build(): AgentController {
     emit: (channel, payload) => events.push({ channel, payload }),
     siteNav,
     showSite,
+    closeSite,
   };
   return new AgentController(deps, emptyState());
 }
@@ -51,6 +53,7 @@ beforeEach(async () => {
   events = [];
   siteNav = vi.fn<NonNullable<ControllerDeps['siteNav']>>();
   showSite = vi.fn<NonNullable<ControllerDeps['showSite']>>();
+  closeSite = vi.fn<NonNullable<ControllerDeps['closeSite']>>();
   controller = build();
 });
 
@@ -170,5 +173,60 @@ describe('agent controller', () => {
     } finally {
       guarded.shutdown();
     }
+  });
+
+  it('closes an agent: kills its pty, drops it from the state file and the snapshot, keeps the others', async () => {
+    await controller.add('claude');
+    await controller.add('grok');
+    await controller.add('codex');
+    const [claude, grok, codex] = controller.snapshot().agents;
+    await waitForBanner(claude?.id ?? '');
+    await controller.close(claude?.id ?? '');
+    const snapshot = controller.snapshot();
+    expect(snapshot.agents.map((agent) => agent.id)).toEqual([grok?.id, codex?.id]);
+    expect(snapshot.selectedId).toBe(codex?.id);
+    expect(controller.ptyBacklog(claude?.id ?? '')).toEqual({ data: '', end: 0 });
+    expect((await loadState(path.join(dir, 'agents.json'))).agents.map((agent) => agent.id)).toEqual([grok?.id, codex?.id]);
+    await controller.close(grok?.id ?? '');
+    expect(closeSite).toHaveBeenCalledWith(grok?.id);
+    await controller.close('missing');
+    expect(controller.snapshot().agents).toHaveLength(1);
+    const changed = events.filter((event) => event.channel === EVENT_CHANNELS.agentsChanged);
+    expect((changed.at(-1)?.payload as AgentsSnapshot).agents).toHaveLength(1);
+  });
+
+  it('stays closed after a relaunch and stops the process', async () => {
+    await controller.add('claude');
+    const id = controller.snapshot().agents[0]?.id ?? '';
+    await waitForBanner(id);
+    await controller.close(id);
+    const after = events.length;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(events.slice(after).some((event) => event.channel === EVENT_CHANNELS.ptyData)).toBe(false);
+    const reopened = build();
+    const state = await loadState(path.join(dir, 'agents.json'));
+    expect(state.agents).toEqual([]);
+    expect(reopened.snapshot().agents).toEqual([]);
+  });
+
+  it('restarts an exited CLI agent with the same restore argv and refuses while it runs', async () => {
+    await controller.add('claude');
+    const agent = controller.snapshot().agents[0];
+    const id = agent?.id ?? '';
+    await waitForBanner(id);
+    expect(await controller.restart(id)).toBe(false);
+    controller.ptyWrite(id, '/exit\r');
+    await vi.waitFor(() => expect(events.some((event) => event.channel === EVENT_CHANNELS.ptyExit)).toBe(true));
+    events.length = 0;
+    expect(await controller.restart(id)).toBe(true);
+    const banner = await waitForBanner(id);
+    expect(banner).toContain(agent?.sessionId ?? 'no-session');
+    expect(await controller.restart(id)).toBe(false);
+    expect(await controller.restart('missing')).toBe(false);
+  });
+
+  it('does not restart a site agent', async () => {
+    await controller.add('grok');
+    expect(await controller.restart(controller.snapshot().agents[0]?.id ?? '')).toBe(false);
   });
 });

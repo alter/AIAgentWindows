@@ -8,6 +8,7 @@ import {
   isSiteKind,
   isUuid,
   parseState,
+  removeAgent,
   serializeState,
   type Agent,
   type AppState,
@@ -99,5 +100,14 @@ describe('state store', () => {
     for (const kind of AGENT_KINDS.filter(isSiteKind)) {
       expect(new URL(SITE_URLS[kind]).protocol).toBe('https:');
     }
+  });
+
+  it('removes an agent and selects the next one in the list, else the previous, else none', () => {
+    const agents = sample().agents;
+    expect(removeAgent(agents, 'a1', 'a2')).toEqual({ agents: [agents[0], agents[2]], selectedId: 'a1' });
+    expect(removeAgent(agents, 'a2', 'a2')).toEqual({ agents: [agents[0], agents[2]], selectedId: 'a3' });
+    expect(removeAgent(agents, 'a3', 'a3')).toEqual({ agents: [agents[0], agents[1]], selectedId: 'a2' });
+    expect(removeAgent([agents[0] as Agent], 'a1', 'a1')).toEqual({ agents: [], selectedId: null });
+    expect(removeAgent(agents, 'a1', 'missing')).toEqual({ agents, selectedId: 'a1' });
   });
 });

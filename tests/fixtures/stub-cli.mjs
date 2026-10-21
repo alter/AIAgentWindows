@@ -25,6 +25,7 @@ function feed(chunk) {
       rest = rest.slice(1);
       if (char === '\r' && !inPaste) {
         process.stdout.write(`\r\nSUBMITTED:${line}\r\n`);
+        if (line === '/exit') process.exit(0);
         line = '';
       } else {
         line += char;

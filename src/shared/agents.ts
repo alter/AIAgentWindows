@@ -46,6 +46,18 @@ export function emptyState(): AppState {
   return { version: STATE_VERSION, agents: [] };
 }
 
+export function removeAgent(
+  agents: readonly Agent[],
+  selectedId: string | null,
+  id: string,
+): { agents: Agent[]; selectedId: string | null } {
+  const index = agents.findIndex((agent) => agent.id === id);
+  if (index < 0) return { agents: [...agents], selectedId };
+  const remaining = agents.filter((agent) => agent.id !== id);
+  if (selectedId !== id) return { agents: remaining, selectedId };
+  return { agents: remaining, selectedId: (remaining[index] ?? remaining[index - 1])?.id ?? null };
+}
+
 export function serializeState(state: AppState): string {
   return JSON.stringify(state);
 }

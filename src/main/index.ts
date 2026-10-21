@@ -68,6 +68,7 @@ async function start(): Promise<void> {
       },
       siteNav: (id, action) => siteViews.navigate(id, action),
       showSite: (agent) => siteViews.show(agent),
+      closeSite: (id) => siteViews.close(id),
       listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
     },
     state,

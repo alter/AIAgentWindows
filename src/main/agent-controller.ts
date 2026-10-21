@@ -1,7 +1,7 @@
 // agent-controller.ts
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { isCliKind, isSiteKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
+import { isCliKind, isSiteKind, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
@@ -28,6 +28,7 @@ export interface ControllerDeps {
   emit(channel: EventChannel, payload: unknown): void;
   siteNav?(id: string, action: SiteAction): void;
   showSite?(agent: Agent | null): void;
+  closeSite?(id: string): void;
   listRollouts?(sinceMs: number): Promise<Rollout[]>;
 }
 
@@ -37,13 +38,16 @@ export class AgentController {
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
   private readonly spawnedAt = new Map<string, number>();
+  private readonly closed = new Set<string>();
   private saving: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: ControllerDeps, initial: AppState) {
     this.agents = [...initial.agents];
     this.selectedId = this.agents[0]?.id ?? null;
     this.pty = new PtyManager({
-      onData: (id, data) => this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) }),
+      onData: (id, data) => {
+        if (!this.closed.has(id)) this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) });
+      },
       onExit: (id, exitCode) => this.deps.emit(EVENT_CHANNELS.ptyExit, { id, exitCode }),
     });
   }
@@ -73,6 +77,31 @@ export class AgentController {
     if (this.agentById(id) === undefined) return;
     this.selectedId = id;
     this.emitChanged();
+  }
+
+  async close(id: string): Promise<void> {
+    if (this.agentById(id) === undefined) return;
+    await this.claimSessions();
+    const next = removeAgent(this.agents, this.selectedId, id);
+    this.closed.add(id);
+    this.pty.kill(id);
+    this.deps.closeSite?.(id);
+    this.backlogs.delete(id);
+    this.spawnedAt.delete(id);
+    this.agents = next.agents;
+    this.selectedId = next.selectedId;
+    await this.persist();
+    this.emitChanged();
+  }
+
+  async restart(id: string): Promise<boolean> {
+    const known = this.agentById(id);
+    if (known === undefined || !isCliKind(known.kind) || this.pty.has(id)) return false;
+    if (await this.claimSessions()) await this.persist();
+    const agent = this.agentById(id);
+    if (agent === undefined || this.pty.has(id)) return false;
+    this.respawn(agent);
+    return this.pty.has(id);
   }
 
   ptyWrite(id: string, data: string): void {
