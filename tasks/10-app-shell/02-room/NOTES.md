@@ -61,3 +61,6 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - Stub CLI gained `AIAW_STUB_REPLY` (fixed reply text).
 - Reverse controls (2026-10-21), both red then restored: (1) `AgentController.paste` writing `bracketedPaste(text) + '\r'` -> carried test `not.toContainText('SUBMITTED:')` failed; (2) feed entry built with `innerHTML` -> markup test `toHaveText` failed (received `bold`).
 - Verify: `PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit` exit 0, 14 tests; fast tier 11/11 (FASTRUN-2026-10-21-202108444464).
+
+## T12b reverse control (capture sanitizer closed vocabulary)
+`isClosedValue` made to accept every value (`parts.length >= 0 ||`): `npx vitest run tests/unit/capture-sanitize.test.ts` -> 6 failed (token-shaped value kept, free-word class / data-state / aria / test id / free-text attribute not flagged by findLeaks). Restored; 32 passed.

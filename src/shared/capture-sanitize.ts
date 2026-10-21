@@ -47,14 +47,22 @@ export const ID_ATTRIBUTES: readonly string[] = [
 
 export const ID_LISTS: readonly string[] = ['headers', 'aria-labelledby', 'aria-controls', 'aria-describedby', 'aria-owns'];
 
+export const CLOSED_WORDS: readonly string[] = [
+  ...['true', 'false', 'mixed', 'undefined', 'page', 'step', 'location', 'date', 'time', 'off', 'on', 'polite', 'assertive', 'auto', 'none', 'all', 'any', 'additions', 'removals', 'text'],
+  ...['open', 'closed', 'checked', 'unchecked', 'active', 'inactive', 'selected', 'disabled', 'enabled', 'hidden', 'visible', 'loading', 'loaded', 'streaming', 'generating', 'idle', 'done', 'complete', 'completed', 'pending', 'error', 'ready', 'busy', 'focus', 'focused', 'hover', 'expanded', 'collapsed', 'starting', 'ended', 'running', 'stopped', 'success', 'failed'],
+  ...['user', 'assistant', 'system', 'tool', 'model', 'bot', 'human', 'ai', 'agent', 'author', 'role'],
+  ...['textbox', 'searchbox', 'combobox', 'listbox', 'option', 'menu', 'menubar', 'menuitem', 'menuitemcheckbox', 'menuitemradio', 'dialog', 'alertdialog', 'alert', 'status', 'log', 'marquee', 'timer', 'tooltip', 'presentation', 'generic', 'list', 'listitem', 'article', 'main', 'navigation', 'region', 'group', 'img', 'image', 'search', 'tab', 'tablist', 'tabpanel', 'checkbox', 'radio', 'radiogroup', 'switch', 'slider', 'spinbutton', 'form', 'banner', 'complementary', 'contentinfo', 'heading', 'separator', 'toolbar', 'tree', 'treeitem', 'grid', 'gridcell', 'row', 'rowgroup', 'cell', 'columnheader', 'rowheader', 'table', 'progressbar', 'scrollbar', 'application', 'document', 'feed', 'figure', 'paragraph', 'link', 'button', 'note', 'math', 'meter', 'term', 'definition', 'directory', 'toggle'],
+  ...['submit', 'reset', 'file', 'password', 'email', 'number', 'url', 'tel', 'range', 'color', 'week', 'month', 'plaintext', 'only', 'ltr', 'rtl', 'yes', 'no', 'stop', 'start', 'enter', 'send', 'go', 'done', 'next', 'previous', 'prev', 'numeric', 'decimal', 'vertical', 'horizontal', 'top', 'bottom', 'left', 'right', 'center', 'start', 'end', 'inline', 'block', 'sm', 'md', 'lg', 'xl', 'xs', 'small', 'medium', 'large', 'default', 'primary', 'secondary', 'tertiary', 'ghost', 'outline', 'solid', 'icon', 'light', 'dark', 'theme', 'plain', 'rich', 'new', 'old'],
+  ...['message', 'messages', 'msg', 'prompt', 'input', 'output', 'composer', 'chat', 'conversation', 'thread', 'turn', 'response', 'reply', 'answer', 'question', 'content', 'markdown', 'prose', 'code', 'block', 'pre', 'body', 'header', 'footer', 'sidebar', 'nav', 'item', 'items', 'container', 'wrapper', 'panel', 'row', 'column', 'field', 'form', 'label', 'title', 'text', 'editor', 'textarea', 'attach', 'attachment', 'attachments', 'upload', 'copy', 'regenerate', 'retry', 'like', 'dislike', 'share', 'edit', 'delete', 'new', 'history', 'search', 'btn', 'frame', 'thinking', 'reasoning', 'tools', 'actions', 'action', 'footer', 'avatar', 'name', 'view', 'scroll', 'scroller', 'list', 'cursor', 'bubble', 'stream', 'result', 'results', 'sources', 'source', 'voice', 'model', 'picker', 'selector', 'mode', 'level', 'variant', 'kind', 'type', 'slot', 'component', 'orientation', 'side', 'scope', 'state', 'testid', 'test', 'id'],
+];
+
 export interface SanitizePolicy {
   controlLabels: readonly string[];
   textAttributes: readonly string[];
   idAttributes: readonly string[];
   idLists: readonly string[];
-  tokenPattern: string;
-  classPattern: string;
-  opaquePattern: string;
+  words: readonly string[];
+  sitePattern: string;
 }
 
 export const SANITIZE_POLICY: SanitizePolicy = {
@@ -62,10 +70,17 @@ export const SANITIZE_POLICY: SanitizePolicy = {
   textAttributes: TEXT_ATTRIBUTES,
   idAttributes: ID_ATTRIBUTES,
   idLists: ID_LISTS,
-  tokenPattern: '^[A-Za-z0-9_:.-]{1,40}$',
-  classPattern: '^[A-Za-z0-9_:./%#()=,!*[\\]-]{1,80}$',
-  opaquePattern: '\\d{6,}|[0-9a-f]{8}-[0-9a-f]{4}|[0-9a-f]{16}',
+  words: CLOSED_WORDS,
+  sitePattern: '^[a-z]{1,20}$',
 };
+
+export const ID_PLACEHOLDER = /^id-\d{1,6}$/;
+
+export function isClosedValue(value: string, words: ReadonlySet<string>): boolean {
+  if (!/^[A-Za-z0-9_:. -]{1,60}$/.test(value)) return false;
+  const parts = value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part !== '');
+  return parts.length > 0 && parts.every((part) => words.has(part) || /^\d{1,4}$/.test(part));
+}
 
 export function sanitizePage(source: Document, site: string, policy: SanitizePolicy): string {
   const TEXT = 'x';
@@ -76,9 +91,10 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   const dropped = new Set(['style', 'srcdoc', 'nonce', 'integrity']);
   const enumerated = new Set(['role', 'type', 'contenteditable', 'draggable', 'spellcheck', 'tabindex', 'dir', 'translate', 'autocomplete', 'enterkeyhint', 'inputmode', 'rows', 'cols', 'maxlength', 'disabled', 'hidden', 'checked', 'selected', 'readonly', 'required', 'multiple']);
   const structuralData = /(testid|test-id|role|author|state|status|type|kind|variant|slot|component|orientation|side|scope|panel|turn|streaming|generating|loading|focus|disabled|active|selected|mode|level|^data-is-|^data-has-)/;
-  const tokenPattern = new RegExp(policy.tokenPattern);
-  const classPattern = new RegExp(policy.classPattern);
-  const opaquePattern = new RegExp(policy.opaquePattern, 'i');
+  const identifierData = /(^|-)ids?$/;
+  const sitePattern = new RegExp(policy.sitePattern);
+  const words = new Set(policy.words);
+  const placeholders = new Map<string, string>();
   const namePattern = /^[a-z_][a-z0-9_.:-]{0,63}$/i;
   const labels = new Set(policy.controlLabels);
   const textAttributes = new Set(policy.textAttributes);
@@ -88,20 +104,33 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   let nodes = 0;
   let truncated = false;
 
-  const token = (value: string): string => (tokenPattern.test(value) && !opaquePattern.test(value) ? value : TEXT);
+  const closed = (value: string): string => (isClosedValue(value, words) ? value : TEXT);
+
+  const placeholder = (value: string): string => {
+    if (value === '') return TEXT;
+    let found = placeholders.get(value);
+    if (found === undefined) {
+      found = 'id-' + String(placeholders.size + 1);
+      placeholders.set(value, found);
+    }
+    return found;
+  };
 
   const attributeValue = (name: string, value: string): string | null => {
     if (name.startsWith('on') || dropped.has(name)) return null;
     if (name === 'class') {
-      const kept = value.split(/\s+/).filter((part) => classPattern.test(part) && !opaquePattern.test(part));
+      const kept = value.split(/\s+/).filter((part) => isClosedValue(part, words));
       return kept.length === 0 ? null : kept.join(' ');
     }
     if (textAttributes.has(name)) return labels.has(value.trim().toLowerCase()) ? value.trim() : TEXT;
     if (idAttributes.has(name)) {
-      return idLists.has(name) ? value.trim().split(/\s+/).map(token).join(' ') : token(value.trim());
+      return idLists.has(name) ? value.trim().split(/\s+/).map(placeholder).join(' ') : placeholder(value.trim());
     }
-    if (name.startsWith('data-')) return structuralData.test(name) ? token(value) : TEXT;
-    if (name.startsWith('aria-') || enumerated.has(name)) return token(value);
+    if (name.startsWith('data-')) {
+      if (identifierData.test(name) && !/test-?id/.test(name)) return placeholder(value.trim());
+      return structuralData.test(name) ? closed(value) : TEXT;
+    }
+    if (name.startsWith('aria-') || enumerated.has(name)) return closed(value);
     return TEXT;
   };
 
@@ -138,7 +167,7 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   };
 
   const root = out.documentElement;
-  root.setAttribute('data-aiaw-site', token(site));
+  root.setAttribute('data-aiaw-site', sitePattern.test(site) ? site : TEXT);
   const body = source.body === null ? null : copy(source.body, 0);
   root.replaceChildren(body ?? out.createElement('body'));
   if (truncated) root.setAttribute('data-aiaw-truncated', 'true');
@@ -148,6 +177,7 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
 export function sanitizeScript(site: string): string {
   return `(() => {
   try {
+    const isClosedValue = ${isClosedValue.toString()};
     const html = (${sanitizePage.toString()})(document, ${JSON.stringify(site)}, ${JSON.stringify(SANITIZE_POLICY)});
     return JSON.stringify({ ok: true, html });
   } catch (error) {
@@ -156,9 +186,8 @@ export function sanitizeScript(site: string): string {
 })()`;
 }
 
-const TOKEN = new RegExp(SANITIZE_POLICY.tokenPattern);
-const CLASS_TOKEN = new RegExp(SANITIZE_POLICY.classPattern);
-const OPAQUE = new RegExp(SANITIZE_POLICY.opaquePattern, 'i');
+const WORDS = new Set(SANITIZE_POLICY.words);
+const SITE = new RegExp(SANITIZE_POLICY.sitePattern);
 const TAG = /<[a-zA-Z][^>]*>/g;
 const ATTRIBUTE = /\s([^\s=<>"']+)(?:="([^"]*)")?/g;
 const FORBIDDEN_TAG = /<\s*(script|style|noscript|template|link|meta|base|title)\b/i;
@@ -168,17 +197,17 @@ function attributeProblem(name: string, value: string): string | null {
   const lower = name.toLowerCase();
   if (FORBIDDEN_ATTRIBUTE.test(lower)) return `attribute ${lower}`;
   if (value === 'x') return null;
+  if (lower === 'data-aiaw-site') return SITE.test(value) ? null : `attribute ${lower} value`;
   if (lower === 'class') {
-    const bad = value.split(/\s+/).some((part) => part !== '' && (!CLASS_TOKEN.test(part) || OPAQUE.test(part)));
+    const bad = value.split(/\s+/).some((part) => part !== '' && !isClosedValue(part, WORDS));
     return bad ? 'attribute class value' : null;
   }
   if (TEXT_ATTRIBUTES.includes(lower)) return CONTROL_LABELS.includes(value.toLowerCase()) ? null : `attribute ${lower} value`;
-  if (ID_ATTRIBUTES.includes(lower)) {
-    const parts = ID_LISTS.includes(lower) ? value.split(/\s+/) : [value];
-    const bad = parts.some((part) => !TOKEN.test(part) || OPAQUE.test(part));
+  if (ID_ATTRIBUTES.includes(lower) || (lower.startsWith('data-') && /(^|-)ids?$/.test(lower) && !/test-?id/.test(lower))) {
+    const bad = value.split(/\s+/).some((part) => !ID_PLACEHOLDER.test(part));
     return bad ? `attribute ${lower} value` : null;
   }
-  return TOKEN.test(value) && !OPAQUE.test(value) ? null : `attribute ${lower} value`;
+  return isClosedValue(value, WORDS) ? null : `attribute ${lower} value`;
 }
 
 export function findLeaks(html: string): string[] {

@@ -83,9 +83,10 @@ describe('capture sanitizer', () => {
     expect(out.querySelector('button[data-testid="send-button"][aria-label="Send message"].btn')).not.toBeNull();
     expect(out.querySelector('div[data-message-author-role="assistant"].msg.assistant.markdown > p')).not.toBeNull();
     expect(out.querySelector('div[data-message-author-role="user"]')).not.toBeNull();
-    expect(out.querySelector('textarea#prompt-textarea')?.getAttribute('placeholder')).toBe('x');
-    expect(out.querySelector('#ce[contenteditable="true"][role="textbox"] > p')?.textContent).toBe('x');
-    expect(out.querySelector('input[type="file"]#file')?.getAttribute('accept')).toBe('x');
+    expect(out.querySelector('textarea[aria-label="Message"]')?.getAttribute('placeholder')).toBe('x');
+    expect(out.querySelector('textarea')?.getAttribute('id')).toMatch(/^id-\d+$/);
+    expect(out.querySelector('[contenteditable="true"][role="textbox"] > p')?.textContent).toBe('x');
+    expect(out.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('x');
     expect(out.querySelector('svg.icon')?.children.length).toBe(0);
     expect(out.querySelectorAll('iframe.frame').length).toBe(1);
     expect(out.querySelector('textarea')?.textContent).toBe('x');
@@ -96,7 +97,8 @@ describe('capture sanitizer', () => {
     const out = new JSDOM(html).window.document;
     expect(out.querySelector('a')?.getAttribute('aria-label')).toBe('x');
     expect(out.querySelector('[data-user-email]')?.getAttribute('data-user-email')).toBe('x');
-    expect(out.querySelector('[data-message-author-role="user"]')?.getAttribute('data-message-id')).toBe('x');
+    expect(out.querySelector('[data-message-author-role="user"]')?.getAttribute('data-message-id')).toMatch(/^id-\d+$/);
+    expect(html).not.toContain('5f2c8e1a');
     expect(out.querySelector('#abc123def456abc123def456')).toBeNull();
     expect(out.querySelector('textarea')?.getAttribute('aria-label')).toBe('Message');
   });
@@ -107,6 +109,57 @@ describe('capture sanitizer', () => {
     const out = new JSDOM(html).window.document;
     expect(out.body.textContent?.replace(/\s+/g, '')).toBe('xxx');
     expect(findLeaks(html)).toEqual([]);
+  });
+});
+
+const ATTACK_PAGE = `<body><div id="private-token-value" class="private-token-value" data-state="private-token-value" aria-current="private-token-value" data-testid="user-probe7f3" data-turn-id="Xk3PqZ9aLmNvBcRtYwQeU">x</div></body>`;
+const ATTACK_VALUES = ['private-token-value', 'probe7f3', 'Xk3PqZ9aLmNvBcRtYwQeU'];
+
+describe('capture sanitizer attribute values', () => {
+  it('keeps no token-shaped value that is not in the closed vocabulary', () => {
+    const html = sanitizePage(new JSDOM(ATTACK_PAGE).window.document, 'chatgpt', SANITIZE_POLICY);
+    for (const value of ATTACK_VALUES) expect(html, value).not.toContain(value);
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it('maps ids and references to the same placeholders so references still resolve', () => {
+    const page = '<body><label for="user-handle-q9">a</label><input id="user-handle-q9" aria-describedby="hint-zz9 user-handle-q9"><p id="hint-zz9" data-message-id="Xk3PqZ9aLmNvBcRtYwQeU">b</p></body>';
+    const html = sanitizePage(new JSDOM(page).window.document, 'grok', SANITIZE_POLICY);
+    const out = new JSDOM(html).window.document;
+    const input = out.querySelector('input');
+    const target = input?.getAttribute('id') ?? '';
+    expect(target).toMatch(/^id-\d+$/);
+    expect(out.querySelector('label')?.getAttribute('for')).toBe(target);
+    const [hint = '', again = ''] = (input?.getAttribute('aria-describedby') ?? '').split(' ');
+    expect(again).toBe(target);
+    expect(out.querySelector('p')?.getAttribute('id')).toBe(hint);
+    expect(hint).not.toBe(target);
+    expect(out.querySelector('p')?.getAttribute('data-message-id')).toMatch(/^id-\d+$/);
+    expect(html).not.toContain('user-handle-q9');
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it('keeps values from the closed vocabulary that an adapter needs', () => {
+    const page = '<body class="dark"><button data-state="open" aria-expanded="true" aria-current="page" data-testid="stop-button" role="button" type="submit" class="btn">x</button><div data-testid="conversation-turn-3" data-message-author-role="assistant">y</div></body>';
+    const html = sanitizePage(new JSDOM(page).window.document, 'deepseek', SANITIZE_POLICY);
+    const out = new JSDOM(html).window.document;
+    expect(out.querySelector('button[data-state="open"][aria-expanded="true"][aria-current="page"][data-testid="stop-button"][role="button"][type="submit"].btn')).not.toBeNull();
+    expect(out.querySelector('div[data-testid="conversation-turn-3"][data-message-author-role="assistant"]')).not.toBeNull();
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it.each([
+    ['a free-word id', '<html><body><div id="private-token-value">x</div></body></html>'],
+    ['a free-word class', '<html><body><div class="private-token-value">x</div></body></html>'],
+    ['a free-word data-state', '<html><body><div data-state="private-token-value">x</div></body></html>'],
+    ['a free-word aria value', '<html><body><div aria-current="private-token-value">x</div></body></html>'],
+    ['a free-word test id', '<html><body><div data-testid="user-probe7f3">x</div></body></html>'],
+    ['a base62 id value', '<html><body><div data-turn-id="Xk3PqZ9aLmNvBcRtYwQeU">x</div></body></html>'],
+    ['a free-word reference', '<html><body><div aria-labelledby="id-1 private-token-value">x</div></body></html>'],
+  ])('leak check flags %s without echoing it', (_name, html) => {
+    const problems = findLeaks(html);
+    expect(problems.length).toBeGreaterThan(0);
+    expect(problems.join('\n')).not.toMatch(/private|probe7f3|Xk3P/);
   });
 });
 
@@ -138,7 +191,7 @@ describe('capture sanitizer limits', () => {
     expect(html).not.toContain('words');
     expect(html).not.toContain('class=');
     expect(html).not.toContain('9x');
-    expect(html).toContain('aria-labelledby="one two"');
+    expect(html).toMatch(/aria-labelledby="id-\d+ id-\d+"/);
     expect(findLeaks(html)).toEqual([]);
   });
 
