@@ -14,12 +14,12 @@ Read the owning guide before changing an area; read only the sections you need. 
 
 | Area | Path | Read first |
 |---|---|---|
-| Main process | `src/main/` (window, IPC handlers, agent controller, pty manager, site views, state file, Codex rollout and Claude transcript lookup) | `docs/tech/electron@44.6.0.md`, `docs/tech/node-pty@1.1.0.md` |
+| Main process | `src/main/` (window, IPC handlers, agent controller, pty manager, site views, state file, Codex rollout and Claude transcript lookup; Room: `room.ts` orchestrator, `room-drivers.ts` CLI and site participant drivers, `room-service.ts` state and IPC, `cli-turn.ts` send and end-of-turn driver; `site-adapters/` per-site adapters run in an isolated world; `capture-sites.ts` the owner's page-structure capture) | `docs/tech/electron@44.6.0.md`, `docs/tech/node-pty@1.1.0.md`, for the Room `docs/tech/claude-code@2.1.306.md`, `docs/tech/codex@0.163.0.md` |
 | Preload | `src/preload/` (the app renderer's `contextBridge` only; remote views get no preload) | `docs/tech/electron@44.6.0.md` |
-| Renderer | `src/renderer/` (DOM UI, xterm panes; imports no Node or main-process module) | `docs/tech/xterm@6.0.0.md` |
-| Shared | `src/shared/` (pure types and rules: agent state schema, CLI argv builder, restore, Codex claim, site policy, IPC validation; the coverage target) | `docs/PROJECT.md` §6 |
-| Scripts | `scripts/` (build, postinstall, gate checks: arch_check, coverage_gate, evidence_check, check_publish_flags, project_check, lint_changed) | `docs/PROJECT.md` §6 |
-| Tests | `tests/unit/`, `tests/integration/` (fast tier), `tests/full/` (Playwright `electron-smoke`), `tests/scripts/` (Python), `tests/fixtures/` (stub CLI, local site page); tests never spawn a real CLI | `docs/PROJECT.md` §5, §6 |
+| Renderer | `src/renderer/` (DOM UI, xterm panes, `room-pane.ts` Room feed built with `textContent`; imports no Node or main-process module) | `docs/tech/xterm@6.0.0.md` |
+| Shared | `src/shared/` (pure types and rules: agent state schema, CLI argv builder, restore, Codex claim, site policy, IPC validation; Room model, relay schedule, history and prompt builder, turn-signal parsers, room view reducer, capture sanitizer; the coverage target) | `docs/PROJECT.md` §6 |
+| Scripts | `scripts/` (build, postinstall, gate checks: arch_check, coverage_gate, evidence_check, check_publish_flags, project_check, lint_changed; `capture-sites.mjs` behind `npm run capture-sites`) | `docs/PROJECT.md` §6 |
+| Tests | `tests/unit/`, `tests/integration/` (fast tier), `tests/full/` (Playwright `electron-smoke`), `tests/scripts/` (Python), `tests/fixtures/` (stub CLI that writes Claude and Codex transcripts, local site page, `sites/` captured page structures for the adapters); tests never spawn a real CLI and never load a real site | `docs/PROJECT.md` §5, §6 |
 
 ## Engineering
 

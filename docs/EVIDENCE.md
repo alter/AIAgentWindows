@@ -58,6 +58,8 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | CX21 | Each `turn_context` record holds the effective `sandbox_policy.type` and `approval_policy`, so a room session can assert it runs `read-only` | run | `tasks/10-app-shell/02-room/spikes/codex-turn-signal.txt` | confirmed |
 | CX22 | Codex 0.163.0 runs its TUI against a shared app-server daemon; `--no-daemon` avoids it and a feature mismatch opens a blocking dialog | run | `tasks/10-app-shell/01-app-skeleton/codex-daemon-mismatch.txt`, `tasks/10-app-shell/02-room/spikes/codex-help-flags.txt` | confirmed |
 | CX23 | A room codex session started with `--no-daemon --sandbox read-only` records `sandbox_policy.type == read-only` in its `turn_context` | assumption | T04 integration test on the stub, HUMAN: AC7 | open |
+| CX24 | The room's CLI turn driver reads a Codex reply from `task_complete` and a Claude reply from `end_turn` records with text, on stub transcripts in both formats, and a turn that never ends times out with an error | run | `tests/integration/cli-turn.test.ts` | confirmed |
+| CX25 | The room's turn signals hold on real Claude Code 2.1.306 and Codex 0.163.0 sessions started by the Room | assumption | HUMAN: AC7 Room run, NOTES.md | open |
 
 ## Files, images, clipboard
 
@@ -105,6 +107,20 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | W12 | OpenAI terms forbid automatically or programmatically extracting Output | doc | https://openai.com/policies/row-terms-of-use/ | confirmed |
 | W13 | xAI acceptable use policy forbids using bots to access the service | doc | https://x.ai/legal/acceptable-use-policy | confirmed |
 | W14 | DeepSeek terms forbid capturing content with robots or other automatic setups | doc | https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html | confirmed |
+| W18 | Adapter text goes in through input events and `textContent`, so markup in a prompt stays text; the insert is read back and a mismatch is an error | run | `tests/unit/site-adapters.test.ts`, `tasks/10-app-shell/02-room/NOTES.md` | confirmed |
+| W19 | The adapter runner works in an isolated world of a hidden Electron page and relays a turn (insert, submit, generating to done, last reply) on the generic fixture | run | `tasks/10-app-shell/02-room/NOTES.md`, `tests/integration/room.test.ts` | confirmed |
+| W20 | The ChatGPT, Grok and DeepSeek adapters insert, submit, detect the end of generation and read the last reply on the real signed-in pages | assumption | T07 on the owner's `npm run capture-sites` fixtures, HUMAN: AC7 | open |
+| W21 | `npm run capture-sites` saves page structures with every text node replaced and fails closed when its leak check finds original text | run | `tests/unit/capture-sanitize.test.ts`, `tasks/10-app-shell/02-room/NOTES.md` | confirmed |
+
+## Room
+
+| ID | Claim | Kind | Evidence | Status |
+|---|---|---|---|---|
+| R1 | A relay of two stub participants for 2 rounds writes the history in the order Owner, A, B, A, B, and a broadcast gives every participant the owner's prompt alone | run | `tests/full/room.spec.ts`, `tasks/10-app-shell/02-room/NOTES.md` | confirmed |
+| R2 | Stop ends a run at the current step with status `stopped` and a `Room` error entry, and does not wait for a driver that ignores it | run | `tests/full/room.spec.ts`, `tests/integration/room.test.ts` | confirmed |
+| R3 | A carried result is pasted into a working CLI session with bracketed paste and never submitted | run | `tests/full/room.spec.ts`, `tests/integration/room-wiring.test.ts` | confirmed |
+| R4 | Markup in a reply or a prompt is shown as text in the feed (`textContent`) and written verbatim to the history file | run | `tests/full/room.spec.ts`, `tests/unit/room-history.test.ts` | confirmed |
+| R5 | A Room with Claude Code, Codex, ChatGPT, Grok and DeepSeek completes 2 relay rounds without a person pressing a key | assumption | HUMAN: AC7, tasks/10-app-shell/02-room/NOTES.md | open |
 
 ## Keys, platforms, build
 
