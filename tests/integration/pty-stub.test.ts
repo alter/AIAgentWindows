@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSpawn } from '../../src/shared/cli-args';
+import { sanitizePaste } from '../../src/shared/terminal-input';
 import { PtyManager } from '../../src/main/pty-manager';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
@@ -78,6 +79,23 @@ describe('stub CLI in a node-pty terminal', () => {
     await waitFor(() => (output.get(id) ?? '').includes('second line'), 'the pasted text echo');
     expect(output.get(id)).toContain('first line');
     expect(output.get(id)).not.toContain('SUBMITTED');
+  });
+
+  it('a hostile paste with an embedded end marker is not submitted once sanitised', async () => {
+    const id = startStub();
+    await started(id);
+    manager.write(id, `\x1b[200~${sanitizePaste('\x1b[201~X\r')}\x1b[201~`);
+    await waitFor(() => (output.get(id) ?? '').includes('X'), 'the pasted text echo');
+    manager.write(id, 'ok\r');
+    await waitFor(() => /SUBMITTED:[^\n]*ok/.test(output.get(id) ?? ''), 'the typed line');
+    expect(output.get(id)?.match(/SUBMITTED:/g)).toHaveLength(1);
+  });
+
+  it('the same paste without sanitising is submitted (control for the hostile paste test)', async () => {
+    const id = startStub();
+    await started(id);
+    manager.write(id, '\x1b[200~\x1b[201~X\r\x1b[201~');
+    await waitFor(() => (output.get(id) ?? '').includes('SUBMITTED:X'), 'the submitted line');
   });
 
   it('typed Enter is submitted (control for the paste test)', async () => {

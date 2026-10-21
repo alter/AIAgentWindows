@@ -38,3 +38,13 @@ export function dropPastePayload(paths: readonly string[]): string {
     .filter((quoted): quoted is string => quoted !== null)
     .join(' ');
 }
+
+function isEscapeOrC1(code: number): boolean {
+  return code === 0x1b || (code >= 0x80 && code <= 0x9f);
+}
+
+export function sanitizePaste(text: string): string {
+  return Array.from(text)
+    .filter((char) => !isEscapeOrC1(char.charCodeAt(0)))
+    .join('');
+}

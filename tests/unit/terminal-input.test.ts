@@ -1,6 +1,6 @@
 // terminal-input.test.ts
 import { describe, expect, it } from 'vitest';
-import { dropPastePayload, quotePathForShell, rawKeySequence, type KeyLike } from '../../src/shared/terminal-input';
+import { dropPastePayload, quotePathForShell, rawKeySequence, sanitizePaste, type KeyLike } from '../../src/shared/terminal-input';
 
 function key(overrides: Partial<KeyLike>): KeyLike {
   return { type: 'keydown', key: 'v', code: 'KeyV', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...overrides };
@@ -51,5 +51,17 @@ describe('dropPastePayload', () => {
   it('returns an empty string when nothing is usable', () => {
     expect(dropPastePayload([])).toBe('');
     expect(dropPastePayload(['', '/x\ny'])).toBe('');
+  });
+});
+
+describe('sanitizePaste', () => {
+  it('removes every escape and C1 control so no paste marker survives, including a split one', () => {
+    expect(sanitizePaste('\x1b[201~X\r')).toBe('[201~X\r');
+    expect(sanitizePaste('a\x1b[20\x1b[201~1~b')).not.toContain('\x1b');
+    expect(sanitizePaste('\x9b201~x')).toBe('201~x');
+  });
+
+  it('keeps ordinary text, tabs, newlines and non-Latin characters', () => {
+    expect(sanitizePaste('line one\n\tline два')).toBe('line one\n\tline два');
   });
 });

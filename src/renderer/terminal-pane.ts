@@ -2,7 +2,7 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import type { PtyDataEvent } from '../shared/ipc';
-import { dropPastePayload, rawKeySequence } from '../shared/terminal-input';
+import { dropPastePayload, rawKeySequence, sanitizePaste } from '../shared/terminal-input';
 import { api } from './api';
 import { el } from './dom';
 
@@ -28,6 +28,7 @@ export class TerminalPane {
     this.terminal.attachCustomKeyEventHandler((event) => this.handleKey(event));
     this.terminal.onData((data) => void api.ptyWrite(this.id, data));
     this.terminal.onResize(({ cols, rows }) => void api.ptyResize(this.id, cols, rows));
+    this.element.addEventListener('paste', (event) => this.handlePaste(event), true);
     this.element.addEventListener('dragover', (event) => event.preventDefault());
     this.element.addEventListener('drop', (event) => this.handleDrop(event));
     void this.hydrate();
@@ -95,11 +96,18 @@ export class TerminalPane {
     return false;
   }
 
+  private handlePaste(event: ClipboardEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = sanitizePaste(event.clipboardData?.getData('text/plain') ?? '');
+    if (text.length > 0) this.terminal.paste(text);
+  }
+
   private handleDrop(event: DragEvent): void {
     event.preventDefault();
     const files = Array.from(event.dataTransfer?.files ?? []);
     const payload = dropPastePayload(files.map((file) => api.pathForFile(file)));
-    if (payload.length > 0) this.terminal.paste(payload);
+    if (payload.length > 0) this.terminal.paste(sanitizePaste(payload));
     this.terminal.focus();
   }
 }
