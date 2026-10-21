@@ -51,12 +51,21 @@ describe('renderHistory', () => {
 describe('buildParticipantPrompt', () => {
   const history = [entry({ text: 'the question' }), entry({ kind: 'reply', authorId: 'a', label: 'Claude Code', text: 'an answer' })];
 
-  it('points a CLI participant at the history file and does not inline the history', () => {
+  it('inlines the whole history for a CLI participant and gives no file instruction', () => {
     const prompt = buildParticipantPrompt(A, 'r1', history);
     expect(prompt.attachHistory).toBe(false);
     expect(prompt.placeHistory).toBe(true);
-    expect(prompt.text).toContain('./history.md');
-    expect(prompt.text).not.toContain('an answer');
+    expect(prompt.text).toContain('the question');
+    expect(prompt.text).toContain('an answer');
+    expect(prompt.text.indexOf('the question')).toBeLessThan(prompt.text.indexOf('an answer'));
+    expect(prompt.text).not.toContain('history.md');
+  });
+
+  it('inlines a CLI history above the web limit instead of attaching it', () => {
+    const big = [entry({ text: 'x'.repeat(WEB_INLINE_LIMIT + 1) })];
+    const prompt = buildParticipantPrompt(A, 'r1', big);
+    expect(prompt.attachHistory).toBe(false);
+    expect(prompt.text).toContain('x'.repeat(WEB_INLINE_LIMIT + 1));
   });
 
   it('asks a continuing participant for something other than the plain first answer, keeping the history delivery', () => {

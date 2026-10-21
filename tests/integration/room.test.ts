@@ -145,7 +145,8 @@ describe('room relay', () => {
     expect(ascending(positions(web?.text ?? '', ['the question', 'reply a1', 'reply b1']))).toBe(true);
     expect(web?.attachPath).toBeNull();
     const cli = t.drivers.get('a')?.requests[0];
-    expect(cli?.text).toContain('./history.md');
+    expect(cli?.text).toContain('the question');
+    expect(cli?.text).not.toContain('history.md');
     expect(cli?.text).not.toContain(roomsDir);
   });
 
@@ -160,6 +161,18 @@ describe('room relay', () => {
       expect(request?.historyText).toBe(t.snapshots[snapshotIndexes[index] ?? 0]);
     });
     expect(t.drivers.get('c')?.requests[0]?.historyText).toBeNull();
+  });
+
+  it('puts every earlier entry in the text of a CLI participant request and never points it at a file', async () => {
+    const t = rig();
+    await t.room.start(config([A, B], { mode: 'relay', rounds: 2 })).done;
+    const second = t.drivers.get('b')?.requests[0]?.text ?? '';
+    expect(groupsInOrder(second, [['the question'], ['reply a1']])).toBe(true);
+    const third = t.drivers.get('a')?.requests[1]?.text ?? '';
+    expect(groupsInOrder(third, [['the question'], ['reply a1'], ['reply b1']])).toBe(true);
+    for (const driver of [t.drivers.get('a'), t.drivers.get('b')]) {
+      for (const request of driver?.requests ?? []) expect(request.text).not.toContain('history.md');
+    }
   });
 
   it('writes replies to the history file with the escape prefix on lines that do not start with a letter or digit', async () => {
@@ -541,12 +554,13 @@ describe('room with stub CLIs', () => {
       'a:reply',
       'b:reply',
     ]);
-    expect(result.entries[1]?.text).toContain('The history is in the file: ./history.md');
+    expect(result.entries[1]?.text).toContain('the question');
+    expect(result.entries[1]?.text).not.toContain('history.md');
     expect(result.entries[1]?.text).not.toContain(roomsDir);
     const history = await readFile(run.historyPath, 'utf8');
     const own = await readFile(path.join(roomsDir, 'codex-1', 'history.md'), 'utf8');
     expect(historyNonce(own)).toBe(historyNonce(history));
-    expect(own).toContain(result.entries[3]?.text ?? 'missing');
+    expect(own).toContain(escapeBody(result.entries[3]?.text ?? 'missing'));
     const starts = (text: string): number => text.split('\n').filter((line) => line.startsWith('<<<entry-')).length;
     expect(starts(history)).toBe(5);
     expect(starts(own)).toBe(4);
@@ -572,7 +586,8 @@ describe('room with stub CLIs', () => {
     }
     for (const call of codex) expect(flagValue(call, '--sandbox')).toBe('read-only');
     for (const call of all) {
-      expect(call.stdin).toContain('./history.md');
+      expect(call.stdin).toContain('the question');
+      expect(call.stdin).not.toContain('history.md');
       expect(call.stdin).not.toContain('\x1b');
       expect(call.argv.join(' ')).not.toContain('./history.md');
       expect(call.argv.join(' ')).not.toMatch(/dangerously|bypass|danger-full-access|workspace-write/);

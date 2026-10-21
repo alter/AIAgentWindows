@@ -103,8 +103,13 @@ function introFor(participant: RoomParticipant, continuation: boolean): string {
   ].join(' ');
 }
 
-function cliPrompt(participant: RoomParticipant, continuation: boolean): ParticipantPrompt {
-  const text = `${introFor(participant, continuation)}\nThe history is in the file: ./${PARTICIPANT_HISTORY_FILE}`;
+function cliPrompt(
+  participant: RoomParticipant,
+  roomId: string,
+  entries: readonly RoomEntry[],
+  continuation: boolean,
+): ParticipantPrompt {
+  const text = `${introFor(participant, continuation)}\n\n${renderHistory(roomId, entries)}`;
   return { text, attachHistory: false, placeHistory: true };
 }
 
@@ -128,6 +133,6 @@ export function buildParticipantPrompt(
   entries: readonly RoomEntry[],
   continuation = false,
 ): ParticipantPrompt {
-  if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, continuation);
+  if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, roomId, entries, continuation);
   return webPrompt(participant, roomId, entries, continuation);
 }
