@@ -54,6 +54,8 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | F3 | With text in the clipboard `Ctrl+V` does nothing in Claude Code, so the terminal must check the clipboard type and paste text itself | run | `tasks/05-feasibility/01-evidence-table/spikes/claude-text-clipboard/claude-04-after-ctrl-v-image.screen.txt` | refuted |
 | F4 | Electron 44 clipboard is async (`has`, `read`, `write`); `readImage`/`writeImage`/`availableFormats` do not exist | run | `tasks/05-feasibility/01-evidence-table/spikes/electron-clipboard-api.txt` | confirmed |
 | F5 | The main process can set files on a page's file input through CDP `DOM.setFileInputFiles` | doc | https://chromedevtools.github.io/devtools-protocol/tot/DOM/#method-setFileInputFiles | confirmed |
+| F7 | Claude Code's clipboard-image key on Windows is `Alt+V` | doc | https://code.claude.com/docs/en/interactive-mode | confirmed |
+| F8 | Drag-and-drop and paste of files and images work natively in the embedded sites | assumption | HUMAN: drop a file on each signed-in site in the sign-in window | open |
 | F6 | Each site's file input accepts files set that way | assumption | the web-adapter task, tasks/ (created after T00) | open |
 
 ## Voice
@@ -61,10 +63,11 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | ID | Claim | Kind | Evidence | Status |
 |---|---|---|---|---|
 | V1 | Claude Code dictation: `/voice`, hold Space; needs Claude.ai sign-in and a local microphone; Linux falls back to `arecord` or SoX `rec` | doc | https://code.claude.com/docs/en/voice-dictation | confirmed |
-| V2 | macOS attributes a child process's microphone use to the responsible app | doc | https://developer.apple.com/forums/thread/763956 | confirmed |
+| V2 | macOS attributes a child process's microphone use to the responsible app | assumption | HUMAN: first `/voice` in a Claude Code window of a dev build (the Apple forum thread cited by research could not be read) | open |
 | V3 | The app needs `NSMicrophoneUsageDescription` in Info.plist | doc | https://github.com/electron/electron/blob/v44.6.0/docs/api/system-preferences.md#L360 | confirmed |
 | V4 | The microphone can be granted per requesting origin | doc | https://github.com/electron/electron/blob/v44.6.0/docs/api/session.md | confirmed |
 | V5 | An unsigned app is asked for the microphone again after each rebuild | assumption | HUMAN: first voice use after two dev builds | open |
+| V7 | OS dictation (macOS Dictation, Windows Win+H) types into the terminal and the sites' inputs; Ubuntu has no built-in dictation | assumption | HUMAN: per-OS smoke | open |
 | V6 | The sites' own voice buttons work in the app | assumption | HUMAN: signed-in check, NOTES.md | open |
 
 ## Web agents
@@ -111,5 +114,6 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | G7 | `PLAYWRIGHT_JUNIT_OUTPUT_NAME=reports/x.xml` writes `reports/x.xml` when the config is at the repository root (the name resolves against the output dir, which defaults to the config dir) | doc | https://github.com/microsoft/playwright/blob/v1.63.0/packages/playwright/src/reporters/base.ts#L671-L675 | confirmed |
 | G8 | `--reporter` on the Playwright command line replaces the configured reporters | doc | https://github.com/microsoft/playwright/blob/v1.63.0/docs/src/test-cli-js.md | confirmed |
 | G9 | `git-guard` refuses all eight prefixes of the deny block and lets a local build through | run | `tasks/05-feasibility/01-evidence-table/spikes/deny-prefixes.txt` | confirmed |
-| G10 | electron-builder `-p` is `--publish`; `publish: never` disables publishing | doc | https://github.com/electron-userland/electron-builder/blob/electron-builder@26.17.0/packages/electron-builder/src/builder.ts#L271-L276 | confirmed |
+| G10 | electron-builder publishes implicitly when no `--publish` is given and the npm script is `release`, a git tag is set in CI, or CI is detected; `--publish never` disables it | doc | https://github.com/electron-userland/electron-builder/blob/electron-builder@26.17.0/packages/app-builder-lib/src/publish/PublishManager.ts#L85-L104 | confirmed |
+| G12 | electron-builder `-p` is the short form of `--publish` | doc | https://github.com/electron-userland/electron-builder/blob/electron-builder@26.17.0/packages/electron-builder/src/builder.ts#L271-L276 | confirmed |
 | G11 | The evidence checker goes red when a row loses its evidence | run | `tasks/05-feasibility/01-evidence-table/spikes/reverse-control.txt` | confirmed |

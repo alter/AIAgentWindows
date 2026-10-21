@@ -1,104 +1,124 @@
-# VERIFY — evidence table (2026-10-21)
+# VERIFY — evidence table, second verification (2026-10-21, commit 4951a41)
 
-Verifier: a separate Claude context, 2026-10-21; did NOT write `docs/EVIDENCE.md`, `scripts/evidence_check.py`, `tests/scripts/test_evidence_check.py`, the spikes or the `docs/tech/` studies; did read every artefact under `spikes/`, re-fetched the pinned-version sources cited by sampled `doc` rows, ran VERIFY items 1–3 in a fresh clone at `d342c6a` (`.claude/scratch/verify-clean`, gitignored), ran the reverse control there, and re-ran the `git-guard` hook against the deny block. Sent no prompt to any site or CLI, did not touch the system clipboard, did not launch Electron.
+Verifier: a separate Claude context (a second verifier; the first one's report, written for `d342c6a` and overwritten here, is called "verify 1" below); did NOT write `docs/EVIDENCE.md`, `scripts/evidence_check.py`, `tests/scripts/test_evidence_check.py`, the spikes or the `docs/tech/*.md` studies; ran VERIFY items 1-3 in a fresh clone (`.claude/scratch/verify2` at `4951a41`, under `env -i`), ran the reverse control there, re-ran the cheap spike commands that touch no network service and no model (`codex --help`, `codex sandbox -- cat`, `codex migrate-rollouts` report, `last_reply.py`, `git-guard`, `lint_changed`/`gitleaks`, `npm pack node-pty@1.1.0`, `curl -I` for frame headers), and re-fetched the pinned-version sources of the rows below. Sent no prompt to any site or CLI, did not touch the system clipboard, did not launch Electron.
 
 ## Per-item verdict
 
 | # | Item | Result |
 |---|---|---|
-| 1 | `python3 scripts/evidence_check.py` exits 0 | pass (exit 0, 74 rows, 0 problems) |
-| 2 | `python3 -m unittest discover -s tests/scripts` exits 0 | pass (exit 0, 12 tests) |
-| 3 | reverse control: empty an evidence cell → `test_row_without_evidence_fails` | pass, with a wording note (see Reverse control) |
-| 4 | every run row points at an artefact that opens and shows the claimed result | FAIL: all 29 artefacts open; 3 run rows are not fully shown by their artefact (CC13, CX2, W1 — see Unsupported rows) |
-| 5 | every refuted claim has changed `docs/PROJECT.md` | pass for 8 of 9 refuted rows; G7's refutation is itself unsupported (see below), so its PROJECT.md edit rests on a claim that does not hold as worded |
-| 6 | HUMAN: owner signs in to ChatGPT, Grok, DeepSeek by hand | not checked (HUMAN, outside this context; `NOTES.md` has no sign-in record) |
+| 1 | `python3 scripts/evidence_check.py` exits 0 | pass (exit 0, `evidence_check: 77 rows, 0 problems`) |
+| 2 | `python3 -m unittest discover -s tests/scripts` exits 0 | pass (exit 0, `Ran 12 tests`, OK) |
+| 3 | reverse control: empty an evidence cell | pass (two reds, below); wording note: the cell edit turns the checker red, the named unit test goes red when the guard is removed |
+| 4 | every run row points at an artefact that opens and shows the claimed result | pass for all 14 re-judged rows and the 15-row sample, with the exceptions listed under "Unsupported" (they are about wording around the rows, not about a run artefact) |
+| 5 | every refuted claim has changed `docs/PROJECT.md` | pass: the 8 refuted rows (CC9, CX10, CX12, F3, W3, W6, G4, G6) are reflected, see V5; G7 is now `confirmed` and §6 keeps `_OUTPUT_FILE` |
+| 6 | HUMAN: owner signs in to ChatGPT, Grok, DeepSeek | NOT CHECKED (HUMAN). It stays unchecked, so even with everything else green `verify:passed` cannot be set while it is open |
 
 ## Requirement evidence
 
-- S1: `docs/EVIDENCE.md:1-112` — 74 rows (35 doc, 29 run, 10 assumption; `docs/EVIDENCE.md` counted with a script, escaped `\|` in CX2 handled by hand). Present, but see Unsupported rows: fail for G7, CC13, CX2, W1, CX3, CX4, CX13, CC10, V2 (evidence cell does not show the claim or status).
-- S2: `scripts/evidence_check.py:33-57` — guards `[kind]` (37), `[no-evidence]` (41), `[doc-url]` (43), `[run-artefact]` (47, 50), `[assumption-place]` (53); tests `tests/scripts/test_evidence_check.py:41-59`, `python3 -m unittest discover -s tests/scripts` exit 0. Pass.
-- S3: `tasks/05-feasibility/01-evidence-table/spikes/pty-claude.js:1-73`, `spikes/web.js:1-30`, `spikes/last_reply.py:1-30` read in this session; spikes read in this session: `spikes/pty-claude.js`, `spikes/web.js`, `spikes/last_reply.py`, `spikes/codex-sandbox-read.txt`; all four sites' screenshots opened. The CLI/pty, bracketed paste, Ctrl+V image, transcript parsing, codex sandbox read and three-site webview spikes all have kept outputs. Pass for existence. Note: `claude-run.out` (first claude run) logs `trust dialog present → Enter`, but the `pty-claude.js` kept in the directory sends Down+Enter by default (and `claude-submit/run.out`, `claude-text-clipboard/run.out` log `"\u001b[B" + Enter`): the first run came from an earlier script version that is not kept.
-- S4: `docs/tech/electron@44.6.0.md:3` (pin rationale) and the other nine `docs/tech/*.md`; `npm view <pkg> time` exit 0 for each pin. `npm view <pkg> time` on 2026-10-21: electron 44.6.0 2026-10-06 (15 days), node-pty 1.1.0 2025-12-22, @xterm/xterm 6.0.0 2025-12-22, typescript 6.0.3 2026-04-16 (latest is 7.0.2), vitest 5.0.3 2026-09-30, @playwright/test 1.63.0 2026-09-04, electron-builder 26.17.0 2026-09-26. All at least two weeks old. Pass.
-- S5: `docs/PROJECT.md:31-41` (§3 rows) and `git diff 8440e1c d342c6a -- docs/PROJECT.md` exit 0 — §3 rows rewritten to scope plus row-id citations; mechanics moved to `docs/tech/`. Pass.
-- V1: `python3 scripts/evidence_check.py` exit 0 (output `evidence_check: 74 rows, 0 problems`), fresh clone.
-- V2: `python3 -m unittest discover -s tests/scripts` exit 0 (`Ran 12 tests`, OK), fresh clone.
-- V3: `python3 scripts/evidence_check.py` exit 1 on the emptied CC4 cell, and `python3 -m unittest tests.scripts.test_evidence_check.EvidenceCheckTest.test_row_without_evidence_fails` exit 1 with the guard removed (`scripts/evidence_check.py:41`). Pass.
-- V4: `python3 scripts/evidence_check.py` exit 0 (every run artefact path exists) and each artefact opened by me, judgement per row below (`spikes/claude-run.out:7` for CC13). Fail on CC13, CX2, W1 (partial support).
-- V5: `git diff 8440e1c d342c6a -- docs/PROJECT.md`: CC9 (isSidechain sentence removed), F3 (clipboard-type-check rule removed, `docs/PROJECT.md:33`), CX10 (`:33` "failed … open until CX11"), CX12 (`:34` Codex `/voice`), W3/W6 (`:36`), G4 (`docs/PROJECT.md:15` TypeScript 6.0.3, §4 last bullet), G6 (§6 audit-parallel row), G7 (§6 `PLAYWRIGHT_JUNIT_OUTPUT_FILE`). Pass on the diff; G7 caveat above.
-- V6: HUMAN — not checked here; no command run, `tasks/05-feasibility/01-evidence-table/NOTES.md:23-29` lists it under what was not checked (exit n/a).
-- D1: `tasks/DECISIONS.md:14` is `[proposed]`, waiting for the owner, yet `docs/PROJECT.md:36` says "decision D1". The row states the fact (DeepSeek refuses the default user agent, W3–W5) and points at an open proposal; no code to check. Recorded, not a failure.
-- D2: `tasks/DECISIONS.md:31` and `docs/PROJECT.md:15` agree (TypeScript 6.0.3); typescript-eslint range `>=4.8.4 <6.1.0` re-read at `warnAboutTSVersion.ts:11` of v8.71.1. Pass.
-- D3: `tasks/DECISIONS.md:41` and `docs/PROJECT.md:36` agree (`WebContentsView`); Electron `webview-tag.md:7` says "we currently recommend to …" against `<webview>`. Pass.
+- S1: `docs/EVIDENCE.md` — 77 rows (34 doc, 32 run, 11 assumption; 58 confirmed, 11 open, 8 refuted; counted by script, `exit 0`). Pass for existence; see "Unsupported" for sentences in `docs/PROJECT.md` and `docs/tech/` that go past the rows.
+- S2: `scripts/evidence_check.py:33-57` read; tests `tests/scripts/test_evidence_check.py:41-79` read; `python3 -m unittest discover -s tests/scripts` exit 0. Pass.
+- S3: spike scripts `spikes/pty-claude.js`, `spikes/web.js`, `spikes/last_reply.py`, `spikes/resume.js` and their kept outputs exist (`ls spikes`, 48 entries). Pass for existence (`spikes/pty-claude.js:43`, `spikes/web.js:19`, `spikes/last_reply.py:20` read; `python3 -I spikes/last_reply.py claude 7d58de11-…` exit 0, reply `OK`); nothing needing Electron could be rerun.
+- S4: ten `docs/tech/*.md` files exist (`ls docs/tech`); pins re-checked by verify 1 with `npm view <pkg> time` (all at least 14 days old). `node-pty@1.1.0.md:5` makes a claim the evidence does not (see Unsupported U1). Fail on that line.
+- S5: `docs/PROJECT.md` §3 is scope plus row ids; mechanics moved to `docs/tech/`; refuted rows reflected (V5). Pass on `docs/PROJECT.md:31-41` (`git diff 8440e1c 4951a41 -- docs/PROJECT.md` exit 0), except the sentences in U2-U4.
+- V1: `python3 scripts/evidence_check.py` exit 0, fresh clone.
+- V2: `python3 -m unittest discover -s tests/scripts` exit 0, fresh clone.
+- V3: `python3 scripts/evidence_check.py` exit 1 with CC4's cell emptied; `python3 -m unittest tests.scripts.test_evidence_check.EvidenceCheckTest.test_row_without_evidence_fails` exit 1 with the guard removed.
+- V4: all 29 first-round artefacts plus the new ones (`claude-trust-enter/run.out`, `codex-help.txt`, `codex-sandbox-read-wide.txt`, `claude-resume-inherited-env.txt`, `codex-session-index.txt`) opened; judgement per row below; `python3 scripts/evidence_check.py` exit 0 confirms every run artefact path exists, `spikes/claude-trust-enter/run.out:7` is the new CC13 evidence. Pass with the U-list.
+- V5: `git diff 8440e1c 4951a41 -- docs/PROJECT.md` plus `grep -n isSidechain docs/PROJECT.md` (no hit; present at 8440e1c per verify 1), `PROJECT.md:31` (CC13 trust dialog, CC17), `:33` (F3 rule gone, CX10 "failed … open until CX11"), `:34` (CX12 Codex `/voice`), `:36` (W3/W6, D1 "proposed"), `:15` (TypeScript 6.0.3, G4), `:149` (`--maxWorkers`, G6). Pass.
+- V6: HUMAN, not run here (exit 0 is not claimed; `tasks/05-feasibility/01-evidence-table/NOTES.md:25` lists sign-in under what was not checked). No sign-in record exists in `NOTES.md`.
+- D1: `tasks/DECISIONS.md:14` `[proposed]`; `docs/PROJECT.md:36` now says "proposed as D1" (verify 1 flagged "decision D1"; fixed). Pass.
+- D2: `tasks/DECISIONS.md:31` and `docs/PROJECT.md:15` agree (TypeScript 6.0.3); typescript-eslint range checked by verify 1 at `warnAboutTSVersion.ts:11`. Pass.
+- D3: `tasks/DECISIONS.md:41`; `spikes/frame-headers.txt` re-run with `curl -sSI`: chatgpt.com `x-frame-options: SAMEORIGIN` (HTTP 403), grok.com `x-frame-options: DENY` (HTTP 200); deepseek 403 as recorded. Pass.
+
+## Rows verify 1 named, re-judged against the artefact or the pinned source
+
+- G7 (doc, confirmed): `base.ts` of Playwright v1.63.0 read (curl): lines 660-675 `outputDir` defaults to `options.configDir`; `outputFile = path.resolve(outputDir, reportName)`; `PLAYWRIGHT_JUNIT_OUTPUT_FILE` is resolved first (line 660). The row's corrected wording holds. PASS. (Minor: the cited range 671-675 shows the NAME half; the `_OUTPUT_FILE` half that §6 uses is at 660-663 and `docs/tech/playwright@1.63.0.md:4` cites the same range.)
+- CC13 (run): `spikes/claude-trust-enter/run.out` — `trust dialog present → "" + Enter` then `[6.8s] pty exit 1`, 0.7 s after Enter; screens 02/03/09 are byte-identical to 01 (`cmp` same: the dialog was never left); `claude-01-start.screen.txt` shows `❯ No, exit` as default. PASS. Residue: the line `prompt visible: true` in the same log is a false positive (`pty-claude.js:43` matches `❯` in the dead dialog); and `claude-run.out` still logs `→ Enter` for a run that reached the prompt (earlier script version, not kept) — neither is cited by CC13.
+- CX2 (run): `codex-update-dialog.screen.txt` shows option 1 `Update now (runs sh -c 'curl -fsSL … | … sh')` as the default (`›`); `codex-02-dialog-0.screen.txt` shows the folder-trust dialog; `codex-run.out` orders update dialog, trust dialog, prompt. The paste-before-dialog sentence is gone from the row and from `docs/tech/codex@0.159.2.md`. PASS.
+- W1 (run): `web-report.json` chatgpt `input: true`, `challengeScriptInHtml: false`, `challengeShown: false`; `web-chatgpt.png` read: "Where should we begin?" with "Ask ChatGPT" input and Log in button. PASS.
+- W6 (run, refuted): `web-report.json` separates `challengeScriptInHtml` (deepseek true) from `challengeShown` (false for all three); screenshots of chatgpt, grok, deepseek-plain-ua read: no challenge page. PASS as refuted ("shown" refuted; script present).
+- CX3 (run): `codex-help.txt` lists every option of `codex` and `codex resume`, none sets a session id of a new session (`resume` takes `[SESSION_ID]` positional only). I regenerated `codex --help` (codex-cli 0.159.2): first 138 lines identical to the file; `codex --help | grep -i session.?id` empty. PASS.
+- CX4 (doc): `recorder.rs` rust-v0.159.2 lines 1727-1735 read: `Resolve ~/.codex/sessions/YYYY/MM/DD path`, `codex_home().push(SESSIONS_SUBDIR)`, year/month/day dirs; filename pattern `rollout-<timestamp>-<id>.jsonl` is at lines 101-102. PASS (the `CODEX_HOME` override is `codex_home()` and is not on the cited lines).
+- CX13 (doc): `shared_options.rs:53-58` rust-v0.159.2: `long = "dangerously-bypass-approvals-and-sandbox", alias = "yolo"`, doc "Skip all confirmation prompts and execute commands without sandboxing". PASS.
+- CC10 (doc): `claude-directory.md` line 112 `projects/<project>/<session>.jsonl | Full conversation transcript: every message, tool call, and tool result`; no schema on that page. PASS, scoped to that one page (the row says "the docs"; I read only this page).
+- CX8 (run): `codex-sandbox-read.txt` (read outside cwd exit 0 in `read-only` and `workspace-write`, write blocked in read-only) and `codex-sandbox-read-wide.txt` (`/etc/hosts`, `~/.zshrc`, the repository README, exit 0, both modes). I re-ran `codex sandbox -c sandbox_mode=… -- cat /etc/hosts` and `cat ~/.zshrc` in both modes: all four exit 0. `permissions.rs:2042-2062` (`ReadOnly` → `Root` with `Read`) agrees. PASS.
+- G9 (run): `spikes/deny-prefixes.txt` lists DENY for all eight prefixes and allow for two builds. I re-ran `~/.claude/hooks/git-guard.py` with the clone as `cwd` on the eight commands plus `npx electron-builder --mac` and `npm run build`: eight deny, two allow. PASS.
+- CC17 (run): `claude-resume-inherited-env.txt` shows the warning line "Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker" with the variable set in the harness. PASS for "the CLI says so"; no artefact checks that the jsonl was in fact not written, and "the app must drop it" is a design consequence.
+- CX15 (assumption, open): place named; `codex migrate-rollouts` report re-run: `Scanned 11 rollout(s): 1 eligible, 10 already paginated`. PASS (honestly open).
+- CX16 (run): `codex-session-index.txt`; I recomputed on `~/.codex/session_index.jsonl`: `{('id','thread_name','updated_at'): 9}`, 9 of 9 ids have a rollout under `~/.codex/sessions`. PASS.
+
+## Fresh sample of 15 other rows (python3 `random.seed(20261021)`, `random.sample` of the 63 rows not named above)
+
+CC1, CX1, CX11, F2, F3, G1, G10, G2, G8, P2, V2, V6, W4, W8, W9.
+
+- CC1: `claude-run.out` electron 44.6.0, node-pty loaded, pty exit 0. PASS.
+- CX1: `codex-02-dialog-1.screen.txt` Codex v0.159.2 prompt in the pty. PASS for "runs"; the ChatGPT sign-in itself is not on the screen, only the absence of a login prompt.
+- CX11, V6, W8: assumptions, place named (HUMAN), status open; checker enforces it. PASS (nothing to prove).
+- F2: `claude-04-after-ctrl-v-image.screen.txt` shows `[Image #1]`. PASS. F3 (refuted): `claude-text-clipboard/claude-04-…` shows the clipboard text pasted by Ctrl+V; `run.out` shows `pasteboard types: public.utf8-plain-text`. PASS.
+- G1: re-ran the four lines in the clone: `shellcheck`, `actionlint`, `gitleaks dir`, `gitleaks git` all exit 0 (the first two with "no changed file matches", vacuous as §6 says). G2: planted a random `ghp_…` string in an untracked file in the clone, the gitleaks line through `lint_changed` exit 1; removed. PASS.
+- G8: `test-cli-js.md:82` "Unlike `--reporter`, this keeps the configured reporters instead of replacing them". PASS.
+- G10: first half PASS (`builder.ts:271-276` `option("publish", alias "p", choices onTag|onTagOrDraft|always|never)`). Second half FAILS as worded, see U2.
+- P2: `node-pty-spawn-helper.txt` mode `-rw-r--r--` and `posix_spawnp failed`; I ran `npm pack node-pty@1.1.0`: `tar -tvzf` shows `package/prebuilds/darwin-arm64/spawn-helper` as `-rw-r--r--`, prebuilds only darwin-arm64/x64 and win32-arm64/x64 (P1 holds). PASS for the missing bit; "every spawn fails until it is set" rests on the one failure plus later successful runs, no artefact shows the chmod.
+- V2: `developer.apple.com/forums/thread/763956` returns a JS shell without the thread text; CANNOT VERIFY HERE (same as verify 1). It is a forum post, not documentation.
+- W4: `web-deepseek-plain-ua.png` read: normal sign-in form; `web-report-plain-ua.json` UA without `Electron/`. PASS, with a note: the png is the 10:48 file from the first spike round (`ls -l`), the rerun's JSON (11:06) records `capture error UnknownVizError`, so the screenshot was not regenerated, contrary to NOTES.md ("screenshots regenerated"). The JSON and the png agree on the UA and URL.
+- W9: `session.md:37-39` `persist:` prefix is persistent. PASS.
+
+## Unsupported (sentences that claim more than their row shows)
+
+- U1: `docs/tech/node-pty@1.1.0.md:5` "the darwin and win32 prebuilds loaded under Electron 44.6.0 without a rebuild (spike log claude-run.out)". The log is macOS only; win32 was never loaded and EVIDENCE P4 says exactly that (open, HUMAN Windows smoke). Contradicts the table.
+- U2: `docs/PROJECT.md:91` "The electron-builder config sets `publish: never`, so a plain local build can never upload", repeated in `docs/tech/electron-builder@26.17.0.md:3` and G10. At the pinned tag `never` is a publish policy (CLI `--publish`, `PublishOptions.publish`, `PublishManager.ts:81,104`), while the config key `publish` holds publisher configurations (`PublishManager.ts:154,467`; `null` disables). `PublishManager.ts:87-100` also turns on implicit publishing (npm lifecycle event `release`, a CI git tag, CI detection) when no policy is given. The cited lines `builder.ts:271-276` show only the CLI choice. The claim as worded is unsupported and probably wrong; the deny block still guards the explicit `-p`/`--publish` forms.
+- U3: `docs/PROJECT.md:33-34` has no EVIDENCE row for: `Alt+V` on Windows (supported only in `docs/tech/claude-code@2.1.306.md:10` by the interactive-mode page, which I did not re-read), "Web windows: native drag-and-drop and paste", "OS dictation (macOS Dictation, Windows `Win+H`) types into any input; Ubuntu has none built in". Verify 1 listed these as missing rows; NOTES.md ("after verify:failed") does not mention them and they are unchanged.
+- U4: `docs/PROJECT.md:36` "Logged out, ChatGPT and Grok load and chat without a challenge (W1, W2, W6)": W1/W2 show a loaded page with an input and no challenge; no prompt was sent, so "chat" is not shown.
+- U5: V2 (above) — cannot verify; the sentence "Microphone granted to CLI children through the app (V2, V3)" in `PROJECT.md:34` rests on it.
+- Minor: `docs/tech/claude-code@2.1.306.md:8` cites "NOTES.md" for the `isSidechain` check; the artefact is `spikes/claude-subagent-files.txt`. `docs/tech/chat-sites@2026-10-21.md:5-6` cite the sites' terms pages after observations the terms do not contain (the artefact is named in the header). `docs/tech/electron@44.6.0.md` cites `sandbox.md` for the harness `UnknownVizError`, which that page does not contain.
 
 ## How to reproduce
 
 From an empty environment:
 
 ```
-git clone <repo> scratch && cd scratch && git checkout d342c6a
-python3 scripts/evidence_check.py                      # evidence_check: 74 rows, 0 problems
+git clone <repo> scratch && cd scratch && git checkout 4951a41
+python3 scripts/evidence_check.py                      # evidence_check: 77 rows, 0 problems
 python3 -m unittest discover -s tests/scripts          # Ran 12 tests ... OK
 python3 tasks/check.py                                 # problems: 0
 ```
 
-Recorded:
-
-- COMMAND: `python3 scripts/evidence_check.py` exit 0
-- COMMAND: `python3 -m unittest discover -s tests/scripts` exit 0
-- COMMAND: `python3 tasks/check.py` exit 0 (before VERIFY.md existed)
-- COMMAND: re-run of the `git-guard` hook (`~/.claude/hooks/git-guard.py`, payload with `cwd` = clone) over the 8 deny prefixes: DENY for `npx electron-builder -p always`, `electron-builder --publish always --mac`, `npx electron-builder --publish always`, `npm publish`, `git push origin main`, `xcrun notarytool submit x`, `gh release create v1`; allow for `npx electron-builder --mac`, `npm run build`; also DENY `electron-builder -p never`. G9 reproduces and is wider than `spikes/deny-prefixes.txt` (that file covers 5 of the 8 prefixes).
+- COMMAND: `env -i PATH=/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin HOME=$HOME python3 scripts/evidence_check.py` (clone at `4951a41`) exit 0, output `evidence_check: 77 rows, 0 problems`
+- COMMAND: `python3 -m unittest discover -s tests/scripts` exit 0, `Ran 12 tests in 0.007s` OK
+- COMMAND: `python3 tasks/check.py` exit 0, `problems: 0` (run in the clone, and again in the repository after this report was written)
 
 ## Reverse control
 
-Both in `.claude/scratch/verify-clean` (scratch clone), restored afterwards (`git status` clean, suite green again).
+Both in the scratch clone `.claude/scratch/verify2`, restored after (`git status --short` empty, suite green: `restored exit 0`).
 
-A. Evidence cell of CC4 emptied in `docs/EVIDENCE.md`:
+A. CC4's evidence cell emptied in `docs/EVIDENCE.md`:
 ```
 CC4: [no-evidence] no evidence
-evidence_check: 74 rows, 1 problems
-COMMAND: python3 scripts/evidence_check.py exit 1
+evidence_check: 77 rows, 1 problems
+COMMAND: python3 scripts/evidence_check.py -> exit 1
 ```
-B. The `no-evidence` guard removed in `scripts/evidence_check.py:41` (`return problems`):
+B. The `no-evidence` guard removed (`scripts/evidence_check.py`: `return problems + [...]` → `return problems`):
 ```
 AssertionError: 'no-evidence' not found in set()
-FAILED (failures=1)    # test_row_without_evidence_fails, exit 1
+Ran 1 test ... FAILED (failures=1)
+COMMAND: python3 -m unittest tests.scripts.test_evidence_check.EvidenceCheckTest.test_row_without_evidence_fails -> exit 1
+whole suite: Ran 12 tests ... FAILED (failures=1)
 ```
-and the whole suite: `Ran 12 tests ... FAILED (failures=1)`.
-Wording note: V3 says "empty the evidence cell … → test_row_without_evidence_fails". Emptying a cell in `docs/EVIDENCE.md` makes the checker (V1) red, not that unit test (it builds its own input); the unit test goes red when the guard in the checker is removed. Both directions are red, so the control is sound. Fixture-only: the unit test does not read the real `docs/EVIDENCE.md`.
-
-## Row-by-row: what I opened (all 29 run rows, all 9 refuted rows, and the doc rows named below)
-
-Supported (artefact or pinned-version source read, claim and status match):
-- Run: CC1 (`claude-run.out`: electron 44.6.0, node-pty loaded, pty exit 0), CC2 (PATH `/usr/bin:/bin:/usr/sbin:/sbin`, claude ran), CC3 (`claude-01-start.screen.txt:1` "Identity added"), CC6 (`transcripts-last-reply.txt`: `-private-tmp-spike-cwd-2uJCQ6` for `/tmp/spike-cwd-2uJCQ6`), CC8 (`~/.claude/projects/-private-tmp-spike-cwd-2uJCQ6/7d58de11-….jsonl`: assistant records `['thinking']` then `['text']` with the same message id, so one reply spans two records; reply `OK`), CC9 refuted (`claude-subagent-files.txt`: isSidechain `{None: 632, False: 609}`, subagents in `<session>/subagents/`; `code.claude.com/docs/en/claude-directory` line 114 confirms the directory), CC11 (`claude-03-…`: two-line text in the prompt, not submitted), CX1 (`codex-02-dialog-1.screen.txt`: Codex 0.159.2 prompt in pty; sign-in itself is not shown on screen, only that no login prompt appeared), CX5 (`last_reply.py` logic; output omitted in the artefact), CX8 (`codex-sandbox-read.txt`: read outside cwd exit 0 in both modes; one directory under `/tmp`, not "whole disk"), CX9 (`codex-03-…`), CX10 refuted (all three `codex-04-…` screens: "Failed to paste image: no image on clipboard"), F2 (`claude-04-…`: `[Image #1]`), F3 refuted (`claude-text-clipboard/claude-04-…`: text pasted by Ctrl+V), F4 (`electron-clipboard-api.txt`: `has/read/readText/write/writeText`, no `readImage`), W2, W3 refuted (`web-deepseek.png`: "Abnormal usage environment"), W4 (`web-deepseek-plain-ua.png`: sign-in form; `web-report-plain-ua.json` UA without `Electron/`), W5 (`url: …/sign_in` in both reports), W6 refuted (three screenshots show no challenge page), W10 (`web.js` uses `executeJavaScriptInIsolatedWorld`, no preload; spike used `BrowserWindow`, not `WebContentsView`), P2 (`node-pty-spawn-helper.txt`: mode `-rw-r--r--`, `posix_spawnp failed`; I also listed the 1.1.0 tarball: prebuilds only darwin-arm64/x64 and win32-arm64/x64, so P1 holds), G1, G2 (`gate-non-ts.txt`; G1 shellcheck/actionlint lines are vacuous, as `docs/PROJECT.md` §6 says), G9 (re-run above), G11 (`reverse-control.txt`, reproduced above).
-- Doc, refuted: CX12 (`slash_command.rs:136` `SlashCommand::Voice => "start or stop voice…"`), G4 (`warnAboutTSVersion.ts:11` `>=4.8.4 <6.1.0`), G6 (`resolveConfig.ts:266-268` "`test.poolOptions` was removed in Vitest 4"; `--maxWorkers` is in `cli-generated.md:463`).
-- Doc, confirmed: CC4 (`cli-reference` `--session-id` row 128, `--add-dir` row 62), CC5 (`permissions` row 17: file reads "No" prompt within working dir and additional directories), CC7, CC12, CC14 (`legal-and-compliance` line 57, "unmodified Claude Code binary with their own Claude subscription"; line 55 says third-party developers may not offer Claude.ai login in their own applications, a tension the row does not mention), CC15 (`cli-reference` row 82 says "Equivalent to `--permission-mode bypassPermissions`"; the cited `permission-modes` page implies it), CX7, CX14 (`learn.chatgpt.com/docs/codex/cli.md`: "choose Sign in with ChatGPT or another available sign-in method"), F1 (`breaking-changes.md:981-983`), V1 (`voice-dictation`: claude.ai account, hold Space, `arecord`/SoX), V3 (`system-preferences.md:360`), W7 (Google policy: embedded user-agent prohibited), W9, W11, W12 (OpenAI terms: "Automatically or programmatically extract data or Output"), W13 (xAI: "using bots to access"), W14 (DeepSeek: "using any robots, spiders, or other automatic setups"), G5, G8, K1 (`safe-storage.md:25`), P3, P5 (Ubuntu release notes confirm the restriction; the `.deb` profile half is `docs/tech/electron-builder@26.17.0.md:4`, which I did not open at source).
-
-## Unsupported rows (evidence cited does not show the claim or the status)
-
-- G7 (status `refuted`): `PLAYWRIGHT_JUNIT_OUTPUT_NAME=reports/x.xml` — Playwright v1.63.0 `reporters/base.ts:674-677` does `path.resolve(outputDir, reportName)` with `outputDir` defaulting to the config directory (`:671-672`), and `junit.ts:96` creates the parent directory recursively; the cited doc lines say NAME is "relative to the output dir", default "cwd or config directory". With the config at the repository root the file is written to `reports/x.xml`. The claim as worded holds (conditionally on the config location); `refuted` is not demonstrated. Switching to `_OUTPUT_FILE` in §6 is harmless, but the stated reason is wrong.
-- CC13 (run, confirmed): the screen shows the default `❯ No, exit` (supported), but "Enter alone quits" has no artefact. `claude-run.out` logs `trust dialog present → Enter` and the session then proceeds to the prompt, which if anything points the other way; the script version that produced it is not kept. No `02-trust-only` snapshot is kept.
-- CX2 (run, confirmed): update dialog with default `curl … | sh` and trust dialog are shown; "text pasted before they are answered lands in the dialog" is shown by no artefact (every paste in the spikes came after the dialogs were dismissed). Same sentence is repeated in `docs/tech/codex@0.159.2.md:12`.
-- W1 (run, confirmed): the screenshot shows the "Ask ChatGPT" input, but the cited `web-report.json` says `"input": false` for chatgpt (selector `#prompt-textarea` did not match), unexplained. Separately `challenge: true` for deepseek in both reports (regex match over raw HTML) contradicts the screenshots without comment; W6's refutation rests on the screenshots.
-- CX4 (doc, confirmed): cited `recorder.rs:82-83` is a doc-comment example with a flat path `~/.codex/sessions/rollout-….jsonl` (no `YYYY/MM/DD`, no `CODEX_HOME`). The claim is true (`recorder.rs:1727` "Resolve ~/.codex/sessions/YYYY/MM/DD path", and `~/.codex/sessions/2026/09/17/rollout-…jsonl` on this disk), but the cited lines do not show it.
-- CX13 (doc, confirmed): cited `protocol.rs:986-1009` is the `AskForApproval` enum, not the flag. The flag is at `utils/cli/src/shared_options.rs:55` (`dangerously-bypass-approvals-and-sandbox`, alias `yolo`) and `cli/src/main.rs:1988-1993`; claim true, citation wrong.
-- CX3 (doc, confirmed): "no flag sets the session id of a new session" is a negative claim; cited `main.rs:350-354` is `ResumeCommand.session_id`. A grep of `main.rs` finds no such flag, but the cited lines cannot show an absence.
-- CC10 (doc, confirmed): "no public schema exists" — `claude-directory` lists `projects/<project>/<session>.jsonl` (line 112) and says nothing about a schema; absence is not shown.
-- CX8 as used in `docs/PROJECT.md:35` ("Codex through its whole-disk read access"): the artefact shows a read of one `/tmp` directory under two sandbox modes, not the whole disk.
-- V2 (doc, confirmed): `developer.apple.com/forums/thread/763956` returned a page without the thread body in my fetch; cannot verify here. It is a forum post, not Apple documentation.
-
-Missing rows (claims in `docs/PROJECT.md` §3/§6 with no row): "Ubuntu has none built in" (OS dictation), macOS Dictation/`Win+H`, `Alt+V` on Windows (supported at `claude-code@2.1.306.md:10` and `interactive-mode` line 28, but no EVIDENCE row), "both CLIs attach image paths as images" was dropped from §3.
+C. G2 control (planted token, gitleaks via `lint_changed`) exit 1, removed afterwards.
+Note: B proves the unit test is sensitive to the guard; A proves the real table is checked. The unit test uses its own fixture, not the real `docs/EVIDENCE.md`.
 
 ## What was not checked
 
-- VERIFY item 6 (HUMAN): sign-in on ChatGPT, Grok, DeepSeek. W8, V6 and persistence of a signed-in partition stay open; `NOTES.md` has no owner record.
-- Windows 11 and Ubuntu 26.04 rows (CC16, P4, P6, V5, CX11): open assumptions, not checkable on macOS.
-- Spike reruns: I did not launch Electron, claude, codex or the sites (instructions), so every `run` artefact was judged by reading, not reproduced. Consequently the screenshots, screens and logs could be post-edited; I saw no sign of that but could not exclude it. The site behaviour (W1–W6) is a single run on 2026-10-21.
-- The `codex-sandbox-read.txt` and `gate-non-ts.txt` outputs, and `claude-subagent-files.txt` (counts for a session that is still growing), were not regenerated. The CC8 reply structure was re-read from the spike's own session file under `~/.claude/projects/`, which is the author's artefact, not a clean one.
-- Doc rows not opened at source: CC12 and CC7 (read in the fetched Claude Code pages only by a grep, not line-checked), F5 (CDP `DOM.setFileInputFiles`), W9 and V4 beyond `session.md` headline text, G8, G10 (`builder.ts:271-276` was read: `-p` alias of `publish`; the `publish: never` half was not), P3 (README text read), P5 `.deb` profile.
-- `python3 tasks/scope_check.py` crashed with a traceback when called with `--help`; I did not determine its normal invocation. WRITE-SET was checked by hand: files changed in `d342c6a` all fall under the task's WRITE-SET (`.gitignore`, `docs/`, `scripts/evidence_check.py`, `tasks/DECISIONS.md`, `tests/scripts/test_evidence_check.py`, the task directory).
-- The `NOTES.md` side-effects section (a Haiku prompt sent through Claude Code, trust entries left in `~/.claude.json` and `~/.codex/config.toml`, clipboard replaced and restored) was not checked and was not redone; note that `NOTES.md` admits a prompt to a CLI, which the task's `−` line forbids only for the real sites.
-- Secrets scan of `spikes/` and `docs/` by grep for token/secret/password/private-key patterns: only text mentions, no values.
+- VERIFY item 6 (HUMAN): sign-in on ChatGPT, Grok, DeepSeek. W8, V6, persistence of a signed-in partition stay open; `NOTES.md` has no owner record. This alone keeps `verify:passed` from being set.
+- Windows 11 and Ubuntu 26.04 rows (CC16, P4, P6, V5, CX11, F6): open assumptions, not checkable on macOS.
+- No spike that needs Electron, `claude` or a website was rerun (instruction), so every `run` artefact for CC1-CC3, CC11, CC13, CX1, CX2, CX9, CX10, F2, F3, F4, W1-W6, W10 was judged by reading, not reproduced; the screens and screenshots could have been edited after the fact, I saw no sign of it. The site behaviour is one run on 2026-10-21.
+- Rows I did not open at source this round: CC4, CC5, CC7, CC12, CC14, CC15, CX7, CX14, F1, F5, V1, V3, V4, W7, W11-W14, K1, P1 (tarball only), P3, P5, G4, G5, G6, CX12, CX5/CC6/CC8 beyond rerunning `last_reply.py` (output `OK` / Cyrillic reply, matches the artefact). Verify 1 read most of them and found them supported; I did not redo that.
+- `CC8`'s reply structure and `claude-subagent-files.txt` were not regenerated.
+- V2 (Apple forum) not retrievable. G10's `publish: never` half and the `.deb` SUID wording (`after-install.tpl` chmods 4755 only when user namespaces do not work) read from source but not run.
+- NOTES.md side effects (a Haiku prompt through Claude Code, trust entries in `~/.claude.json` and `~/.codex/config.toml`, clipboard replaced and restored) were not checked.
+- Secrets: `git diff` of the task not scanned beyond the `gitleaks` lines of item G1 (exit 0); `spikes/` text artefacts were not grepped again.
+- `python3 tasks/scope_check.py` not run (its usage is `<task dir> [base]`; WRITE-SET compared by hand: every file changed between `8440e1c` and `4951a41` is under the task's WRITE-SET).
 
 ## Verdict
 
-verify:failed for tasks/05-feasibility/01-evidence-table — items 1–3 and 5's diff pass, but item 4 fails (rows CC13, CX2, W1 are not fully shown by their artefacts) and G7 is marked `refuted` without support (plus citation mismatches on CX3, CX4, CX13, CC10 and V2 not retrievable); item 6 is HUMAN and not checked, which alone would keep it from `passed`.
+verify:failed for tasks/05-feasibility/01-evidence-table — every row verify 1 rejected and the three new rows now hold against their artefacts and the pinned sources, and items 1-3 reproduce, but `docs/tech/node-pty@1.1.0.md:5` claims win32 prebuilds loaded (P4 is open), `docs/PROJECT.md:91` claims a config `publish: never` that the source does not show, several §3 sentences have no row (U3, U4), V2 cannot be verified, and item 6 (HUMAN) is unchecked and by itself prevents `verify:passed`.
