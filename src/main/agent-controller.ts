@@ -7,6 +7,7 @@ import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { OutputBuffer } from '../shared/output-buffer';
 import { claimForAgents, restoreSpawn } from '../shared/restore';
+import { claudeTranscriptExists } from './claude-transcripts';
 import { PtyManager } from './pty-manager';
 import { saveState } from './state-file';
 
@@ -143,7 +144,12 @@ export class AgentController {
   }
 
   private respawn(agent: Agent): void {
-    const spec = restoreSpawn(agent, { sharedDir: this.deps.sharedDir, platform: this.deps.platform, env: this.deps.env });
+    const spec = restoreSpawn(agent, {
+      sharedDir: this.deps.sharedDir,
+      platform: this.deps.platform,
+      env: this.deps.env,
+      claudeTranscriptExists: (sessionId) => claudeTranscriptExists(this.deps.env, sessionId),
+    });
     if (spec === null) return;
     try {
       this.pty.spawn(agent.id, spec);

@@ -8,7 +8,12 @@ const ID_A = '0199a1b2-c3d4-7e5f-8a6b-1c2d3e4f5a6b';
 const ID_B = '0199a1b2-c3d4-7e5f-8a6b-2c2d3e4f5a6b';
 const ID_C = '0199a1b2-c3d4-7e5f-8a6b-3c2d3e4f5a6b';
 const SESSION = '0199a1b2-c3d4-7e5f-8a6b-9c2d3e4f5a6b';
-const CTX: RestoreContext = { sharedDir: '/data/shared', platform: 'win32', env: { AIAW_CLAUDE_BIN: 'claude-bin', AIAW_CODEX_BIN: 'codex-bin' } };
+const CTX: RestoreContext = {
+  sharedDir: '/data/shared',
+  platform: 'win32',
+  env: { AIAW_CLAUDE_BIN: 'claude-bin', AIAW_CODEX_BIN: 'codex-bin' },
+  claudeTranscriptExists: () => true,
+};
 
 function agent(partial: Partial<Agent> & Pick<Agent, 'id' | 'kind'>): Agent {
   return { title: partial.id, createdAt: 1000, ...partial };
@@ -28,6 +33,18 @@ describe('restoreSpawn', () => {
     expect(spec?.file).toBe('claude-bin');
     expect(spec?.args).toEqual(['--resume', SESSION, '--add-dir', '/data/shared']);
     expect(spec?.cwd).toBe('/work/p');
+  });
+
+  it('starts a claude agent with its own session id when the transcript does not exist', () => {
+    const spec = restoreSpawn(agent({ id: 'a', kind: 'claude', cwd: '/work/p', sessionId: SESSION }), { ...CTX, claudeTranscriptExists: () => false });
+    expect(spec?.args).toEqual(['--session-id', SESSION, '--add-dir', '/data/shared']);
+  });
+
+  it('asks about the transcript of the agent session only', () => {
+    const asked: string[] = [];
+    restoreSpawn(agent({ id: 'a', kind: 'claude', cwd: '/work/p', sessionId: SESSION }), { ...CTX, claudeTranscriptExists: (id) => asked.push(id) > 0 });
+    restoreSpawn(agent({ id: 'b', kind: 'codex', cwd: '/work/p', sessionId: SESSION }), { ...CTX, claudeTranscriptExists: (id) => asked.push(id) > 0 });
+    expect(asked).toEqual([SESSION]);
   });
 
   it('resumes a codex agent that has a claimed session id', () => {

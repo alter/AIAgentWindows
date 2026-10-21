@@ -7,16 +7,18 @@ export interface RestoreContext {
   sharedDir: string;
   platform: string;
   env: Readonly<Record<string, string | undefined>>;
+  claudeTranscriptExists(sessionId: string): boolean;
 }
 
 export function restoreSpawn(agent: Agent, context: RestoreContext): SpawnSpec | null {
   if (isSiteKind(agent.kind) || agent.cwd === undefined) return null;
-  if (agent.kind === 'claude' && agent.sessionId === undefined) return null;
+  const sessionId = agent.sessionId;
+  if (agent.kind === 'claude' && sessionId === undefined) return null;
   return buildSpawn(agent.kind, {
     cwd: agent.cwd,
-    sessionId: agent.sessionId,
+    sessionId,
     sharedDir: context.sharedDir,
-    resume: agent.sessionId !== undefined,
+    resume: sessionId !== undefined && (agent.kind !== 'claude' || context.claudeTranscriptExists(sessionId)),
     platform: context.platform,
     env: context.env,
   });

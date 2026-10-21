@@ -1,5 +1,5 @@
 // restore-controller.test.ts
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -23,7 +23,7 @@ function build(initial: AppState): AgentController {
     stateFile: path.join(dir, 'agents.json'),
     sharedDir: path.join(dir, 'shared'),
     platform: 'win32',
-    env: { PATH: process.env.PATH, AIAW_CLAUDE_BIN: STUB, AIAW_CODEX_BIN: STUB },
+    env: { PATH: process.env.PATH, AIAW_CLAUDE_BIN: STUB, AIAW_CODEX_BIN: STUB, CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config') },
     pickFolder: async () => dir,
     emit: (channel, payload) => events.push({ channel, payload }),
     listRollouts: async () => rollouts,
@@ -69,6 +69,8 @@ describe('restore at start', () => {
     const saved = await loadState(path.join(dir, 'agents.json'));
     const agent = saved.agents[0];
     first.shutdown();
+    await mkdir(path.join(dir, 'claude-config', 'projects', '-some-folder'), { recursive: true });
+    await writeFile(path.join(dir, 'claude-config', 'projects', '-some-folder', `${agent?.sessionId}.jsonl`), '{}\n');
     events = [];
     const second = build(saved);
     await second.restore();
@@ -76,6 +78,20 @@ describe('restore at start', () => {
     expect(output(agent?.id ?? '')).toContain('--resume');
     expect(output(agent?.id ?? '')).toContain(agent?.sessionId ?? 'missing');
     expect(second.snapshot().agents).toEqual(saved.agents);
+  });
+
+  it('starts a claude agent with its own session id when no transcript exists', async () => {
+    const first = build({ version: 1, agents: [] });
+    await first.add('claude');
+    const saved = await loadState(path.join(dir, 'agents.json'));
+    const agent = saved.agents[0];
+    first.shutdown();
+    events = [];
+    const second = build(saved);
+    await second.restore();
+    await expect.poll(() => output(agent?.id ?? '')).toContain('STUB-CLI BANNER');
+    expect(output(agent?.id ?? '')).toContain('--session-id');
+    expect(output(agent?.id ?? '')).not.toContain('--resume');
   });
 
   it('claims the codex rollout when the list is saved and resumes it after a restart', async () => {
