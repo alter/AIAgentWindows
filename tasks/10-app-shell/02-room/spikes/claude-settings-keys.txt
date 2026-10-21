@@ -1,0 +1,4 @@
+# permission-relevant keys only (values of defaultMode and booleans); no rule text
+~/.claude/settings.json permissions.defaultMode = auto | permission keys = ['allow', 'defaultMode', 'deny'] | skipDangerousModePermissionPrompt = True
+~/.claude/settings.local.json permissions.defaultMode = None | permission keys = [] | skipDangerousModePermissionPrompt = None
+/Library/Application Support/ClaudeCode/managed-settings.json absent

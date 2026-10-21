@@ -1,0 +1,84 @@
+# claude 2.1.306 --help (flags relevant to room sessions)
+10:  --add-dir <directories...>            Additional directories to allow tool
+11-                                        access to
+12-  --agent <agent>                       Agent for the current session. Overrides
+13-                                        the 'agent' setting.
+14-  --agents <json-or-file>               JSON object defining custom agents, or
+15-                                        with --print the path to a file that
+16-                                        holds one (e.g. '{"reviewer":
+17-                                        {"description": "Reviews code",
+18-                                        "prompt": "You are a code reviewer"}}')
+19-  --allow-dangerously-skip-permissions  Enable bypassing all permission checks
+20-                                        as an option, without it being enabled
+21-                                        by default. Recommended only for
+22-                                        sandboxes with no internet access.
+--
+81:  --disallowedTools, --disallowed-tools <tools...>
+82-      Comma or space-separated list of tool names to deny (e.g. "Bash(git *)
+83-      Edit")
+84-  --effort <level>                      Effort level for the current session
+85-                                        (low, medium, high, xhigh, max)
+86-  --environment <environment_id>        Create a new cloud session that runs on
+87-                                        the given self-hosted environment
+88-                                        (ccpool_...).
+89-  --exclude-dynamic-system-prompt-sections
+90-      Move per-machine sections (cwd, env info, memory paths, git status) from
+91-      the system prompt into the first user message. Improves cross-user
+92-      prompt-cache reuse. Only applies with the default system prompt (ignored
+93-      with --system-prompt). (default: false)
+--
+151:  --permission-mode <mode>              Permission mode to use for the session
+152-                                        (choices: "acceptEdits", "auto",
+153-                                        "bypassPermissions", "manual",
+154-                                        "dontAsk", "plan")
+155-  --permission-prompts <target>         Who answers permission prompts with
+156-                                        --print: "host" (the SDK host or
+157-                                        --permission-prompt-tool) or "none"
+158-                                        (nobody: anything that would prompt is
+159-                                        denied automatically; the permission
+160-                                        mode still decides everything else)
+161-                                        (choices: "host", "none", default:
+162-                                        "host")
+163-  --plugin-dir <path>                   Load a plugin from a directory or .zip
+--
+195:  --restricted                          Restricted mode: removes the built-in
+196-                                        tools that run commands or code (Bash,
+197-                                        PowerShell and the other code-running
+198-                                        tools) and WebFetch unless --tools names
+199-                                        them, and ignores user, project and
+200-                                        local settings files (managed settings
+201-                                        and --settings still apply; add
+202-                                        --strict-mcp-config to skip MCP servers
+203-                                        too). Also confines the file tools to
+204-                                        the working directories (--add-dir
+205-                                        included), refuses bypassPermissions,
+206-                                        and lets only a person or the configured
+207-                                        permission handler approve writes to
+--
+224:  --session-id <uuid>                   Use a specific session ID for the
+225-                                        conversation (must be a valid UUID)
+226-  --setting-sources <sources>           Comma-separated list of setting sources
+227-                                        to load (user, project, local).
+228-  --settings <file-or-json>             Path to a settings JSON file or a JSON
+229-                                        string to load additional settings from
+230-  --strict-mcp-config                   Only use MCP servers from --mcp-config,
+231-                                        ignoring all other MCP configurations
+232-  --system-prompt <prompt>              System prompt to use for the session
+233-  --system-prompt-snapshot <on|off>     Record the system prompt once per
+234-                                        conversation and reuse it verbatim on
+235-                                        every request and resume. on (the
+236-                                        default, except under --bare outside
+--
+255:  --tools <tools...>                    Specify the list of available tools from
+256-                                        the built-in set. Use "" to disable all
+257-                                        tools, "default" to use the default set,
+258-                                        or specify tool names (e.g.
+259-                                        "Bash,Edit,Read").
+260-  --verbose                             Override verbose mode setting from
+261-                                        config
+262-  -v, --version                         Output the version number
+263-  -w, --worktree [name]                 Create a new git worktree for this
+264-                                        session (optionally specify a name)
+265-
+266-Commands:
+267-  agents [options]                      Manage background agents

@@ -1,0 +1,10 @@
+CODEX rollouts: 13
+(cli_version, history_mode): {('0.129.0-alpha.15', None): 5, ('0.154.0', 'paginated'): 6, ('0.156.1', 'paginated'): 3, ('0.159.2', 'paginated'): 1, ('0.163.0', 'paginated'): 2}
+event_msg types: {'task_started': 82, 'user_message': 5, 'token_count': 711, 'agent_message': 42, 'patch_apply_end': 17, 'task_complete': 82, 'web_search_end': 10, 'item_completed': 1702, 'thread_settings_applied': 101}
+task_complete keys seen: ['completed_at', 'duration_ms', 'error', 'last_agent_message', 'root_turn_id', 'started_at', 'time_to_first_token_ms', 'turn_id', 'type']
+AgentMessage phases: {'commentary': 165, 'final_answer': 69}
+  63 ('turn_context', 'approval_policy', 'on-request', 'sandbox_policy.type', 'workspace-write')
+  68 ('task_complete', 'last_agent_message is str', True, 'error present', False)
+  1 ('task_complete', 'last_agent_message is str', False, 'error present', False)
+  13 ('task_complete', 'last_agent_message is str', False, 'error present', True)
+  27 ('turn_context', 'approval_policy', 'never', 'sandbox_policy.type', 'danger-full-access')

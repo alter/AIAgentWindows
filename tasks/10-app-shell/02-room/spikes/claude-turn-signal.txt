@@ -1,0 +1,16 @@
+CLAUDE transcripts scanned: 6
+record types: {'mode': 1378, 'permission-mode': 1378, 'atis-latch': 1446, 'file-history-snapshot': 193, 'user': 2234, 'attachment': 3085, 'api-request-shape': 9, 'api-request-blob': 1979, 'api-request': 1882, 'last-prompt': 1443, 'ai-title': 1145, 'assistant': 3639, 'system': 658, 'queue-operation': 935, 'file-history-delta': 28, 'custom-title': 69, 'agent-name': 68}
+assistant message shapes (stop_reason, content block types per record, in file order):
+  996 (('tool_use', ('thinking',)), ('tool_use', ('tool_use',)))
+  386 (('tool_use', ('tool_use',)),)
+  245 (('end_turn', ('text',)),)
+  102 (('tool_use', ('thinking',)), ('tool_use', ('text',)), ('tool_use', ('tool_use',)))
+  76 (('tool_use', ('thinking',)), ('tool_use', ('thinking',)), ('tool_use', ('tool_use',)))
+  61 (('end_turn', ('thinking',)), ('end_turn', ('text',)))
+  51 (('tool_use', ('text',)), ('tool_use', ('tool_use',)))
+  30 (('tool_use', ('thinking',)), ('tool_use', ('tool_use',)), ('tool_use', ('tool_use',)))
+system subtypes: {('stop_hook_summary', False): 307, ('turn_duration', None): 289, ('away_summary', None): 57, ('local_command', None): 2, ('informational', None): 1, ('compact_boundary', None): 1, ('api_error', None): 1}
+turn_duration keys: ['cwd', 'durationMs', 'entrypoint', 'gitBranch', 'isMeta', 'isSidechain', 'messageCount', 'parentUuid', 'pendingBackgroundAgentCount', 'sessionId', 'slug', 'subtype', 'timestamp', 'type', 'userType', 'uuid', 'version']
+end_turn records with a text block: 307 followed by a turn_duration record before the next assistant record: 288
+assistant record keys: ['advisorModel', 'apiBlockIndex', 'cwd', 'effort', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'parentUuid', 'perTurnEffort', 'requestId', 'requestRef', 'requestedModel', 'serverClassifierRequest', 'sessionId', 'session_id', 'thinkingDisplay', 'thinkingDurationMs', 'timestamp', 'type', 'userType', 'uuid', 'version']
+user record keys: ['cwd', 'entrypoint', 'gitBranch', 'isSidechain', 'message', 'origin', 'parentUuid', 'permissionMode', 'promptId', 'promptSource', 'sessionId', 'timestamp', 'turnOrigin', 'turnPosition', 'type', 'userType', 'uuid', 'version']
