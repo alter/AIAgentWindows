@@ -33,6 +33,7 @@ SCOPE
 WRITE-SET
   package.json
   package-lock.json
+  .npmrc
   tsconfig.json
   tsconfig.main.json
   tsconfig.renderer.json

@@ -1,0 +1,7 @@
+{
+  "command": "npx vitest run tests/unit tests/integration --coverage --coverage.reporter=json-summary",
+  "format": "json-summary",
+  "report": "coverage/coverage-summary.json",
+  "floor": 100.0,
+  "tolerance": 0.2
+}
