@@ -49,6 +49,8 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 
 - Codex creates its rollout file only when the session is first persisted, not at spawn (recorder.rs at rust-v0.159.2: "For newly created sessions, this precomputes path/metadata and defers file creation/open until an explicit persist() call"). T13 therefore claims lazily: on app quit, when the agent list is saved, and before restore; an unclaimed Codex agent restores as a fresh `codex` in its folder (coordinator note, 2026-10-21).
 
+- arch_check (T09) sees `preload` only in constructor arguments written inline; T12 writes the `WebContentsView` and popup-window options for sites inline, never through a shared options variable (coordinator note, 2026-10-21).
+
 ## Out of scope
 - Forward, shared directory content, last-reply adapters — next tasks of 10-app-shell
 - Import of existing local sessions with filters — its own task of 10-app-shell
