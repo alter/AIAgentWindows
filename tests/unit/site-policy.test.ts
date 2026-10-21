@@ -1,7 +1,16 @@
 // site-policy.test.ts
 import { describe, expect, it } from 'vitest';
 import { SITE_URLS } from '../../src/shared/agents';
-import { originOf, permissionAllowed, popupAllowed, siteStartUrl, userAgentFor } from '../../src/shared/site-policy';
+import {
+  originOf,
+  permissionAllowed,
+  permissionCheckAllowed,
+  popupAllowed,
+  SENSITIVE_PERMISSIONS,
+  siteStartUrl,
+  userAgentFor,
+} from '../../src/shared/site-policy';
+import { formatSiteLog } from '../../src/shared/site-log';
 
 const DEFAULT_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) aiagentwindows/0.1.0 Chrome/150.0.0.0 Electron/44.6.0 Safari/537.36';
@@ -100,5 +109,62 @@ describe('siteStartUrl', () => {
     expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: 'file:///etc/passwd' })).toBe(SITE_URLS.grok);
     expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: 'not a url' })).toBe(SITE_URLS.grok);
     expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: '' })).toBe(SITE_URLS.grok);
+  });
+});
+
+describe('permissionCheckAllowed', () => {
+  const grok = originOf(SITE_URLS.grok) as string;
+  const signIn = 'https://accounts.x.ai';
+
+  it('lists exactly the sensitive set', () => {
+    expect([...SENSITIVE_PERMISSIONS].sort()).toEqual(
+      ['clipboard-read', 'display-capture', 'geolocation', 'hid', 'idle-detection', 'media', 'midi', 'notifications', 'serial', 'usb'].sort(),
+    );
+  });
+
+  it('follows the default for a permission outside the sensitive set, from any origin', () => {
+    for (const permission of ['storage-access', 'top-level-storage-access', 'persistent-storage', 'fullscreen', 'unknown']) {
+      expect(permissionCheckAllowed(grok, permission, signIn)).toBe(true);
+      expect(permissionCheckAllowed(grok, permission, 'https://grok.com')).toBe(true);
+      expect(permissionCheckAllowed(grok, permission, '')).toBe(true);
+    }
+  });
+
+  it('refuses every sensitive permission from a foreign origin', () => {
+    for (const permission of SENSITIVE_PERMISSIONS) {
+      expect(permissionCheckAllowed(grok, permission, signIn)).toBe(false);
+      expect(permissionCheckAllowed(grok, permission, 'https://evil.example')).toBe(false);
+      expect(permissionCheckAllowed(grok, permission, '')).toBe(false);
+    }
+  });
+
+  it('grants media to the agent origin and refuses the other sensitive permissions there', () => {
+    expect(permissionCheckAllowed(grok, 'media', 'https://grok.com')).toBe(true);
+    for (const permission of SENSITIVE_PERMISSIONS) {
+      if (permission !== 'media') expect(permissionCheckAllowed(grok, permission, 'https://grok.com')).toBe(false);
+    }
+  });
+});
+
+describe('formatSiteLog', () => {
+  it('writes one line with the time, the site, the event and quoted fields', () => {
+    const line = formatSiteLog('2026-10-21T10:00:00.000Z', 'grok', 'check', {
+      permission: 'storage-access',
+      origin: 'https://accounts.x.ai',
+      allowed: true,
+    });
+    expect(line).toBe(
+      '2026-10-21T10:00:00.000Z grok check permission="storage-access" origin="https://accounts.x.ai" allowed=true',
+    );
+  });
+
+  it('keeps a hostile value on one line', () => {
+    const line = formatSiteLog('t', 'grok', 'popup-denied', { url: 'javascript:1\n2026 fake request allowed=true' });
+    expect(line.split('\n')).toHaveLength(1);
+    expect(line).toContain('\\n');
+  });
+
+  it('writes numbers unquoted', () => {
+    expect(formatSiteLog('t', 'chatgpt', 'load-failed', { code: -105 })).toBe('t chatgpt load-failed code=-105');
   });
 });

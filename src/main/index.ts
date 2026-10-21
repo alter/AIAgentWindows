@@ -8,6 +8,7 @@ import { AgentController } from './agent-controller';
 import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { installMenu } from './menu';
+import { createSiteLogger } from './site-log-file';
 import { SiteViews } from './site-views';
 import { loadState } from './state-file';
 
@@ -54,7 +55,7 @@ async function start(): Promise<void> {
   mainWindow = window;
   const siteViews = new SiteViews(window, (event) => {
     if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
-  }, process.env);
+  }, process.env, createSiteLogger(path.join(userData, 'logs', 'sites.log')));
   sites = siteViews;
   controller = new AgentController(
     {

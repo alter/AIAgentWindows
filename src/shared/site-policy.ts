@@ -3,6 +3,18 @@ import { SITE_URLS, type SiteKind } from './agents';
 
 const ELECTRON_TOKEN = /\s*Electron\/\S+/;
 const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set(['media', 'persistent-storage']);
+export const SENSITIVE_PERMISSIONS: ReadonlySet<string> = new Set([
+  'media',
+  'geolocation',
+  'notifications',
+  'clipboard-read',
+  'display-capture',
+  'midi',
+  'hid',
+  'serial',
+  'usb',
+  'idle-detection',
+]);
 
 export function userAgentFor(kind: SiteKind, defaultUserAgent: string): string {
   return kind === 'deepseek' ? defaultUserAgent.replace(ELECTRON_TOKEN, '') : defaultUserAgent;
@@ -22,6 +34,10 @@ export function permissionAllowed(agentOrigin: string, permission: string, reque
   const agent = originOf(agentOrigin);
   const requester = originOf(requestingUrl);
   return agent !== null && agent === requester;
+}
+
+export function permissionCheckAllowed(agentOrigin: string, permission: string, requestingOrigin: string): boolean {
+  return SENSITIVE_PERMISSIONS.has(permission) ? permissionAllowed(agentOrigin, permission, requestingOrigin) : true;
 }
 
 export function popupAllowed(url: string): boolean {

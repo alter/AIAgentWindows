@@ -21,6 +21,11 @@ function startFixtureServer(): Promise<Fixture> {
   const server = createServer((request, response) => {
     userAgents.push(String(request.headers['user-agent']));
     response.setHeader('content-type', 'text/html; charset=utf-8');
+    if (request.url === '/frame-parent') {
+      const port = String(request.headers.host).split(':')[1] ?? '';
+      response.end(`<!doctype html><iframe id="child" src="http://localhost:${port}/frame-child"></iframe>`);
+      return;
+    }
     response.end(request.url === '/away' ? '<!doctype html><h1>FIXTURE-SITE-AWAY</h1>' : sitePage);
   });
   return new Promise((resolve) => {
@@ -231,6 +236,47 @@ test('a DeepSeek agent shows a visible view without the Electron token and Home 
 
     await page.locator('.nav-button[data-action="home"]').click();
     await expect(page.locator('.nav-address')).toHaveText(fixture.url);
+  } finally {
+    await app.close();
+    fixture.server.close();
+  }
+});
+
+test('a storage-access check from a cross-origin iframe in a site view is not refused and is logged', async () => {
+  const fixture = await startFixtureServer();
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder, { AIAW_SITE_URL_GROK: `${fixture.url}frame-parent` });
+  try {
+    const page = await app.firstWindow();
+    await addAgent(page, 'grok');
+    await expect(page.locator('.agent-item')).toHaveCount(1);
+
+    await expect
+      .poll(
+        () =>
+          app.evaluate(async ({ webContents }) => {
+            const parent = webContents.getAllWebContents().find((item) => item.getURL().endsWith('/frame-parent'));
+            const child = parent?.mainFrame.frames.find((frame) => frame.url.includes('localhost'));
+            if (child === undefined) return 'no-frame';
+            return child.executeJavaScript(
+              "navigator.permissions.query({ name: 'storage-access' }).then((status) => status.state)",
+            );
+          }),
+        { timeout: 15000 },
+      )
+      .toBe('granted');
+
+    const logFile = path.join(userData, 'logs', 'sites.log');
+    await expect
+      .poll(() => {
+        try {
+          return readFileSync(logFile, 'utf8');
+        } catch {
+          return '';
+        }
+      })
+      .toMatch(/ grok check permission="storage-access" origin="http:\/\/localhost:\d+\/?" allowed=true/);
   } finally {
     await app.close();
     fixture.server.close();

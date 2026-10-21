@@ -3,7 +3,15 @@ import { session, WebContentsView, type BrowserWindow } from 'electron';
 import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
 import { siteBounds } from '../shared/site-layout';
-import { originOf, permissionAllowed, popupAllowed, siteStartUrl, userAgentFor } from '../shared/site-policy';
+import {
+  originOf,
+  permissionAllowed,
+  permissionCheckAllowed,
+  popupAllowed,
+  siteStartUrl,
+  userAgentFor,
+} from '../shared/site-policy';
+import type { SiteLogger } from './site-log-file';
 
 interface SiteEntry {
   kind: SiteKind;
@@ -18,6 +26,7 @@ export class SiteViews {
     private readonly window: BrowserWindow,
     private readonly emit: (event: SiteStateEvent) => void,
     private readonly env: Readonly<Record<string, string | undefined>> = {},
+    private readonly log: SiteLogger = () => undefined,
   ) {
     window.on('resize', () => this.layout());
   }
@@ -70,7 +79,10 @@ export class SiteViews {
     });
     const contents = view.webContents;
     contents.setWindowOpenHandler(({ url }) => {
-      if (!popupAllowed(url)) return { action: 'deny' };
+      if (!popupAllowed(url)) {
+        this.log(kind, 'popup-denied', { url });
+        return { action: 'deny' };
+      }
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -82,6 +94,9 @@ export class SiteViews {
     const refresh = (): void => {
       if (this.visibleId === id) this.publish(id, view);
     };
+    contents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+      this.log(kind, 'load-failed', { code, description, url, mainFrame: isMainFrame });
+    });
     contents.on('did-navigate', refresh);
     contents.on('did-navigate-in-page', refresh);
     contents.on('did-finish-load', refresh);
@@ -98,11 +113,15 @@ export class SiteViews {
     ses.setUserAgent(userAgentFor(kind, ses.getUserAgent()));
     const agentOrigin = originOf(siteStartUrl(kind, this.env)) ?? '';
     ses.setPermissionRequestHandler((_contents, permission, callback, details) => {
-      callback(permissionAllowed(agentOrigin, permission, details.requestingUrl));
+      const allowed = permissionAllowed(agentOrigin, permission, details.requestingUrl);
+      this.log(kind, 'request', { permission, origin: details.requestingUrl, allowed });
+      callback(allowed);
     });
-    ses.setPermissionCheckHandler((_contents, permission, requestingOrigin) =>
-      permissionAllowed(agentOrigin, permission, requestingOrigin),
-    );
+    ses.setPermissionCheckHandler((_contents, permission, requestingOrigin) => {
+      const allowed = permissionCheckAllowed(agentOrigin, permission, requestingOrigin);
+      this.log(kind, 'check', { permission, origin: requestingOrigin, allowed });
+      return allowed;
+    });
   }
 
   private layout(): void {
