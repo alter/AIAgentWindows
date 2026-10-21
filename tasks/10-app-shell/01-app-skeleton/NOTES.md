@@ -37,3 +37,9 @@ attack:passed on the T16a fix. Recorded for the next tasks, not fixed here (PLAU
 - A dropped path containing a C1 character is silently turned into a different path by `sanitizePaste`; `hasControlCharacter` should reject 0x80–0x9f so such a path is refused instead.
 - The 256 KB backlog could drop the CLI's `ESC[?2004h` for a pane rebuilt after long output (no reload path exists today).
 - Round 1's navigation-lock finding (main window) remains open as a recommendation.
+
+# NOTES — owner's first run (2026-10-21 17:14)
+
+- Codex in the app showed "Background server has incompatible feature settings". Root cause (evidence in `codex-daemon-mismatch.txt`): Codex runs a shared background app-server daemon that its own updater upgrades on a schedule (daemon 0.163.0 since 10:41) while the CLI on PATH was still 0.159.2; the older CLI asked for feature settings the newer daemon was not running with. It is not caused by the app: the same daemon serves every Codex client. The owner's own `codex` in iTerm2 then ran the "Update now" installer (`curl … | sh`, parent: a zsh under iTerm2), and the CLI is now 0.163.0, which should end the mismatch. Safe answer in the dialog: "Run without daemon this time"; "Restart with these settings" changes the shared daemon for every Codex client.
+- Consequence for the evidence: the pinned `docs/tech/codex@0.159.2.md` no longer matches the owner's CLI (0.163.0); Codex updates itself outside the app. Its transcript and resume claims must be re-checked on 0.163.0 by the task that next touches Codex.
+- Correction to 05-feasibility NOTES: `sandbox_extension_issue_file failed … (Operation not permitted)` also appears when the app is started from iTerm2 (process chain in `codex-daemon-mismatch.txt`), so it is not caused by the Claude Code sandbox. The app works with it; it is a Chromium warning for the unsigned development build. The STUN `-105` errors remain explained by the sandbox.

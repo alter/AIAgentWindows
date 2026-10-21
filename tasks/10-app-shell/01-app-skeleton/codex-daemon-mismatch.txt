@@ -1,0 +1,20 @@
+Owner's run 2026-10-21 17:14–17:18: npm start from iTerm2 (process chain iTerm2 → login → zsh → npm start → electron .), Codex agent added in the app.
+Dialog in the app's Codex pane: 'Background server has incompatible feature settings. This session requires api_key_model_discovery to be disabled … 1. Run without daemon this time 2. Restart with these settings 3. Cancel'.
+
+Processes at 17:18 (ps -axo pid,ppid,lstart,command):
+  app's codex: pid 8481, parent = Electron (exec "$@" replaced the login shell), started 17:16:29
+  shared daemon: ~/.codex/packages/app-server-daemon/releases/0.163.0-aarch64-apple-darwin/bin/codex app-server (pid 9823, restarted 17:17:23)
+  daemon updater: pid 43485 since 10:41; its log: package_selected release 0.163.0 trigger scheduled
+  an update 'curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh' at 17:17:47 was started by a zsh under iTerm2's login (pid 9276), not by the app
+  codex --version before: codex-cli 0.159.2; after the owner's update: codex-cli 0.163.0
+
+~/.codex/app-server-daemon/settings.json after the run:
+{
+  "remoteControlEnabled": false,
+  "featureOverrides": {
+    "api_key_model_discovery": false,
+    "auth_elicitation": true,
+    "code_mode_host": true,
+    "mcp_oauth_refresh_coordination": false
+  }
+}
