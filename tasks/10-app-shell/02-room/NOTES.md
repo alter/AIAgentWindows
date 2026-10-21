@@ -121,3 +121,6 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 
 ## T12k reverse control
 Sources reverted to HEAD with the T12k tests in place: room-model 7 failed (renderer label accepted), integration 'keeps the nonce and appends' failed, room-history forgery tests never finished (freshNonce redraws forever when the draw is constant and the body contains it; process killed). Sources restored; room-history/room-model/room.test 79/79 green.
+
+## T12l reverse control
+src/shared/room-history.ts reverted to HEAD with the T12l tests in place: `npx vitest run tests/unit/room-history.test.ts tests/integration/room.test.ts` -> 20 failed | 66 passed (incl. the Round 3 integration forgery); fixed file restored, 86/86 green.
