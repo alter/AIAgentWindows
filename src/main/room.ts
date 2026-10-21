@@ -15,6 +15,7 @@ import {
   MAX_HISTORY_CHARS,
   MAX_REPLY_CHARS,
   relaySchedule,
+  roomPlan,
   truncateText,
   type RoomConfig,
   type RoomEntry,
@@ -91,6 +92,10 @@ function defaultRoomId(now: number): string {
 
 function errorText(error: unknown): string {
   return truncateText(error instanceof Error ? error.message : String(error), MAX_ERROR_CHARS);
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: unknown }).code === 'timeout';
 }
 
 async function writeAtomic(file: string, text: string): Promise<void> {
@@ -212,7 +217,7 @@ export class Room {
   private async execute(run: RunState): Promise<RoomRunResult> {
     let status: RoomStatus = 'done';
     try {
-      this.emit({ type: 'started', roomId: run.id, historyPath: run.historyPath, total: run.total });
+      this.emit({ type: 'started', roomId: run.id, historyPath: run.historyPath, total: run.total, plan: roomPlan(run.config) });
       this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
@@ -276,7 +281,7 @@ export class Room {
     const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
     this.append(run, participant.id, participant.label, kind, outcome.text);
     await run.flushed();
-    this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : 'failed');
+    this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : outcome.timedOut === true ? 'timeout' : 'failed');
   }
 
   private async turn(
@@ -317,7 +322,7 @@ export class Room {
       }
     } catch (error) {
       await driver?.reset().catch(() => undefined);
-      return run.signal.aborted ? { kind: 'aborted' } : { kind: 'error', text: errorText(error) };
+      return run.signal.aborted ? { kind: 'aborted' } : { kind: 'error', text: errorText(error), timedOut: isTimeout(error) };
     }
   }
 
@@ -336,4 +341,4 @@ export class Room {
   }
 }
 
-type TurnOutcome = { kind: 'reply'; text: string } | { kind: 'error'; text: string } | { kind: 'aborted' };
+type TurnOutcome = { kind: 'reply'; text: string } | { kind: 'error'; text: string; timedOut?: boolean } | { kind: 'aborted' };

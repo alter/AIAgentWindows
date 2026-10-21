@@ -85,6 +85,33 @@ test('a relay of two stub participants for 2 rounds writes the history in the re
   }
 });
 
+test('a 2-round relay shows each round, the final turn, per-participant chips and the finished banner', async () => {
+  const { app, page } = await open();
+  try {
+    await fill(page, 'relay', 2, 'progress question');
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      (window as unknown as { __rounds: string[] }).__rounds = seen;
+      const node = document.querySelector('[data-room="round"]');
+      const note = (): void => {
+        const text = node?.textContent ?? '';
+        if (text !== '' && seen[seen.length - 1] !== text) seen.push(text);
+      };
+      new MutationObserver(note).observe(node as Node, { childList: true, characterData: true, subtree: true });
+    });
+    await field(page, 'start').click();
+    await expect(field(page, 'banner')).toHaveText('Done \u2014 final answer from Claude Code');
+    const rounds = await page.evaluate(() => (window as unknown as { __rounds: string[] }).__rounds);
+    expect(rounds).toEqual(['Round 1 of 2', 'Round 2 of 2', 'Final: Claude Code']);
+    await expect(field(page, 'remaining')).toHaveText('0 turns left');
+    const chips = page.locator('[data-room="chips"] [data-participant]');
+    await expect(chips).toHaveCount(1);
+    await expect(chips.first()).toHaveAttribute('data-state', 'answered');
+  } finally {
+    await app.close();
+  }
+});
+
 test('the finalizer lists the ticked participants, defaults to Claude Code and writes the final answer', async () => {
   const { app, page } = await open();
   try {
@@ -152,6 +179,7 @@ test('Stop in the middle ends the run at the current step', async () => {
     await expect(page.locator('.room-entry.kind-reply')).toHaveCount(1);
     await field(page, 'stop').click();
     await expect(field(page, 'status')).toContainText('stopped');
+    await expect(field(page, 'banner')).toHaveText('Stopped');
     expect(await page.locator('.room-entry.kind-reply').count()).toBeLessThan(6);
     const headings = await historyHeadings(page);
     expect(headings.some((heading) => heading.startsWith('Room | error'))).toBe(true);

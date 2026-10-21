@@ -316,6 +316,23 @@ body {
 }
 .room-button:disabled { opacity: 0.45; cursor: default; }
 .room-button.stop { background: #e01e5a; }
+.room-progress { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); }
+.room-progress[hidden] { display: none; }
+.room-progress-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; }
+.room-headline { font-size: 15px; font-weight: 700; color: #fff; }
+.room-remaining { font-size: 12px; opacity: 0.8; }
+.room-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.room-chip { padding: 2px 10px; border-radius: 999px; font-size: 12px; background: rgba(255, 255, 255, 0.1); }
+.room-chip.state-running { background: rgba(17, 100, 163, 0.5); }
+.room-chip.state-answered { background: rgba(46, 182, 125, 0.35); }
+.room-chip.state-error, .room-chip.state-timeout { background: rgba(224, 30, 90, 0.4); }
+.room-chip.state-stopped { background: rgba(242, 199, 68, 0.3); }
+.room-banner { padding: 10px 14px; border-radius: 6px; font-size: 16px; font-weight: 700; color: #fff; }
+.room-banner[hidden] { display: none; }
+.room-banner[data-tone="done"] { background: #2eb67d; }
+.room-banner[data-tone="warn"] { background: #b8860b; }
+.room-banner[data-tone="stopped"] { background: #6b6b6b; }
+.room-banner[data-tone="failed"] { background: #e01e5a; }
 .room-status { font-size: 12px; opacity: 0.85; }
 .room-message { font-size: 12px; color: #f2a0b8; min-height: 16px; }
 

@@ -11,12 +11,16 @@ import {
   type PausedSession,
   type RoomMode,
   type RoomParticipant,
+  type RoomPlan,
   type RoomStatus,
+  type StepState,
 } from './room-model';
 
 export type RoomPhase = 'idle' | 'running' | RoomStatus;
 export type CarryWhat = 'final' | 'history';
 export const CARRY_KINDS: readonly CarryWhat[] = ['final', 'history'];
+
+export type ChipState = 'waiting' | 'running' | 'answered' | 'error' | 'timeout' | 'stopped';
 
 export interface RoomSnapshot {
   phase: RoomPhase;
@@ -27,6 +31,9 @@ export interface RoomSnapshot {
   paused: PausedSession[];
   completed: number;
   total: number;
+  plan: RoomPlan | null;
+  round: number;
+  chips: Record<string, ChipState>;
 }
 
 export type RoomStartResult = { ok: true; roomId: string; historyPath: string } | { ok: false; error: string };
@@ -61,16 +68,34 @@ export function participantAvailability(
 }
 
 export function emptyRoomSnapshot(): RoomSnapshot {
-  return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0 };
+  return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0, plan: null, round: 0, chips: {} };
+}
+
+const CHIP_OF_STEP: Record<StepState, ChipState> = { running: 'running', replied: 'answered', failed: 'error', timeout: 'timeout' };
+const SETTLED_CHIPS: readonly ChipState[] = ['answered', 'error', 'timeout'];
+
+function waitingChips(plan: RoomPlan): Record<string, ChipState> {
+  return Object.fromEntries(plan.participants.map((participant) => [participant.id, 'waiting' as const]));
+}
+
+function stepChips(snapshot: RoomSnapshot, participantId: string, state: StepState): Pick<RoomSnapshot, 'round' | 'chips'> {
+  const previous = snapshot.chips[participantId];
+  const nextRound = state === 'running' && previous !== undefined && SETTLED_CHIPS.includes(previous);
+  const base = nextRound && snapshot.plan !== null ? waitingChips(snapshot.plan) : snapshot.chips;
+  return { round: nextRound ? snapshot.round + 1 : snapshot.round, chips: { ...base, [participantId]: CHIP_OF_STEP[state] } };
+}
+
+function stoppedChips(chips: Record<string, ChipState>): Record<string, ChipState> {
+  return Object.fromEntries(Object.entries(chips).map(([id, state]) => [id, state === 'running' ? ('stopped' as const) : state]));
 }
 
 export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSnapshot {
   if (event.type === 'started') {
-    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: [], running: [], paused: [], completed: 0, total: event.total };
+    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: [], running: [], paused: [], completed: 0, total: event.total, plan: event.plan, round: 1, chips: waitingChips(event.plan) };
   }
   if (event.roomId !== snapshot.roomId) return snapshot;
   if (event.type === 'entry') return { ...snapshot, entries: [...snapshot.entries, event.entry] };
-  if (event.type === 'finished') return { ...snapshot, phase: event.status, running: [], paused: [] };
+  if (event.type === 'finished') return { ...snapshot, phase: event.status, running: [], paused: [], chips: stoppedChips(snapshot.chips) };
   if (event.type === 'paused') {
     const { participantId, sessionId, note } = event;
     return { ...snapshot, paused: [...snapshot.paused.filter((item) => item.participantId !== participantId), { participantId, sessionId, note }] };
@@ -78,7 +103,7 @@ export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSn
   if (event.type === 'resumed') return { ...snapshot, paused: snapshot.paused.filter((item) => item.participantId !== event.participantId) };
   const others = snapshot.running.filter((id) => id !== event.participantId);
   const running = event.state === 'running' ? [...others, event.participantId] : others;
-  return { ...snapshot, running, completed: event.completed, total: event.total };
+  return { ...snapshot, ...stepChips(snapshot, event.participantId, event.state), running, completed: event.completed, total: event.total };
 }
 
 export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | null {
@@ -108,4 +133,55 @@ export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKin
     finalizerId: resolveFinalizer(form.checked, form.finalizerId ?? ''),
     turnTimeoutMs: Math.round(minutes * MS_PER_MINUTE),
   });
+}
+
+export interface RoomChip {
+  id: string;
+  label: string;
+  state: ChipState;
+}
+
+export type BannerTone = 'done' | 'warn' | 'stopped' | 'failed';
+
+export interface RoomBanner {
+  tone: BannerTone;
+  text: string;
+}
+
+export interface RoomProgress {
+  headline: string;
+  remaining: number;
+  remainingText: string;
+  chips: RoomChip[];
+  banner: RoomBanner | null;
+}
+
+function turnsText(count: number): string {
+  return `${count} ${count === 1 ? 'turn' : 'turns'} left`;
+}
+
+function finishedBanner(snapshot: RoomSnapshot, plan: RoomPlan, finalizerLabel: string): RoomBanner | null {
+  if (snapshot.phase === 'stopped') return { tone: 'stopped', text: 'Stopped' };
+  if (snapshot.phase === 'failed') return { tone: 'failed', text: 'Failed' };
+  if (snapshot.phase !== 'done') return null;
+  const final = snapshot.entries.find((entry) => entry.kind === 'final');
+  if (final !== undefined) return { tone: 'done', text: `Done \u2014 final answer from ${final.label}` };
+  return { tone: 'warn', text: `Done \u2014 no final answer (${finalizerLabel} failed)` };
+}
+
+export function roomProgress(snapshot: RoomSnapshot): RoomProgress | null {
+  const { plan } = snapshot;
+  if (plan === null || snapshot.phase === 'idle') return null;
+  const finalizer = plan.participants.find((participant) => participant.id === plan.finalizerId);
+  const finalizerLabel = finalizer?.label ?? plan.finalizerId;
+  const inFinal = snapshot.round > plan.rounds;
+  const remaining = Math.max(0, snapshot.total - snapshot.completed);
+  const shown = inFinal ? plan.participants.filter((participant) => participant.id === plan.finalizerId) : plan.participants;
+  return {
+    headline: inFinal ? `Final: ${finalizerLabel}` : `Round ${snapshot.round} of ${plan.rounds}`,
+    remaining,
+    remainingText: turnsText(remaining),
+    chips: shown.map((participant) => ({ id: participant.id, label: participant.label, state: snapshot.chips[participant.id] ?? 'waiting' })),
+    banner: finishedBanner(snapshot, plan, finalizerLabel),
+  };
 }

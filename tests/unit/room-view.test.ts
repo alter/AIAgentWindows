@@ -1,7 +1,7 @@
 // room-view.test.ts
 import { describe, expect, it } from 'vitest';
 import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
-import type { RoomEntry, RoomEvent } from '../../src/shared/room-model';
+import type { RoomEntry, RoomEvent, RoomPlan } from '../../src/shared/room-model';
 import { ROOM_PARTICIPANTS } from '../../src/shared/room-model';
 import {
   applyRoomEvent,
@@ -10,6 +10,7 @@ import {
   formToConfig,
   participantAvailability,
   resolveFinalizer,
+  roomProgress,
   type RoomFormValues,
 } from '../../src/shared/room-view';
 import { adapterFor } from '../../src/main/site-adapters/registry';
@@ -23,7 +24,16 @@ function run(events: RoomEvent[]): ReturnType<typeof emptyRoomSnapshot> {
   return events.reduce(applyRoomEvent, emptyRoomSnapshot());
 }
 
-const STARTED: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 3 };
+const PLAN: RoomPlan = {
+  mode: 'relay',
+  rounds: 1,
+  finalizerId: 'a',
+  participants: [
+    { id: 'a', kind: 'claude', label: 'Claude Code' },
+    { id: 'b', kind: 'codex', label: 'Codex' },
+  ],
+};
+const STARTED: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 3, plan: PLAN };
 
 describe('room participants', () => {
   it('offers every agent kind once, id equal to kind, with the agent label', () => {
@@ -65,12 +75,15 @@ describe('applyRoomEvent', () => {
       paused: [],
       completed: 0,
       total: 0,
+      plan: null,
+      round: 0,
+      chips: {},
     });
   });
 
   it('started resets the feed and marks the run running', () => {
     const old = run([STARTED, { type: 'entry', roomId: 'r1', entry: entry('prompt', 'old') }]);
-    const next = applyRoomEvent(old, { type: 'started', roomId: 'r2', historyPath: '/h/r2.md', total: 2 });
+    const next = applyRoomEvent(old, { type: 'started', roomId: 'r2', historyPath: '/h/r2.md', total: 2, plan: PLAN });
     expect(next).toMatchObject({ phase: 'running', roomId: 'r2', historyPath: '/h/r2.md', entries: [], total: 2, completed: 0 });
   });
 
@@ -303,5 +316,100 @@ describe('finalizer choice', () => {
       done,
     ]);
     expect(carryText(failedFinal, 'final')).toBe('a reply');
+  });
+});
+
+
+const TWO_ROUNDS: RoomPlan = { ...PLAN, rounds: 2 };
+const BEGIN: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 5, plan: TWO_ROUNDS };
+
+function step(participantId: string, state: 'running' | 'replied' | 'failed' | 'timeout', completed: number): RoomEvent {
+  return { type: 'progress', roomId: 'r1', participantId, state, completed, total: 5 };
+}
+
+function chips(events: RoomEvent[]): Array<[string, string]> {
+  const view = roomProgress(run(events));
+  return (view?.chips ?? []).map((chip) => [chip.id, chip.state]);
+}
+
+describe('roomProgress', () => {
+  it('is empty before any run', () => {
+    expect(roomProgress(emptyRoomSnapshot())).toBeNull();
+  });
+
+  it('shows round 1 of N with every participant waiting right after the start', () => {
+    const view = roomProgress(run([BEGIN]));
+    expect(view?.headline).toBe('Round 1 of 2');
+    expect(view?.remaining).toBe(5);
+    expect(view?.remainingText).toBe('5 turns left');
+    expect(chips([BEGIN])).toEqual([['a', 'waiting'], ['b', 'waiting']]);
+    expect(view?.banner).toBeNull();
+  });
+
+  it('marks who runs and who answered in the current round', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('a', 'replied', 1), step('b', 'running', 1)];
+    expect(chips(events)).toEqual([['a', 'answered'], ['b', 'running']]);
+    expect(roomProgress(run(events))?.remainingText).toBe('4 turns left');
+  });
+
+  it('starts the next round with everybody waiting again', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('a', 'replied', 1), step('b', 'running', 1), step('b', 'failed', 2), step('a', 'running', 2)];
+    expect(roomProgress(run(events))?.headline).toBe('Round 2 of 2');
+    expect(chips(events)).toEqual([['a', 'running'], ['b', 'waiting']]);
+  });
+
+  it('keeps the round of a parallel pass until all of it has answered', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('b', 'running', 0), step('a', 'replied', 1)];
+    expect(roomProgress(run(events))?.headline).toBe('Round 1 of 2');
+    expect(chips(events)).toEqual([['a', 'answered'], ['b', 'running']]);
+  });
+
+  it('distinguishes an error from a timeout', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('a', 'timeout', 1), step('b', 'running', 1), step('b', 'failed', 2)];
+    expect(chips(events)).toEqual([['a', 'timeout'], ['b', 'error']]);
+  });
+
+  it('names the final turn and shows only the finalizer', () => {
+    const events = [
+      BEGIN,
+      step('a', 'running', 0), step('a', 'replied', 1), step('b', 'running', 1), step('b', 'replied', 2),
+      step('a', 'running', 2), step('a', 'replied', 3), step('b', 'running', 3), step('b', 'replied', 4),
+      step('a', 'running', 4),
+    ];
+    const view = roomProgress(run(events));
+    expect(view?.headline).toBe('Final: Claude Code');
+    expect(view?.remainingText).toBe('1 turn left');
+    expect(chips(events)).toEqual([['a', 'running']]);
+  });
+
+  it('a done run announces the final answer and its author', () => {
+    const events: RoomEvent[] = [
+      BEGIN,
+      { type: 'entry', roomId: 'r1', entry: entry('final', 'answer', 'Claude Code') },
+      step('a', 'replied', 5),
+      { type: 'finished', roomId: 'r1', status: 'done' },
+    ];
+    expect(roomProgress(run(events))?.banner).toEqual({ tone: 'done', text: 'Done \u2014 final answer from Claude Code' });
+    expect(roomProgress(run(events))?.remainingText).toBe('0 turns left');
+  });
+
+  it('a done run without a final entry says the finalizer failed', () => {
+    const events: RoomEvent[] = [BEGIN, step('a', 'failed', 5), { type: 'finished', roomId: 'r1', status: 'done' }];
+    expect(roomProgress(run(events))?.banner).toEqual({ tone: 'warn', text: 'Done \u2014 no final answer (Claude Code failed)' });
+  });
+
+  it('a stopped run says Stopped and no chip stays running', () => {
+    const events: RoomEvent[] = [BEGIN, step('a', 'running', 0), { type: 'finished', roomId: 'r1', status: 'stopped' }];
+    expect(roomProgress(run(events))?.banner).toEqual({ tone: 'stopped', text: 'Stopped' });
+    expect(chips(events)).toEqual([['a', 'stopped'], ['b', 'waiting']]);
+  });
+
+  it('a failed run says Failed', () => {
+    const events: RoomEvent[] = [BEGIN, { type: 'finished', roomId: 'r1', status: 'failed' }];
+    expect(roomProgress(run(events))?.banner).toEqual({ tone: 'failed', text: 'Failed' });
+  });
+
+  it('a snapshot without a plan (state of an older main) shows nothing', () => {
+    expect(roomProgress({ ...run([BEGIN]), plan: null })).toBeNull();
   });
 });

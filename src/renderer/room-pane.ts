@@ -2,7 +2,7 @@
 import { isCliKind, type Agent } from '../shared/agents';
 import type { PtyDataEvent } from '../shared/ipc';
 import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEntry, type RoomEvent, type RoomMode } from '../shared/room-model';
-import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
+import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, roomProgress, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
@@ -42,6 +42,11 @@ export class RoomPane {
   private readonly finalizer = el('select');
   private readonly start = el('button', 'room-button', 'Start');
   private readonly stop = el('button', 'room-button stop', 'Stop');
+  private readonly progress = el('div', 'room-progress');
+  private readonly headline = el('div', 'room-headline');
+  private readonly remaining = el('div', 'room-remaining');
+  private readonly chips = el('div', 'room-chips');
+  private readonly banner = el('div', 'room-banner');
   private readonly status = el('div', 'room-status');
   private readonly message = el('div', 'room-message');
   private readonly target = el('select');
@@ -66,6 +71,15 @@ export class RoomPane {
     this.prompt.placeholder = 'Prompt for the room';
     this.prompt.dataset['room'] = 'prompt';
     this.status.dataset['room'] = 'status';
+    this.progress.dataset['room'] = 'progress';
+    this.headline.dataset['room'] = 'round';
+    this.remaining.dataset['room'] = 'remaining';
+    this.chips.dataset['room'] = 'chips';
+    this.banner.dataset['room'] = 'banner';
+    this.progress.hidden = true;
+    const counters = el('div', 'room-progress-row');
+    counters.append(this.headline, this.remaining);
+    this.progress.append(this.banner, counters, this.chips);
     this.message.dataset['room'] = 'message';
     this.pause.hidden = true;
     this.pause.dataset['room'] = 'pause';
@@ -75,7 +89,7 @@ export class RoomPane {
     this.resume.dataset['room'] = 'resume';
     this.resume.addEventListener('click', () => void api.roomResume());
     this.pause.append(this.pauseNotes, this.terminals, this.resume);
-    this.element.append(el('h2', 'room-title', 'Room'), this.feed, this.pause, this.controls());
+    this.element.append(el('h2', 'room-title', 'Room'), this.progress, this.feed, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
   }
@@ -251,8 +265,28 @@ export class RoomPane {
     }
   }
 
+  private renderProgress(): void {
+    const view = roomProgress(this.snapshot);
+    this.progress.hidden = view === null;
+    if (view === null) return;
+    this.headline.textContent = view.headline;
+    this.remaining.textContent = view.remainingText;
+    this.banner.hidden = view.banner === null;
+    this.banner.dataset['tone'] = view.banner?.tone ?? '';
+    this.banner.textContent = view.banner?.text ?? '';
+    this.chips.replaceChildren(
+      ...view.chips.map((chip) => {
+        const node = el('span', `room-chip state-${chip.state}`, `${chip.label}: ${chip.state === 'timeout' ? 'timed out' : chip.state}`);
+        node.dataset['participant'] = chip.id;
+        node.dataset['state'] = chip.state;
+        return node;
+      }),
+    );
+  }
+
   private renderState(): void {
     this.renderPause();
+    this.renderProgress();
     const { phase, completed, total, running, historyPath, paused } = this.snapshot;
     const busy = phase === 'running';
     this.start.disabled = busy;

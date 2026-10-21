@@ -41,7 +41,14 @@ export interface RoomEntry {
 }
 
 export type RoomStatus = 'done' | 'stopped' | 'failed';
-export type StepState = 'running' | 'replied' | 'failed';
+export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
+
+export interface RoomPlan {
+  mode: RoomMode;
+  rounds: number;
+  finalizerId: string;
+  participants: RoomParticipant[];
+}
 
 export interface PausedSession {
   participantId: string;
@@ -50,7 +57,7 @@ export interface PausedSession {
 }
 
 export type RoomEvent =
-  | { type: 'started'; roomId: string; historyPath: string; total: number }
+  | { type: 'started'; roomId: string; historyPath: string; total: number; plan: RoomPlan }
   | { type: 'paused'; roomId: string; participantId: string; sessionId: string; note: string }
   | { type: 'resumed'; roomId: string; participantId: string }
   | { type: 'progress'; roomId: string; participantId: string; state: StepState; completed: number; total: number }
@@ -66,6 +73,11 @@ export const ROOM_PARTICIPANTS: readonly RoomParticipant[] = AGENT_KINDS.map((ki
 export function defaultFinalizerId(participants: readonly RoomParticipant[]): string {
   const claude = participants.find((participant) => participant.kind === 'claude');
   return (claude ?? participants[0])?.id ?? '';
+}
+
+export function roomPlan(config: RoomConfig): RoomPlan {
+  const { mode, rounds, finalizerId, participants } = config;
+  return { mode, rounds, finalizerId, participants: participants.map((participant) => ({ ...participant })) };
 }
 
 export type RoomConfigResult = { ok: true; config: RoomConfig } | { ok: false; error: string };

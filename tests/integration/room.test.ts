@@ -266,6 +266,19 @@ describe('room relay', () => {
     expect(t.events[t.events.length - 1]).toMatchObject({ type: 'finished', status: 'done' });
   });
 
+  it('announces the plan in the started event and reports a timed-out turn as timeout, any other failure as failed', async () => {
+    const timeout = Object.assign(new Error('the turn did not end'), { code: 'timeout' });
+    const t = rig({ a: () => Promise.reject(timeout), b: () => Promise.reject(new Error('boom')) });
+    await t.room.start(config([A, B, C], { rounds: 2, mode: 'broadcast', finalizerId: 'b' })).done;
+    const started = t.events.find((event) => event.type === 'started');
+    expect(started).toMatchObject({ plan: { mode: 'broadcast', rounds: 2, finalizerId: 'b', participants: [A, B, C] } });
+    const settled = t.events.filter((event) => event.type === 'progress' && event.state !== 'running' && event.completed <= 3);
+    const states = new Map(settled.map((event) => (event.type === 'progress' ? [event.participantId, event.state] : ['', ''])));
+    expect(states.get('a')).toBe('timeout');
+    expect(states.get('b')).toBe('failed');
+    expect(states.get('c')).toBe('replied');
+  });
+
   it('disposes every session on shutdown', async () => {
     const t = rig();
     await t.room.start(config([A, B])).done;
