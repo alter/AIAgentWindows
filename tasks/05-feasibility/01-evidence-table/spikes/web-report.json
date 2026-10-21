@@ -5,8 +5,9 @@
     "chatgpt": {
       "title": "ChatGPT: Chat, Work, Create & Code with AI",
       "url": "https://chatgpt.com/",
-      "input": false,
-      "challenge": false,
+      "input": true,
+      "challengeScriptInHtml": false,
+      "challengeShown": false,
       "loginWall": true,
       "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
       "mainFrameAndErrors": [
@@ -21,7 +22,8 @@
       "title": "DeepSeek - Into the Unknown",
       "url": "https://chat.deepseek.com/sign_in",
       "input": false,
-      "challenge": true,
+      "challengeScriptInHtml": true,
+      "challengeShown": false,
       "loginWall": true,
       "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
       "mainFrameAndErrors": [
@@ -34,7 +36,8 @@
       "title": "Grok",
       "url": "https://grok.com/",
       "input": true,
-      "challenge": false,
+      "challengeScriptInHtml": false,
+      "challengeShown": false,
       "loginWall": true,
       "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
       "mainFrameAndErrors": [

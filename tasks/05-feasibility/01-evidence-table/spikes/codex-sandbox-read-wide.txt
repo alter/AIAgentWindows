@@ -1,0 +1,7 @@
+codex-cli 0.159.2; cwd=/tmp/spike-codex-cwd-IIB2
+sandbox_mode=read-only read ~/workflow/git/AIAgentWindows/README.md exit=0
+sandbox_mode=read-only read /etc/hosts exit=0
+sandbox_mode=read-only read ~/.zshrc exit=0
+sandbox_mode=workspace-write read ~/workflow/git/AIAgentWindows/README.md exit=0
+sandbox_mode=workspace-write read /etc/hosts exit=0
+sandbox_mode=workspace-write read ~/.zshrc exit=0

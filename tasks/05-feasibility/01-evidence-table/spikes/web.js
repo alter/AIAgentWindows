@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
     wc.session.webRequest.onCompleted({ urls: ['*://*/*'] }, (d) => { if (d.resourceType === 'mainFrame' || d.statusCode >= 400) statuses.push(`${d.statusCode} ${d.resourceType} ${d.url.slice(0, 90)}`); });
     try { await win.loadURL(url); } catch (e) { statuses.push(`load error ${e.message}`); }
     await sleep(20000);
-    const probe = await wc.executeJavaScriptInIsolatedWorld(999, [{ code: `({ title: document.title, url: location.href, input: !!document.querySelector(${JSON.stringify(INPUT[name])}), challenge: /just a moment|verify you are human|cf-chl|challenges\\.cloudflare/i.test(document.documentElement.outerHTML.slice(0, 200000)), loginWall: /log in|sign in|sign up|войти/i.test(document.body ? document.body.innerText.slice(0, 3000) : '') })` }]);
+    const probe = await wc.executeJavaScriptInIsolatedWorld(999, [{ code: `({ title: document.title, url: location.href, input: !!document.querySelector('textarea, [contenteditable="true"]'), challengeScriptInHtml: /cf-chl|challenges\\.cloudflare/i.test(document.documentElement.outerHTML.slice(0, 200000)), challengeShown: /just a moment|verify you are human|checking your browser/i.test(document.title + ' ' + (document.body ? document.body.innerText.slice(0, 3000) : '')), loginWall: /log in|sign in|sign up|войти/i.test(document.body ? document.body.innerText.slice(0, 3000) : '') })` }]);
     try { const img = await wc.capturePage(); fs.writeFileSync(path.join(OUT, `web-${name}${TAG}.png`), img.resize({ width: 800 }).toPNG()); } catch (e) { statuses.push(`capture error ${e.message}`); }
     report.sites[name] = { ...probe, ua: wc.getUserAgent(), mainFrameAndErrors: statuses.slice(0, 15), permissionRequests: asked };
   }));

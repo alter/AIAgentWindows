@@ -1,0 +1,9 @@
+~/.codex/session_index.jsonl (codex-cli 0.159.2): keys of each line, values omitted
+{('id', 'thread_name', 'updated_at'): 9}
+ids that also have a rollout file under ~/.codex/sessions:
+9 of 9
+
+$ codex migrate-rollouts   (report only)
+Scan complete in 0s.
+Scanned 11 rollout(s): 1 eligible, 10 already paginated, 0 skipped (0 empty, 0 busy), 0 failed.
+Run `codex migrate-rollouts --apply` to migrate eligible sessions.

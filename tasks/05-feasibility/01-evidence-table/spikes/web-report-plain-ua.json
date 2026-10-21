@@ -3,15 +3,17 @@
   "chrome": "152.0.7977.130",
   "sites": {
     "deepseek": {
-      "title": "DeepSeek - Into the Unknown",
+      "title": "DeepSeek",
       "url": "https://chat.deepseek.com/sign_in",
       "input": false,
-      "challenge": true,
+      "challengeScriptInHtml": true,
+      "challengeShown": false,
       "loginWall": true,
       "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36",
       "mainFrameAndErrors": [
         "202 mainFrame https://chat.deepseek.com/",
-        "200 mainFrame https://chat.deepseek.com/"
+        "200 mainFrame https://chat.deepseek.com/",
+        "capture error UnknownVizError"
       ],
       "permissionRequests": []
     }

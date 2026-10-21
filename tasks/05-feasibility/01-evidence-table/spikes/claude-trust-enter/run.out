@@ -1,0 +1,10 @@
+[0.1s] electron 44.6.0, node 24.21.0, node-pty loaded, shell /bin/zsh
+[0.1s] PATH seen by the GUI process: /usr/bin:/bin:/usr/sbin:/sbin
+[0.1s] cwd /tmp/spike-cwd-JLnq8X; shared /tmp/spike-shared-rypAJ5; session-id 82f8ed00-dd52-4be4-9e3f-17136e76c6ea; cmd: /bin/zsh -l -i -c "claude --session-id 82f8ed00-dd52-4be4-9e3f-17136e76c6ea --add-dir /tmp/spike-shared-rypAJ5"
+[6.1s] snapshot 01-start; bracketedPasteMode=true
+[6.1s] trust dialog present → "" + Enter
+[6.8s] pty exit 1
+[11.5s] snapshot 02-after-trust; bracketedPasteMode=false
+[11.5s] prompt visible: true
+[13.0s] snapshot 03-after-bracketed-paste; bracketedPasteMode=false
+[13.5s] snapshot 09-end; bracketedPasteMode=false

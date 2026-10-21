@@ -1,0 +1,16 @@
+node-pty under the Claude Code harness, environment inherited from this Claude Code session (CLAUDE_CODE_CHILD_SESSION set: yes)
+--- claude --resume 7d58de11-2632-437c-a2e1-2ed31d16c513  (cwd /tmp/spike-cwd-2uJCQ6)
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/spike-cwd-2uJCQ6
+❯ line one of a forwarded text                                                                                          
+  Reply with the single word OK and nothing else.                                                                       
+⏺ OK
+  ⎿  Interrupted · What should Claude do instead?
+                                                                                                    ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯  
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…
+  spike-cwd-2uJCQ6  Haiku 5.5/medium  ctx 5%
+  ⏵⏵ auto mode on (shift+tab to cycle)

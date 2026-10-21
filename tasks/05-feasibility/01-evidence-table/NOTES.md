@@ -27,3 +27,16 @@
 - Why Codex rejects the clipboard image (CX10): the same clipboard worked for Claude Code; CX11 decides whether the app is at fault.
 - Setting files on each site's file input (F6) and the sites' voice buttons (V6).
 - shellcheck and actionlint have had no input, so their gate lines were never red (G3).
+
+# NOTES — after verify:failed (2026-10-21)
+
+The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
+
+- G7 was wrongly refuted: Playwright resolves `PLAYWRIGHT_JUNIT_OUTPUT_NAME` against the output dir, which defaults to the config dir (`base.ts:671-675`, re-read by this session). Now confirmed; §6 keeps `…_OUTPUT_FILE` with a corrected reason.
+- CC13 "Enter alone quits" now has its own run: `spikes/claude-trust-enter/run.out` (pty exit 1 0.7 s after Enter).
+- CX2 claimed that a paste before the dialogs lands in them; no artefact showed it. The claim is cut to what the screens show.
+- W1/W6: the site probe used a ChatGPT selector that no longer matches and a regex over the whole HTML. Rerun with a generic input probe and separate `challengeScriptInHtml` / `challengeShown`; screenshots regenerated and re-read.
+- CX3 is now a run (`codex-help.txt`), not a citation of the resume command; CX4 and CX13 cite the lines that hold the facts; CC10 states only what the page says; CX8 is backed by reads of the repository, `/etc/hosts` and `~/.zshrc` (`codex-sandbox-read-wide.txt`); G9 covers all eight deny prefixes.
+- New rows: CC17 (an inherited `CLAUDE_CODE_CHILD_SESSION` turns transcript saving off — found while answering the owner's question about existing sessions), CX15 (Codex rollouts are being migrated to a paginated form; parser unproven on it), CX16 (Codex `session_index.jsonl`).
+- The rerun spikes ran `claude` once more in a new temporary directory (no prompt) and re-opened the Haiku session `7d58de11-…` with `--resume` (no prompt). No clipboard was touched.
+- `tasks/scope_check.py --help` crashes: it takes `<task dir> [base]` and has no `--help`. Template script, left as is.

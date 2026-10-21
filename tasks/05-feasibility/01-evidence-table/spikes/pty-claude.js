@@ -44,6 +44,7 @@ app.whenReady().then(async () => {
 
   p.write('\x1b[200~line one of a forwarded text\nline two\x1b[201~'); await sleep(1500); snap('03-after-bracketed-paste');
 
+  if (process.env.SPIKE_NO_CLIPBOARD) { await sleep(500); snap('09-end'); fs.writeFileSync(path.join(OUT, `${CLI}-run.log`), log.join('\n') + '\n'); try { p.kill(); } catch {} app.quit(); return; }
   const { execFileSync } = require('child_process');
   const saved = execFileSync('/usr/bin/pbpaste', { env: { LANG: 'en_US.UTF-8' } }).toString();
   const pngFile = path.join(os.tmpdir(), 'spike-image.png');

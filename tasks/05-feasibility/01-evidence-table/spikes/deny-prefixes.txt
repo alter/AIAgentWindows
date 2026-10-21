@@ -1,8 +1,11 @@
-~/.claude/hooks/git-guard.py invoked as a PreToolUse hook from the repository root, docs/PROJECT.md §5 deny block
-DENY  npx electron-builder -p always
-DENY  electron-builder --publish always --mac
-DENY  npm publish
+~/.claude/hooks/git-guard.py invoked as a PreToolUse hook from the repository root, docs/PROJECT.md §5 deny block (all 8 prefixes plus two local builds)
 DENY  git push origin main
+DENY  npm publish
+DENY  electron-builder --publish always
+DENY  electron-builder -p always
+DENY  npx electron-builder --publish always
+DENY  npx electron-builder -p always
 DENY  xcrun notarytool submit x
+DENY  gh release create v1
 allow npx electron-builder --mac
 allow npm run build
