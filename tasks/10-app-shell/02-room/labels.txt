@@ -2,7 +2,7 @@ phase:app-shell
 role:APP
 type:feature
 priority:P0
-status:todo
+status:in_progress
 verify:pending
 depends:10-app-shell/01-app-skeleton
 milestone:M2

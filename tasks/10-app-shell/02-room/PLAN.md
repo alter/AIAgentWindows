@@ -1,5 +1,5 @@
 ---
-status: draft
+status: running
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
