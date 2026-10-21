@@ -1,0 +1,134 @@
+// ipc.ts
+import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
+
+export const INVOKE_CHANNELS = {
+  listAgents: 'agents:list',
+  addAgent: 'agents:add',
+  selectAgent: 'agents:select',
+  ptyWrite: 'pty:write',
+  ptyResize: 'pty:resize',
+  siteNav: 'site:nav',
+} as const;
+
+export const EVENT_CHANNELS = {
+  agentsChanged: 'agents:changed',
+  ptyData: 'pty:data',
+  ptyExit: 'pty:exit',
+  siteState: 'site:state',
+} as const;
+
+export const MAX_PTY_WRITE_BYTES = 1024 * 1024;
+export const MAX_ID_LENGTH = 200;
+export const MAX_DIMENSION = 1000;
+export const SITE_ACTIONS = ['back', 'forward', 'home', 'reload'] as const;
+
+export type SiteAction = (typeof SITE_ACTIONS)[number];
+
+export interface AgentsSnapshot {
+  agents: Agent[];
+  selectedId: string | null;
+}
+
+export interface PtyDataEvent {
+  id: string;
+  data: string;
+}
+
+export interface PtyExitEvent {
+  id: string;
+  exitCode: number;
+}
+
+export interface SiteStateEvent {
+  id: string;
+  url: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+export interface InvokeRequests {
+  [INVOKE_CHANNELS.listAgents]: undefined;
+  [INVOKE_CHANNELS.addAgent]: { kind: AgentKind };
+  [INVOKE_CHANNELS.selectAgent]: { id: string };
+  [INVOKE_CHANNELS.ptyWrite]: { id: string; data: string };
+  [INVOKE_CHANNELS.ptyResize]: { id: string; cols: number; rows: number };
+  [INVOKE_CHANNELS.siteNav]: { id: string; action: SiteAction };
+}
+
+export type InvokeChannel = keyof InvokeRequests;
+export type EventChannel = (typeof EVENT_CHANNELS)[keyof typeof EVENT_CHANNELS];
+
+export type Validation<T> = { ok: true; value: T } | { ok: false; error: string };
+
+export interface AppApi {
+  listAgents(): Promise<AgentsSnapshot>;
+  addAgent(kind: AgentKind): Promise<void>;
+  selectAgent(id: string): Promise<void>;
+  ptyWrite(id: string, data: string): Promise<void>;
+  ptyResize(id: string, cols: number, rows: number): Promise<void>;
+  siteNav(id: string, action: SiteAction): Promise<void>;
+  onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
+  onPtyData(listener: (event: PtyDataEvent) => void): () => void;
+  onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
+  onSiteState(listener: (event: SiteStateEvent) => void): () => void;
+}
+
+type Parser<T> = (payload: unknown) => T | null;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseId(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_ID_LENGTH ? value : null;
+}
+
+function parseDimension(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= MAX_DIMENSION
+    ? value
+    : null;
+}
+
+function withId<T extends object>(payload: unknown, build: (record: Record<string, unknown>, id: string) => T | null): T | null {
+  if (!isRecord(payload)) return null;
+  const id = parseId(payload['id']);
+  return id === null ? null : build(payload, id);
+}
+
+const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
+  [INVOKE_CHANNELS.listAgents]: (payload) => (payload === undefined ? undefined : null),
+  [INVOKE_CHANNELS.addAgent]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const kind = payload['kind'];
+    return (AGENT_KINDS as readonly unknown[]).includes(kind) ? { kind: kind as AgentKind } : null;
+  },
+  [INVOKE_CHANNELS.selectAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.ptyWrite]: (payload) =>
+    withId(payload, (record, id) => {
+      const data = record['data'];
+      if (typeof data !== 'string' || Buffer.byteLength(data, 'utf8') > MAX_PTY_WRITE_BYTES) return null;
+      return { id, data };
+    }),
+  [INVOKE_CHANNELS.ptyResize]: (payload) =>
+    withId(payload, (record, id) => {
+      const cols = parseDimension(record['cols']);
+      const rows = parseDimension(record['rows']);
+      return cols === null || rows === null ? null : { id, cols, rows };
+    }),
+  [INVOKE_CHANNELS.siteNav]: (payload) =>
+    withId(payload, (record, id) => {
+      const action = record['action'];
+      return (SITE_ACTIONS as readonly unknown[]).includes(action) ? { id, action: action as SiteAction } : null;
+    }),
+};
+
+export function validateRequest(channel: string, payload: unknown): Validation<unknown> {
+  if (!Object.hasOwn(PARSERS, channel)) return { ok: false, error: `unknown channel ${channel}` };
+  const parser = PARSERS[channel as InvokeChannel] as Parser<unknown>;
+  const value = parser(payload);
+  return value === null ? { ok: false, error: `invalid payload for ${channel}` } : { ok: true, value };
+}
+
+export function isEventChannel(channel: string): channel is EventChannel {
+  return (Object.values(EVENT_CHANNELS) as string[]).includes(channel);
+}
