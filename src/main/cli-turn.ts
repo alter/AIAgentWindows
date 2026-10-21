@@ -8,7 +8,7 @@ const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 const ENTER = '\r';
 
-export type CliTurnErrorCode = 'timeout' | 'failed' | 'unavailable';
+export type CliTurnErrorCode = 'timeout' | 'failed' | 'unavailable' | 'aborted';
 
 export class CliTurnError extends Error {
   constructor(
@@ -29,6 +29,7 @@ export interface CliTurnOptions {
   pollMs?: number;
   settleMs?: number;
   submitDelayMs?: number;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_POLL_MS = 250;
@@ -67,12 +68,18 @@ async function confirmed(options: CliTurnOptions, sentAtMs: number, signal: Turn
   return again.state === 'done' && again.continued ? { state: 'running' } : again;
 }
 
+function throwIfAborted(options: CliTurnOptions): void {
+  if (options.signal?.aborted) throw new CliTurnError('aborted', 'the turn was stopped');
+}
+
 export async function runCliTurn(options: CliTurnOptions): Promise<string | null> {
+  throwIfAborted(options);
   const sentAtMs = Date.now();
   const deadline = sentAtMs + options.timeoutMs;
   await send(options);
   const pollMs = options.pollMs ?? DEFAULT_POLL_MS;
   while (Date.now() < deadline) {
+    throwIfAborted(options);
     const signal = await confirmed(options, sentAtMs, await signalOf(options, sentAtMs));
     if (signal.state === 'failed') throw new CliTurnError('failed', signal.reason);
     if (signal.state === 'done') return signal.reply;

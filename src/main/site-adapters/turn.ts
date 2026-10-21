@@ -9,6 +9,7 @@ export interface TurnOptions {
   pollMs: number;
   settleMs: number;
   startGraceMs: number;
+  signal?: AbortSignal;
 }
 
 export const DEFAULT_TURN_OPTIONS: TurnOptions = {
@@ -22,12 +23,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function throwIfAborted(options: TurnOptions): void {
+  if (options.signal?.aborted) throw new SiteAdapterError('aborted', 'the turn was stopped');
+}
+
 export async function runAdapterTurn(
   adapter: SiteAdapter,
   runner: PageRunner,
   prompt: string,
   options: TurnOptions = DEFAULT_TURN_OPTIONS,
 ): Promise<string> {
+  throwIfAborted(options);
   const baseline = await adapter.lastReply(runner);
   await adapter.insertText(runner, prompt);
   await adapter.submit(runner);
@@ -36,6 +42,7 @@ export async function runAdapterTurn(
   let sawGenerating = false;
   let idleSince: number | null = null;
   for (;;) {
+    throwIfAborted(options);
     const now = Date.now();
     if (now - started >= options.timeoutMs) {
       throw new SiteAdapterError('timeout', `${adapter.site} did not finish within ${options.timeoutMs} ms`);

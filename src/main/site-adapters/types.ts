@@ -28,7 +28,8 @@ export type SiteAdapterErrorCode =
   | 'page-error'
   | 'page-gone'
   | 'no-response'
-  | 'timeout';
+  | 'timeout'
+  | 'aborted';
 
 export class SiteAdapterError extends Error {
   constructor(

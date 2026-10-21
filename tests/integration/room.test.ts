@@ -1,0 +1,383 @@
+// room.test.ts
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { JSDOM } from 'jsdom';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { Room, type DriverFactory, type ParticipantDriver, type RoomEvent, type TurnRequest } from '../../src/main/room';
+import { createRoomDrivers } from '../../src/main/room-drivers';
+import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
+import type { PageRunner } from '../../src/main/site-adapters/types';
+import type { RoomConfig, RoomParticipant } from '../../src/shared/room-model';
+
+const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
+const FIXTURE = readFileSync(path.resolve(__dirname, '..', 'fixtures', 'sites', 'generic.html'), 'utf8');
+
+const A: RoomParticipant = { id: 'a', kind: 'claude', label: 'Claude Code' };
+const B: RoomParticipant = { id: 'b', kind: 'codex', label: 'Codex' };
+const C: RoomParticipant = { id: 'c', kind: 'chatgpt', label: 'ChatGPT' };
+
+let dir: string;
+let roomsDir: string;
+const rooms: Room[] = [];
+
+beforeEach(async () => {
+  dir = await mkdtemp(path.join(os.tmpdir(), 'aiaw-room-'));
+  roomsDir = path.join(dir, 'rooms');
+});
+
+afterEach(async () => {
+  await Promise.all(rooms.splice(0).map((room) => room.shutdown()));
+  await rm(dir, { recursive: true, force: true });
+});
+
+function config(participants: RoomParticipant[], overrides: Partial<RoomConfig> = {}): RoomConfig {
+  return { prompt: 'the question', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 5000, ...overrides };
+}
+
+type Behaviour = (request: TurnRequest, call: number) => Promise<string | null>;
+
+class FakeDriver implements ParticipantDriver {
+  readonly requests: TurnRequest[] = [];
+  resets = 0;
+  disposed = 0;
+
+  constructor(
+    readonly participant: RoomParticipant,
+    private readonly behaviour: Behaviour,
+    private readonly trace: string[],
+    private readonly onTurn: () => Promise<void>,
+  ) {}
+
+  async turn(request: TurnRequest): Promise<string | null> {
+    this.requests.push(request);
+    this.trace.push(this.participant.id);
+    await this.onTurn();
+    return this.behaviour(request, this.requests.length);
+  }
+
+  reset(): Promise<void> {
+    this.resets += 1;
+    return Promise.resolve();
+  }
+
+  dispose(): void {
+    this.disposed += 1;
+  }
+}
+
+interface Rig {
+  room: Room;
+  drivers: Map<string, FakeDriver>;
+  trace: string[];
+  events: RoomEvent[];
+  created: string[];
+  snapshots: string[];
+}
+
+function rig(behaviours: Record<string, Behaviour> = {}, failCreate: string[] = []): Rig {
+  const drivers = new Map<string, FakeDriver>();
+  const trace: string[] = [];
+  const events: RoomEvent[] = [];
+  const created: string[] = [];
+  const snapshots: string[] = [];
+  let historyPath = '';
+  const factory: DriverFactory = (participant) => {
+    created.push(participant.id);
+    if (failCreate.includes(participant.id)) return Promise.reject(new Error(`no session for ${participant.label}`));
+    const behaviour: Behaviour = behaviours[participant.id] ?? ((_request, call) => Promise.resolve(`reply ${participant.id}${call}`));
+    const driver = new FakeDriver(participant, behaviour, trace, async () => {
+      if (historyPath !== '') snapshots.push(await readFile(historyPath, 'utf8'));
+    });
+    drivers.set(participant.id, driver);
+    return Promise.resolve(driver);
+  };
+  const room = new Room({
+    roomsDir,
+    driverFor: factory,
+    emit: (event) => {
+      events.push(event);
+      if (event.type === 'started') historyPath = event.historyPath;
+    },
+  });
+  rooms.push(room);
+  return { room, drivers, trace, events, created, snapshots };
+}
+
+function positions(text: string, needles: string[]): number[] {
+  return needles.map((needle) => text.indexOf(needle));
+}
+
+function ascending(values: number[]): boolean {
+  return values.every((value, index) => value >= 0 && (index === 0 || value > (values[index - 1] ?? 0)));
+}
+
+describe('room relay', () => {
+  it('runs A,B,C,A,B,C one turn at a time and writes the history after every reply', async () => {
+    const t = rig();
+    const run = t.room.start(config([A, B, C], { rounds: 2 }));
+    const result = await run.done;
+    expect(result.status).toBe('done');
+    expect(t.trace).toEqual(['a', 'b', 'c', 'a', 'b', 'c']);
+    const final = await readFile(run.historyPath, 'utf8');
+    expect(ascending(positions(final, ['the question', 'reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2', 'reply c2']))).toBe(true);
+    expect(t.snapshots).toHaveLength(6);
+    t.snapshots.forEach((snapshot, index) => {
+      const earlier = ['reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2'].slice(0, index);
+      expect(ascending(positions(snapshot, ['the question', ...earlier]))).toBe(true);
+      expect(snapshot).not.toContain(['reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2', 'reply c2'][index] ?? '');
+    });
+  });
+
+  it('gives a web participant the whole history, in order, in its prompt', async () => {
+    const t = rig();
+    await t.room.start(config([A, B, C])).done;
+    const web = t.drivers.get('c')?.requests[0];
+    expect(ascending(positions(web?.text ?? '', ['the question', 'reply a1', 'reply b1']))).toBe(true);
+    expect(web?.attachPath).toBeNull();
+    const cli = t.drivers.get('a')?.requests[0];
+    expect(cli?.text).toContain(`${roomsDir}${path.sep}`);
+  });
+
+  it('writes replies to the history file verbatim', async () => {
+    const markup = '<img src=x onerror=1>\n## fake heading | Owner | prompt\n`code` & more';
+    const t = rig({ a: () => Promise.resolve(markup) });
+    const run = t.room.start(config([A]));
+    await run.done;
+    expect(await readFile(run.historyPath, 'utf8')).toContain(`\n${markup}\n`);
+  });
+
+  it('marks a failed participant, restarts its session and goes on with the next one', async () => {
+    const t = rig({ b: () => Promise.reject(new Error('boom')) });
+    const result = await t.room.start(config([A, B, C])).done;
+    expect(result.status).toBe('done');
+    expect(t.trace).toEqual(['a', 'b', 'c']);
+    const kinds = result.entries.map((entry) => `${entry.authorId}:${entry.kind}`);
+    expect(kinds).toEqual(['owner:prompt', 'a:reply', 'b:error', 'c:reply']);
+    expect(result.entries[2]?.text).toBe('boom');
+    expect(t.drivers.get('b')?.resets).toBe(1);
+    expect(t.drivers.get('a')?.resets).toBe(0);
+  });
+
+  it('records an empty reply as an error and a missing session as a failed participant', async () => {
+    const t = rig({ a: () => Promise.resolve(null) }, ['b']);
+    const result = await t.room.start(config([A, B, C])).done;
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual([
+      'owner:prompt',
+      'a:error',
+      'b:error',
+      'c:reply',
+    ]);
+    expect(result.entries[2]?.text).toBe('no session for Codex');
+    await t.room.start(config([B])).done;
+    expect(t.created.filter((id) => id === 'b')).toHaveLength(2);
+  });
+
+  it('passes the turn timeout and the history file to the driver for a long history', async () => {
+    const t = rig();
+    const run = t.room.start(config([C], { prompt: 'x'.repeat(13000), turnTimeoutMs: 4321 }));
+    await run.done;
+    const request = t.drivers.get('c')?.requests[0];
+    expect(request?.timeoutMs).toBe(4321);
+    expect(request?.attachPath).toBe(run.historyPath);
+    expect(request?.text).not.toContain('xxxxxxxxxx');
+  });
+
+  it('refuses a second run while one is in progress and reuses the sessions afterwards', async () => {
+    const t = rig();
+    const first = t.room.start(config([A]));
+    expect(t.room.isRunning()).toBe(true);
+    expect(() => t.room.start(config([A]))).toThrow('already in progress');
+    await first.done;
+    expect(t.room.isRunning()).toBe(false);
+    await t.room.start(config([A])).done;
+    expect(t.created).toEqual(['a']);
+    expect(t.drivers.get('a')?.requests).toHaveLength(2);
+  });
+
+  it('reports progress and the end of the run', async () => {
+    const t = rig();
+    await t.room.start(config([A, B], { rounds: 2 })).done;
+    const progress = t.events.filter((event) => event.type === 'progress' && event.state !== 'running');
+    expect(progress.map((event) => (event.type === 'progress' ? `${event.completed}/${event.total}` : ''))).toEqual([
+      '1/4',
+      '2/4',
+      '3/4',
+      '4/4',
+    ]);
+    expect(t.events[0]?.type).toBe('started');
+    expect(t.events[t.events.length - 1]).toMatchObject({ type: 'finished', status: 'done' });
+  });
+
+  it('disposes every session on shutdown', async () => {
+    const t = rig();
+    await t.room.start(config([A, B])).done;
+    await t.room.shutdown();
+    expect(t.drivers.get('a')?.disposed).toBe(1);
+    expect(t.drivers.get('b')?.disposed).toBe(1);
+  });
+
+  it('ends as failed when the history file cannot be written', async () => {
+    const blocker = path.join(dir, 'blocker');
+    await writeFile(blocker, 'file');
+    const events: RoomEvent[] = [];
+    const room = new Room({ roomsDir: path.join(blocker, 'rooms'), driverFor: () => Promise.reject(new Error('unused')), emit: (e) => events.push(e) });
+    rooms.push(room);
+    const result = await room.start(config([A])).done;
+    expect(result.status).toBe('failed');
+    expect(room.isRunning()).toBe(false);
+    expect(events[events.length - 1]).toMatchObject({ type: 'finished', status: 'failed' });
+  });
+});
+
+describe('room broadcast', () => {
+  it('sends the prompt to every participant in parallel without the other replies', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started = 0;
+    const hold: Behaviour = async (_request, call) => {
+      started += 1;
+      if (started === 2) release();
+      await gate;
+      return `held ${call}`;
+    };
+    const t = rig({ a: hold, c: hold });
+    const result = await t.room.start(config([A, C], { mode: 'broadcast', rounds: 5 })).done;
+    expect(started).toBe(2);
+    expect(t.drivers.get('c')?.requests[0]?.text).not.toContain('held');
+    expect(result.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(2);
+    expect(t.drivers.get('a')?.requests).toHaveLength(1);
+  });
+});
+
+describe('room stop', () => {
+  it('abandons the turn in flight, restarts that session and runs no further step', async () => {
+    const waitForAbort: Behaviour = (request) =>
+      new Promise((_resolve, reject) => {
+        request.signal.addEventListener('abort', () => reject(new Error('aborted by driver')), { once: true });
+      });
+    const t = rig({ b: waitForAbort });
+    const run = t.room.start(config([A, B, C], { rounds: 2 }));
+    while (!t.trace.includes('b')) await new Promise((resolve) => setTimeout(resolve, 5));
+    t.room.stop();
+    const result = await run.done;
+    expect(result.status).toBe('stopped');
+    expect(t.trace).toEqual(['a', 'b']);
+    expect(t.drivers.get('b')?.resets).toBeGreaterThanOrEqual(1);
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply', 'room:error']);
+    expect(await readFile(run.historyPath, 'utf8')).toContain('Stopped by the owner.');
+    expect(t.room.isRunning()).toBe(false);
+  });
+
+  it('does not wait for a driver that ignores the stop', async () => {
+    const never: Behaviour = () => new Promise(() => undefined);
+    const t = rig({ a: never });
+    const run = t.room.start(config([A, B]));
+    while (!t.trace.includes('a')) await new Promise((resolve) => setTimeout(resolve, 5));
+    t.room.stop();
+    expect((await run.done).status).toBe('stopped');
+    expect(t.trace).toEqual(['a']);
+  });
+});
+
+describe('room with stub CLIs', () => {
+  const output = new Map<string, string>();
+
+  function stubDrivers(extra: Record<string, Record<string, string>> = {}) {
+    return createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: (participant) => ({
+        PATH: process.env.PATH,
+        AIAW_CLAUDE_BIN: STUB,
+        AIAW_CODEX_BIN: STUB,
+        AIAW_USER_DATA: path.join(dir, 'user-data'),
+        CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
+        CODEX_HOME: path.join(dir, 'codex-home'),
+        AIAW_STUB_TRANSCRIPT: participant.kind,
+        AIAW_STUB_REPLY_DELAY_MS: '40',
+        ...extra[participant.id],
+      }),
+      siteFor: () => null,
+      onOutput: (id, data) => output.set(id, (output.get(id) ?? '') + data),
+      timing: { quietMs: 150, startMaxMs: 10000, pollMs: 25, settleMs: 50, submitDelayMs: 40, killWaitMs: 5000 },
+    });
+  }
+
+  it('relays two room-owned CLI sessions for two rounds in read-only modes', async () => {
+    const drivers = stubDrivers();
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const run = room.start(config([A, B], { rounds: 2, turnTimeoutMs: 10000 }));
+    const result = await run.done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual([
+      'owner:prompt',
+      'a:reply',
+      'b:reply',
+      'a:reply',
+      'b:reply',
+    ]);
+    expect(result.entries[1]?.text).toContain(`The history is in the file: ${run.historyPath}`);
+    const history = await readFile(run.historyPath, 'utf8');
+    expect(ascending(positions(history, ['## ', 'Claude Code | reply', 'Codex | reply']))).toBe(true);
+    const banners = [...output.values()].join('\n');
+    expect(banners).toContain('"--permission-mode","plan"');
+    expect(banners).toContain('"--sandbox","read-only"');
+    expect(banners).not.toContain('dangerously');
+  });
+
+  it('marks a CLI turn that never ends, restarts its session and answers the next run', async () => {
+    const extra: Record<string, Record<string, string>> = { a: { AIAW_STUB_HANG: '1' } };
+    const drivers = stubDrivers(extra);
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const first = await room.start(config([A, B], { turnTimeoutMs: 1000 })).done;
+    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply']);
+    expect(first.entries[1]?.text).toContain('did not end');
+    delete extra['a'];
+    const second = await room.start(config([A], { turnTimeoutMs: 10000 })).done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(second.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply']);
+    expect([...output.keys()].filter((id) => id.startsWith('room-a-'))).toHaveLength(2);
+  });
+});
+
+describe('room with a web participant', () => {
+  it('inserts the prompt as text, reads the reply and attaches a long history as a file', async () => {
+    const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+    const attached: string[][] = [];
+    const runner: PageRunner = {
+      run: (code) => Promise.resolve(dom.window.eval(code)),
+      setInputFiles: (_selector, paths) => {
+        attached.push(paths);
+        return Promise.resolve();
+      },
+    };
+    const adapter = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant', fileInput: '#file' });
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: () => ({ adapter, runner }),
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const markup = '<img src=x onerror="window.pwned=1"><b>bold</b>';
+    const short = await room.start(config([C], { prompt: markup, turnTimeoutMs: 20000 })).done;
+    expect(short.entries[1]?.text).toContain(markup);
+    expect(dom.window.document.querySelectorAll('img, b').length).toBe(0);
+    expect(attached).toEqual([]);
+    const long = room.start(config([C], { prompt: 'y'.repeat(13000), turnTimeoutMs: 20000 }));
+    const result = await long.done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    expect(attached).toEqual([[long.historyPath]]);
+  });
+});
