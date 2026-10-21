@@ -1,0 +1,59 @@
+<!doctype html>
+<!-- generic.html -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Generic chat fixture</title></head>
+  <body>
+    <main id="log"></main>
+    <textarea id="ta" aria-label="Message"></textarea>
+    <div id="ce" contenteditable="true" role="textbox" aria-label="Message"></div>
+    <button id="send" type="button" disabled>Send</button>
+    <button id="stop" type="button" hidden>Stop</button>
+    <input id="file" type="file" />
+    <script>
+      const ta = document.getElementById('ta');
+      const ce = document.getElementById('ce');
+      const send = document.getElementById('send');
+      const stop = document.getElementById('stop');
+      const log = document.getElementById('log');
+      const stall = new URLSearchParams(location.search).has('stall');
+
+      function ceText() {
+        const kids = Array.from(ce.children);
+        return kids.length === 0 ? ce.textContent : kids.map((kid) => kid.textContent).join('\n');
+      }
+      function pending() {
+        return ta.value !== '' ? ta.value : ceText();
+      }
+      function refresh() {
+        send.disabled = pending() === '';
+      }
+      function say(role, text) {
+        const node = document.createElement('div');
+        node.className = 'msg ' + role;
+        node.textContent = text;
+        log.appendChild(node);
+      }
+      function submit() {
+        const text = pending();
+        if (text === '') return;
+        ta.value = '';
+        ce.replaceChildren();
+        refresh();
+        say('user', text);
+        stop.hidden = false;
+        if (stall) return;
+        setTimeout(() => say('assistant', 'ECHO: ' + text), 60);
+        setTimeout(() => { stop.hidden = true; }, 90);
+      }
+      ta.addEventListener('input', refresh);
+      ce.addEventListener('input', refresh);
+      ce.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          submit();
+        }
+      });
+      send.addEventListener('click', submit);
+    </script>
+  </body>
+</html>
