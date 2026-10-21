@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Application skeleton — one Slack-like window with CLI and web agents
@@ -17,7 +17,7 @@ created: 2026-10-21
 - [x] AC7 Full tier: `npx vitest run tests/full` and `npx playwright test --project=electron-smoke` exit 0 — the app starts with a temporary userData, a stub agent added through the UI shows the stub banner, and after a relaunch with the same userData the agent is listed again
 - [x] AC8 Architecture: `python3 scripts/arch_check.py` exit 0, and red on a scratch copy where `src/renderer/` imports `node:fs` or `electron` (kept in NOTES.md)
 - [x] AC9 Every electron-builder invocation in package.json scripts carries `--publish never` and no script is named `release`: `python3 scripts/check_publish_flags.py` exit 0 (added in T13, red on a scratch package.json without the flag)
-- [ ] AC10 HUMAN (excluded from /run): the owner runs the app, adds Claude Code, Codex and the three sites, signs in, restarts, and records in NOTES.md what came back
+- [!] AC10 HUMAN (excluded from /run): the owner runs the app, adds Claude Code, Codex and the three sites, signs in, restarts, and records in NOTES.md what came back
 
 ## Stack
 Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xterm 6.0.0, @xterm/addon-fit 0.11.0, TypeScript 6.0.3, esbuild 0.28.2, eslint 10.12.0, typescript-eslint 8.71.1, @eslint/js 10.0.1, globals 17.13.0, vitest 5.0.3, @vitest/coverage-v8 5.0.3, @playwright/test 1.63.0, electron-builder 26.17.0. Exact versions in package.json (no `^`/`~`). Studies: `docs/tech/`.
@@ -113,3 +113,4 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 - 2026-10-21 finish (coordinator): AC1 fast tier rc=0 (all §6 lines); AC2–AC6 vitest 6 files / 70 tests rc=0; AC7 full tier rc=0 (electron-smoke 2/2); AC8 arch_check rc=0, red kept in NOTES.md (T09); AC9 check_publish_flags rc=0, red kept in NOTES.md (T13); attack round 2 passed; AC10 HUMAN pending. Baseline T00: no product tests existed; scripts tests 12 → 40, all green; coverage floor 100.00% held.
 - 2026-10-21 T17 done: Content.render hides the other panes before showing the selected one and a ResizeObserver watches every pane element (src/renderer/content.ts); Playwright smoke "switching between two terminal agents" (A,B,A,B,A: xterm screen height within one row of the pane inner height) red before the fix (timeout), green after; fast tier rc=0 (coverage 100.00%), electron-smoke 3 passed
 - 2026-10-21 T18 done: close (controller.close kills the pty, SiteViews.close removes the view, removeAgent picks the next selection, state file rewritten; session files untouched) via sidebar × button and context menu with an in-app confirm bar; Restart button in an exited CLI pane (controller.restart refuses while alive/site/unknown, claims Codex rollout first, same restoreSpawn argv); stub-cli exits on `/exit`; tests red first (state-store 1, ipc-validate 1, controller 4 failed), smoke close+restart red before z-index fix (xterm screen intercepted the Restart click) then 5 passed; fast tier rc=0 (coverage 100.00%), vitest unit+integration 134 passed
+- 2026-10-21 coordinator: T17 (pane height) and T18 (close/restart) verified — vitest 134 passed, electron-smoke 5/5, fast tier rc=0, coverage 100.00%. Only AC10 (owner's run) remains; plan paused for the owner.
