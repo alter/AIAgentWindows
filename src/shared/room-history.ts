@@ -16,10 +16,14 @@ function randomNonce(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function freshNonce(entries: readonly RoomEntry[], random: () => string): string {
+export function entryCollides(nonce: string, entry: RoomEntry): boolean {
+  return entry.text.includes(nonce) || entry.label.includes(nonce);
+}
+
+export function freshNonce(entries: readonly RoomEntry[], random: () => string = randomNonce): string {
   for (;;) {
     const nonce = random();
-    if (!entries.some((entry) => entry.text.includes(nonce) || entry.label.includes(nonce))) return nonce;
+    if (!entries.some((entry) => entryCollides(nonce, entry))) return nonce;
   }
 }
 
@@ -45,14 +49,21 @@ export function historyNonce(history: string): string | null {
   return match?.[1] ?? null;
 }
 
+export function renderHistoryHeader(roomId: string, nonce: string): string {
+  return `# Room ${roomId}\n\n${historyNotice(nonce)}\n`;
+}
+
+export function renderEntryBlock(nonce: string, entry: RoomEntry): string {
+  return `\n${entryStart(nonce, entry)}\n${entry.text}\n<<<end-${nonce}>>>\n`;
+}
+
 export function renderHistory(
   roomId: string,
   entries: readonly RoomEntry[],
   random: () => string = randomNonce,
 ): string {
   const nonce = freshNonce(entries, random);
-  const blocks = entries.map((entry) => `${entryStart(nonce, entry)}\n${entry.text}\n<<<end-${nonce}>>>\n`);
-  return [`# Room ${roomId}\n`, `${historyNotice(nonce)}\n`, ...blocks].join('\n');
+  return renderHistoryHeader(roomId, nonce) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
 }
 
 function introFor(participant: RoomParticipant): string {

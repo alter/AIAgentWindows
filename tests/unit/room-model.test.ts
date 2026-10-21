@@ -2,11 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_PROMPT_CHARS,
+  MAX_REPLY_CHARS,
   MAX_ROUNDS,
   MIN_ROUNDS,
   parseRoomConfig,
   ROOM_PARTICIPANTS,
   relaySchedule,
+  truncateText,
   type RoomParticipant,
 } from '../../src/shared/room-model';
 
@@ -107,5 +109,28 @@ describe('participant labels', () => {
     for (const item of ROOM_PARTICIPANTS) {
       expect(parseRoomConfig({ ...base, participants: [item] }).ok).toBe(true);
     }
+  });
+});
+
+describe('truncateText', () => {
+  it('keeps a reply of exactly MAX_REPLY_CHARS and truncates one character more with a visible marker', () => {
+    const exact = 'x'.repeat(MAX_REPLY_CHARS);
+    expect(truncateText(exact, MAX_REPLY_CHARS)).toBe(exact);
+    const over = truncateText(`${exact}x`, MAX_REPLY_CHARS);
+    expect(over.length).toBeLessThanOrEqual(MAX_REPLY_CHARS);
+    expect(over).toMatch(/\[truncated \d+ chars\]$/);
+    expect(over.startsWith('xxxx')).toBe(true);
+  });
+
+  it('does not cut a surrogate pair in half and reports the dropped count', () => {
+    const text = '\u{1F600}'.repeat(200);
+    const cut = truncateText(text, 100);
+    const body = cut.slice(0, cut.indexOf('\n[truncated'));
+    expect(body.length % 2).toBe(0);
+    expect(cut).toContain(`[truncated ${text.length - body.length} chars]`);
+  });
+
+  it('with a limit below the marker size leaves only the marker', () => {
+    expect(truncateText('abcdef', 0)).toMatch(/^\n\[truncated 6 chars\]$/);
   });
 });

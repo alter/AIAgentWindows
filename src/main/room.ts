@@ -1,10 +1,19 @@
 // room.ts
 import { randomBytes } from 'node:crypto';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { buildParticipantPrompt, renderHistory } from '../shared/room-history';
 import {
+  buildParticipantPrompt,
+  entryCollides,
+  freshNonce,
+  renderEntryBlock,
+  renderHistory,
+} from '../shared/room-history';
+import {
+  MAX_HISTORY_CHARS,
+  MAX_REPLY_CHARS,
   relaySchedule,
+  truncateText,
   type RoomConfig,
   type RoomEntry,
   type RoomEntryKind,
@@ -37,6 +46,7 @@ export interface RoomDeps {
   emit?(event: RoomEvent): void;
   now?(): number;
   newId?(): string;
+  newNonce?(): string;
 }
 
 export interface RoomRunResult {
@@ -86,6 +96,8 @@ class RunState {
   readonly entries: RoomEntry[] = [];
   readonly controller = new AbortController();
   completed = 0;
+  chars = 0;
+  private nonce: string | null = null;
   private writing: Promise<void> = Promise.resolve();
 
   constructor(
@@ -93,20 +105,35 @@ class RunState {
     readonly historyPath: string,
     readonly config: RoomConfig,
     readonly total: number,
+    private readonly random: (() => string) | undefined,
   ) {}
 
   get signal(): AbortSignal {
     return this.controller.signal;
   }
 
-  queueWrite(): void {
-    const text = renderHistory(this.id, this.entries);
-    const write = async (): Promise<void> => writeAtomic(this.historyPath, text);
-    this.writing = this.writing.then(write, write);
+  add(entry: RoomEntry): void {
+    this.entries.push(entry);
+    this.chars += entry.text.length;
+    const nonce = this.nonce;
+    if (nonce !== null && !entryCollides(nonce, entry)) {
+      const block = renderEntryBlock(nonce, entry);
+      this.enqueue(() => appendFile(this.historyPath, block, 'utf8'));
+      return;
+    }
+    const fresh = freshNonce(this.entries, this.random);
+    this.nonce = fresh;
+    const text = renderHistory(this.id, this.entries, () => fresh);
+    this.enqueue(() => writeAtomic(this.historyPath, text));
   }
 
   flushed(): Promise<void> {
     return this.writing;
+  }
+
+  private enqueue(write: () => Promise<void>): void {
+    this.writing = this.writing.then(write);
+    this.writing.catch(() => undefined);
   }
 }
 
@@ -126,7 +153,7 @@ export class Room {
     const roomId = this.deps.newId?.() ?? defaultRoomId(now);
     const historyPath = path.join(this.deps.roomsDir, `${roomId}.md`);
     const total = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length;
-    const run = new RunState(roomId, historyPath, config, total);
+    const run = new RunState(roomId, historyPath, config, total, this.deps.newNonce);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
   }
@@ -188,9 +215,9 @@ export class Room {
   }
 
   private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string): void {
-    const entry: RoomEntry = { authorId, label, time: this.now(), kind, text };
-    run.entries.push(entry);
-    run.queueWrite();
+    const limit = kind === 'reply' ? Math.min(MAX_REPLY_CHARS, Math.max(0, MAX_HISTORY_CHARS - run.chars)) : MAX_REPLY_CHARS;
+    const entry: RoomEntry = { authorId, label, time: this.now(), kind, text: truncateText(text, limit) };
+    run.add(entry);
     this.emit({ type: 'entry', roomId: run.id, entry });
   }
 

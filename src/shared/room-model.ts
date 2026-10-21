@@ -10,6 +10,9 @@ export const DEFAULT_TURN_TIMEOUT_MS = 600000;
 export const MAX_PARTICIPANTS = 16;
 export const MAX_LABEL_CHARS = 80;
 export const MAX_ID_CHARS = 128;
+export const MAX_REPLY_CHARS = 1_000_000;
+export const MAX_HISTORY_CHARS = 4_000_000;
+const TRUNCATION_RESERVE = 64;
 
 export type RoomMode = 'broadcast' | 'relay';
 export type RoomEntryKind = 'prompt' | 'reply' | 'error';
@@ -118,4 +121,12 @@ export function parseRoomConfig(value: unknown): RoomConfigResult {
   const parsed = parseParticipants(participants);
   if (!parsed) return { ok: false, error: 'participants must be 1..16 unique known agents' };
   return { ok: true, config: { prompt, mode, rounds, participants: parsed, turnTimeoutMs } };
+}
+
+export function truncateText(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  let keep = Math.max(0, limit - TRUNCATION_RESERVE);
+  const last = text.charCodeAt(keep - 1);
+  if (keep > 0 && last >= 0xd800 && last <= 0xdbff) keep -= 1;
+  return `${text.slice(0, keep)}\n[truncated ${text.length - keep} chars]`;
 }
