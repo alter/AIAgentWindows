@@ -32,9 +32,21 @@ describe('room sessions start read-only', () => {
     expect(valueAfter(cliArgs('claude'), '--permission-mode')).toBe('plan');
   });
 
-  it('removes every tool that writes or leaves plan mode from claude', () => {
-    const tools = (valueAfter(cliArgs('claude'), '--disallowedTools') ?? '').split(/\s+/);
-    expect(tools).toEqual(expect.arrayContaining(['Bash', 'Edit', 'Write', 'NotebookEdit', 'ExitPlanMode']));
+  it('gives claude an allowlist of read tools and nothing else', () => {
+    const args = cliArgs('claude');
+    const tools = (valueAfter(args, '--tools') ?? '').split(',');
+    expect(tools.sort()).toEqual(['Glob', 'Grep', 'Read']);
+    expect(args).not.toContain('--allowedTools');
+  });
+
+  it('ignores the owner MCP servers: strict config with an empty server list', () => {
+    const args = cliArgs('claude');
+    expect(args).toContain('--strict-mcp-config');
+    expect(JSON.parse(valueAfter(args, '--mcp-config') ?? 'null')).toEqual({ mcpServers: {} });
+  });
+
+  it('denies every MCP tool, because --tools does not touch them', () => {
+    expect(valueAfter(cliArgs('claude'), '--disallowedTools')).toBe('mcp__*');
   });
 
   it('gives claude the shared directory and a fresh session id', () => {
@@ -47,7 +59,8 @@ describe('room sessions start read-only', () => {
     const args = cliArgs('claude', { resume: true });
     expect(valueAfter(args, '--resume')).toBe(SESSION);
     expect(valueAfter(args, '--permission-mode')).toBe('plan');
-    expect(args).toContain('--disallowedTools');
+    expect(valueAfter(args, '--tools')).toBeDefined();
+    expect(args).toContain('--strict-mcp-config');
   });
 
   it('starts codex with a read-only sandbox, no approvals and no daemon', () => {

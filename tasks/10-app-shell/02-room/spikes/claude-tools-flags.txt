@@ -1,0 +1,52 @@
+# claude 2.1.306 --help: tool allowlist and MCP flags (T12e). Command: claude --help (no session, no prompt). Exit code below.
+exit=0
+  --allowedTools, --allowed-tools <tools...>
+      Comma or space-separated list of tool names to allow (e.g. "Bash(git *)
+      Edit")
+  --disallowedTools, --disallowed-tools <tools...>
+      Comma or space-separated list of tool names to deny (e.g. "Bash(git *)
+      Edit")
+  --mcp-config <configs...>             Load MCP servers from JSON files or
+                                        strings (space-separated)
+  --permission-mode <mode>              Permission mode to use for the session
+                                        (choices: "acceptEdits", "auto",
+                                        "bypassPermissions", "manual",
+                                        "dontAsk", "plan")
+  --restricted                          Restricted mode: removes the built-in
+                                        tools that run commands or code (Bash,
+                                        PowerShell and the other code-running
+                                        tools) and WebFetch unless --tools names
+                                        them, and ignores user, project and
+                                        local settings files (managed settings
+                                        and --settings still apply; add
+                                        --strict-mcp-config to skip MCP servers
+                                        too). Also confines the file tools to
+                                        the working directories (--add-dir
+                                        included), refuses bypassPermissions,
+                                        and lets only a person or the configured
+                                        permission handler approve writes to
+                                        settings, git and tool-configuration
+                                        files.
+  -r, --resume [value]                  Resume a conversation by session ID or
+                                        name, or open interactive picker with
+                                        optional search term
+  --safe-mode                           Start with all customizations
+                                        (CLAUDE.md, skills, installed plugins,
+                                        hooks, MCP servers, custom commands and
+                                        agents, output styles, workflows, custom
+                                        themes, keybindings, and more) disabled
+                                        — useful for troubleshooting a broken
+                                        configuration. Admin-managed (policy)
+                                        settings still apply. Auth, model
+                                        selection, built-in tools and plugins,
+                                        and permissions work normally. Sets
+                                        CLAUDE_CODE_SAFE_MODE=1.
+  --setting-sources <sources>           Comma-separated list of setting sources
+                                        to load (user, project, local).
+  --strict-mcp-config                   Only use MCP servers from --mcp-config,
+                                        ignoring all other MCP configurations
+  --tools <tools...>                    Specify the list of available tools from
+                                        the built-in set. Use "" to disable all
+                                        tools, "default" to use the default set,
+                                        or specify tool names (e.g.
+                                        "Bash,Edit,Read").

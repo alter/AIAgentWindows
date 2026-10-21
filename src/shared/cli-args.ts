@@ -41,8 +41,13 @@ function requireSessionId(sessionId: string | undefined): string {
 const ROOM_CLAUDE_ARGS: readonly string[] = [
   '--permission-mode',
   'plan',
+  '--tools',
+  'Read,Grep,Glob',
+  '--strict-mcp-config',
+  '--mcp-config',
+  '{"mcpServers":{}}',
   '--disallowedTools',
-  'Bash Edit Write NotebookEdit ExitPlanMode',
+  'mcp__*',
 ];
 const ROOM_CODEX_ARGS: readonly string[] = [
   '--sandbox',

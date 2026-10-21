@@ -84,3 +84,10 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - The history file is appended to (`appendFile` of one entry block) after the first write; `RunState` keeps the file's nonce. When an appended entry (text or label) contains the current nonce, a new nonce is drawn and the whole file is rewritten once (T12c guarantee kept). A failed write is sticky: later appends are skipped and the run ends `failed`.
 - Tests red first: `tests/integration/room.test.ts` "room reply size and history file" (src reverted to HEAD: 4 of 5 failed, among them the append test: 5 different inodes for 6 entries, and the nonce-redraw test), `tests/unit/room-model.test.ts` `truncateText`.
 - Reverse control (2026-10-21): the collision check removed from `RunState.add` (`if (nonce !== null) {`) -> `npx vitest run tests/integration/room.test.ts` -> `Tests  1 failed | 22 passed (23)` (redraws the nonce and rewrites the file when an entry contains the current one); restored.
+
+## T12e fix (ATTACK.md "Claude tool denylist")
+
+- Room claude now starts with `--permission-mode plan --tools Read,Grep,Glob --strict-mcp-config --mcp-config '{"mcpServers":{}}' --disallowedTools 'mcp__*'` instead of the denylist. Flags checked against the official CLI reference and tools reference and `claude --help` of 2.1.306 (`spikes/claude-tools-flags.txt`, docs/tech/claude-code@2.1.306.md, EVIDENCE CC27-CC28); claude was never started.
+- Tests `tests/unit/room-sessions.test.ts` (allowlist exactly Read/Grep/Glob and no `--allowedTools`, strict empty MCP config, `mcp__*` denied, resumed session keeps them) were red first against the old denylist (4 failed, 8 passed), green after.
+- Reverse control (2026-10-21): the 4 new/changed assertions failing against the previous `ROOM_CLAUDE_ARGS` is the red run; no separate break was made.
+- Not verified without starting claude: that an empty `mcpServers` object is accepted, and that `--tools` with `Read,Grep,Glob` leaves plan mode answering. A start-up error would fail the turn visibly (T12a guard, timeout); the owner's AC7 run is the check.

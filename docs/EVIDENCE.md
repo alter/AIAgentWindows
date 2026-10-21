@@ -29,6 +29,8 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | CC22 | `--disallowedTools` with a bare tool name removes the tool from Claude's context; `--tools` restricts the built-in set; `--restricted` exists in 2.1.306 | run | `tasks/10-app-shell/02-room/spikes/claude-help-flags.txt` | confirmed |
 | CC23 | An assistant message is one transcript record per content block with the message's `stop_reason` on every record; the first `end_turn` record can hold only `thinking` (61 of 306 final messages) and the `text` record follows | run | `tasks/10-app-shell/02-room/spikes/claude-turn-signal.txt`, `tasks/10-app-shell/02-room/spikes/turn_signals.py` | confirmed |
 | CC24 | A `system`/`turn_duration` record follows 288 of 307 `end_turn` records that carry text, so it is a confirmation, not the signal | run | `tasks/10-app-shell/02-room/spikes/claude-turn-signal.txt` | confirmed |
+| CC27 | `--tools` restricts the built-in tools to the named ones (naming Grep/Glob brings them back on macOS) and does not affect MCP tools; `--allowedTools` only skips prompts | doc | https://code.claude.com/docs/en/cli-reference | confirmed |
+| CC28 | `--strict-mcp-config` with `--mcp-config <json string>` uses only the MCP servers given there; `claude --help` of 2.1.306 lists `--tools`, `--strict-mcp-config`, `--mcp-config` | run | `tasks/10-app-shell/02-room/spikes/claude-tools-flags.txt` | confirmed |
 | CC16 | On Windows `claude` is resolved from the user's environment at spawn time | assumption | HUMAN: Windows 11 smoke | open |
 
 ## Codex windows
