@@ -59,6 +59,7 @@ export interface RoomDeps {
   now?(): number;
   newId?(): string;
   newNonce?(): string;
+  maxHistoryChars?: number;
 }
 
 export interface RoomRunResult {
@@ -240,7 +241,7 @@ export class Room {
   }
 
   private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string): void {
-    const limit = Math.min(MAX_REPLY_CHARS, Math.max(0, MAX_HISTORY_CHARS - run.chars));
+    const limit = Math.min(MAX_REPLY_CHARS, Math.max(0, (this.deps.maxHistoryChars ?? MAX_HISTORY_CHARS) - run.chars));
     const entry: RoomEntry = { authorId, label, time: this.now(), kind, text: truncateText(text, limit) };
     run.add(entry);
     this.emit({ type: 'entry', roomId: run.id, entry });

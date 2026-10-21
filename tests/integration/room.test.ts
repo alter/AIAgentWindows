@@ -286,7 +286,7 @@ describe('room relay', () => {
 });
 
 describe('room reply size and history file', () => {
-  function sized(reply: string, nonces: string[] = []): { room: Room; inodes: number[]; entries: string[] } {
+  function sized(reply: string, nonces: string[] = [], maxHistoryChars?: number): { room: Room; inodes: number[]; entries: string[] } {
     const inodes: number[] = [];
     const entries: string[] = [];
     let historyPath = '';
@@ -294,6 +294,7 @@ describe('room reply size and history file', () => {
       roomsDir,
       driverFor: () => Promise.resolve({ turn: () => Promise.resolve(reply), reset: () => Promise.resolve(), dispose: () => undefined }),
       newNonce: nonces.length > 0 ? () => nonces.shift() ?? 'z'.repeat(24) : undefined,
+      maxHistoryChars,
       emit: (event) => {
         if (event.type === 'started') historyPath = event.historyPath;
         if (event.type === 'entry' && event.entry.kind === 'reply') entries.push(event.entry.text);
@@ -318,19 +319,25 @@ describe('room reply size and history file', () => {
   });
 
   it('caps the whole history: replies stop growing it once the budget is spent', async () => {
-    const t = sized('h'.repeat(MAX_REPLY_CHARS));
+    const budget = 4_000;
+    const t = sized('h'.repeat(1_000), [], budget);
     const result = await t.room.start(config([A, B, C], { rounds: 3 })).done;
     const file = await readFile(result.historyPath, 'utf8');
     expect(result.status).toBe('done');
-    expect(file.length).toBeLessThan(MAX_HISTORY_CHARS + 20_000);
+    expect(file.length).toBeLessThan(budget + 20_000);
     expect(result.entries).toHaveLength(10);
     expect(result.entries[9]?.text).toMatch(/\[truncated \d+ chars\]$/);
   });
 
-  function scripted(turns: Array<string | Error>): Room {
+  it('keeps the default history budget at 4,000,000 characters', () => {
+    expect(MAX_HISTORY_CHARS).toBe(4_000_000);
+  });
+
+  function scripted(turns: Array<string | Error>, maxHistoryChars?: number): Room {
     let call = 0;
     const room = new Room({
       roomsDir,
+      maxHistoryChars,
       driverFor: () =>
         Promise.resolve({
           turn: () => {
@@ -357,10 +364,11 @@ describe('room reply size and history file', () => {
   });
 
   it('charges error entries against the history budget once replies have spent it', async () => {
-    const room = scripted(['r'.repeat(MAX_REPLY_CHARS), new Error('E'.repeat(400))]);
+    const budget = 3_000;
+    const room = scripted(['r'.repeat(1_000), new Error('E'.repeat(400))], budget);
     const result = await room.start(config([A, B], { rounds: 20 })).done;
     const total = result.entries.reduce((sum, entry) => sum + entry.text.length, 0);
-    expect(total).toBeLessThanOrEqual(MAX_HISTORY_CHARS + 64 * result.entries.length);
+    expect(total).toBeLessThanOrEqual(budget + 64 * result.entries.length);
     expect(result.entries.some((entry) => entry.kind === 'error')).toBe(true);
   });
 
