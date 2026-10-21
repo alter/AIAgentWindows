@@ -83,6 +83,9 @@ test('in test mode the main window stays hidden', async () => {
   const hiddenPage = await hidden.firstWindow();
   await expect(hiddenPage.locator('button[aria-haspopup="menu"]')).toBeAttached();
   expect(await visible(hidden)).toEqual([false]);
+  if (process.platform === 'darwin') {
+    expect(await hidden.evaluate(({ app }) => app.dock?.isVisible())).toBe(false);
+  }
   await hidden.close();
 });
 

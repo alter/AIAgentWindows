@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
-import { windowsVisible } from '../shared/window-visibility';
+import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
 import { codexHome, listRollouts } from './codex-rollouts';
@@ -15,6 +15,7 @@ import { loadState } from './state-file';
 
 const userDataOverride = process.env['AIAW_USER_DATA'];
 if (userDataOverride) app.setPath('userData', userDataOverride);
+if (dockHidden(process.env, process.platform)) app.dock?.hide();
 
 const smokeExit = process.argv.includes('--smoke-exit');
 let mainWindow: BrowserWindow | null = null;

@@ -5,3 +5,7 @@ export function windowsVisible(env: VisibilityEnv): boolean {
   const testMode = (env['AIAW_USER_DATA'] ?? '').length > 0;
   return !testMode || env['AIAW_SHOW_WINDOWS'] === '1';
 }
+
+export function dockHidden(env: VisibilityEnv, platform: string): boolean {
+  return platform === 'darwin' && !windowsVisible(env);
+}
