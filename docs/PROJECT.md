@@ -28,7 +28,7 @@ One state per row: `included` (present, expected to work) · `available` (partly
 | Capability | State | Note |
 |---|---|---|
 | Slack-like shell (agent sidebar, tabs, multiple windows) | included | |
-| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. The pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder/Explorer does not inherit it). Launched with `--session-id <uuid>` and `--add-dir <shared dir>`. Text goes in by bracketed paste into the pty; the last reply is read from the session transcript `~/.claude/projects/<cwd slug>/<session-id>.jsonl` (`type: assistant` records), never by scraping the terminal. That format is internal and unversioned: the parser skips unknown records, and when it finds no reply the user's terminal selection is the fallback |
+| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. The pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder/Explorer does not inherit it). Each window has a working directory the user picks when creating it (the transcript slug derives from it); `claude` is launched there with a fresh `--session-id <uuid>` and `--add-dir <shared dir>`. Text goes in by bracketed paste into the pty; the last reply is read from the session transcript `~/.claude/projects/<cwd slug>/<session-id>.jsonl` (`type: assistant` records with `isSidechain` false — subagent turns live in the same file), never by scraping the terminal. That format is internal and unversioned: the parser skips unknown records, and when it finds no reply the user's terminal selection is the fallback |
 | ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window. Feasibility unproven: Google sign-in may refuse embedded user agents, sites may show bot challenges to Electron — first task after `T00` is a spike on all three |
 | DOM adapters: read last reply, insert text into input | included | one isolated adapter per site; breakage must not touch other adapters; only on a user action, never in a loop. Owner's risk: OpenAI and xAI terms restrict programmatic extraction of output |
 | Forward to another window (action + window picker) | included | |
@@ -67,7 +67,7 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 
 | Question | Answer |
 |---|---|
-| Platform reach | only macOS is verifiable by the session (no remote, no CI). Windows 11 and Ubuntu 26.04 are checked by the owner's manual smoke; a task whose acceptance needs another OS keeps that check open as `[!] BLOCKED: needs <OS>` and the rest of the task proceeds. Known per-OS pitfalls go to `docs/tech/` at `T00`: node-pty native rebuild for the Electron ABI and Windows ConPTY; Ubuntu's AppArmor restriction on unprivileged user namespaces breaking the Chromium sandbox of unpacked/AppImage builds |
+| Platform reach | only macOS is verifiable by the session (no remote, no CI). Windows 11 and Ubuntu 26.04 are checked by the owner's manual smoke; `/plan` therefore never puts another OS into a code task's acceptance: the code task closes on macOS plus its tests, and per-OS verification is its own task, closed by the owner after the manual smoke (`[!] BLOCKED: needs <OS>` until then). Known per-OS pitfalls go to `docs/tech/` at `T00`: node-pty native rebuild for the Electron ABI and Windows ConPTY; Ubuntu's AppArmor restriction on unprivileged user namespaces breaking the Chromium sandbox of unpacked/AppImage builds |
 | A non-production target is recognised by (database name, kube context, workspace, profile, host group) | n/a: no live backend. Tests never talk to the real chatgpt.com, grok.com, chat.deepseek.com or claude accounts unless the owner runs a named live-smoke command themselves |
 
 Commands that need the owner, as prefixes; `git-guard` refuses them in every session:
@@ -110,13 +110,15 @@ gitleaks git --no-banner --log-level error --log-opts="2393fe1..HEAD"
 Run by the night full run and at the end of a milestone, never before a single `[x]`: the whole suite, mutation testing, fuzzing, long integration. The runner does not stop at a failing command; it reports every one. A red full run holds the milestone; surviving mutants become tasks and do not hold it.
 
 ```
-#: budget=7m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
+#: budget=3m report=reports/junit-vitest-fast.xml list="npx vitest list tests/unit tests/integration"
+npx vitest run tests/unit tests/integration --reporter=junit --outputFile=reports/junit-vitest-fast.xml
+#: budget=6m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
 npx vitest run tests/full --reporter=junit --outputFile=reports/junit-vitest-full.xml
-#: budget=7m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
-npx playwright test --project=electron-smoke --reporter=junit
+#: budget=6m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
+PLAYWRIGHT_JUNIT_OUTPUT_NAME=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit
 ```
 
-Budgets are provisional until `T00` measures a run; the whole-run budget below is the cap. Reporter and list flags (`vitest list`, `--sequence.shuffle`, the pool options) are confirmed against the versions `T00` pins (`docs/tech/`); the playwright JUnit output path is set in its config to match `report=`.
+Budgets are provisional until `T00` measures a run; the whole-run budget below is the cap. Reporter and list flags (`vitest list`, `--sequence.shuffle`, the pool options) are confirmed against the versions `T00` pins (`docs/tech/`); a `--reporter` on the Playwright command line replaces the reporters of the config, so the JUnit path is given by `PLAYWRIGHT_JUNIT_OUTPUT_NAME` on the same line, not by the config. The night run repeats the unit and integration tests on purpose: it runs on a different state than any single task's fast tier.
 
 A command may carry attributes on a `#:` line directly above it. Keys: `budget` (`40m`; over it the command is stopped with its children and reported `timeout`; without it, twice the last passing time), `expect` (a postcondition on the result; exit 0 with a failed `expect` is `empty`), `report` (JUnit XML the command writes), `list` (a command that lists the tests without running them — `pytest --collect-only -q`, `go test -list .`, `cargo nextest list`, `jest --listTests`), `shards` and `parallel` (the command uses `{shard}`/`{shards}`; shard 1 runs alone first and the rest start only after it passed its budget, its `expect` and its census), `repeat` with `reason` (a declared repetition; anything else that runs a test twice is a duplicate), `mem` (`512M`, `2G`; the peak of the command's process group is sampled every half second, over it the command is stopped and reported `mem`, which holds a milestone; without it, 75% of the machine's RAM), `leftover` (a command printing one number — databases, temp dirs, containers named by tests — counted before and after; growth is a finding). With `report` and `list` the run is censused: each test ran exactly once, every listed test ran, shards are disjoint. `{shard}` counts from 1, `{shard0}` from 0 — tools differ, check yours.
 
