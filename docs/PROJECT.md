@@ -28,26 +28,17 @@ One state per row: `included` (present, expected to work) · `available` (partly
 | Capability | State | Note |
 |---|---|---|
 | Slack-like shell (agent sidebar, tabs, multiple windows) | included | |
-| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login |
+| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. The pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder/Explorer does not inherit it) |
 | ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window. Feasibility unproven: Google sign-in may refuse embedded user agents, sites may show bot challenges to Electron — first task after `T00` is a spike on all three |
 | DOM adapters: read last reply, insert text into input | included | one isolated adapter per site; breakage must not touch other adapters; only on a user action, never in a loop. Owner's risk: OpenAI and xAI terms restrict programmatic extraction of output |
 | Forward to another window (action + window picker) | included | |
 | Shared directory + manifest readable by other agents | included | markdown/JSON files. Claude Code reads the path itself; web agents cannot read files — the app inserts or attaches the content; API agents get it in the message or through a tool |
-| OpenAI API provider | included | secondary; key in OS keychain; after the subscription/free-account paths work |
+| OpenAI API provider | included | secondary, after the subscription/free-account paths work; key stored through Electron `safeStorage`; on Linux the app refuses to save a key when the backend reports plaintext (`basic_text`) |
 | Other API providers (Anthropic API, Gemini, etc.) | absent | |
 | Credential or captcha automation | absent | never |
 | Release builds, signing, notarization, auto-update | absent | build packages locally only |
 | Cloud sync, accounts, telemetry | absent | |
 | Mobile | absent | |
-
-`/intake` fills this from the repository. What counts as a capability depends on what the repository is; take the rows that apply, add the ones that are missing, and drop the rest:
-
-- **Service / web or mobile backend**: accounts and sign-in, persistent storage, file uploads, payments, admin and roles, background jobs, notifications (email, push), real-time, external integrations, a model or LLM call.
-- **Library / SDK**: the public API surface, supported runtimes and versions, optional extras, plugins or hooks, a CLI entry point.
-- **Command-line tool**: commands and subcommands, config file, network access, writing outside the working directory, self-update.
-- **Infrastructure as code**: environments (dev/stage/prod), the resources each module creates, state backend, secrets handling, destructive operations.
-- **Host or fleet configuration** (ansible, shell, dotfiles): the hosts or groups touched, services it installs or restarts, users and keys it manages, firewall rules.
-- **Data pipeline / ML**: sources, outputs, schedules, models trained or served, evaluation gates.
 
 ## 4. Decided by the agent — never asked
 
@@ -76,17 +67,22 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 
 | Question | Answer |
 |---|---|
-| A non-production target is recognised by (database name, kube context, workspace, profile, host group) | n/a: no live backend. Tests never talk to the real chatgpt.com, grok.com, chat.deepseek.com or claude accounts unless the owner runs a named live-smoke command himself |
+| A non-production target is recognised by (database name, kube context, workspace, profile, host group) | n/a: no live backend. Tests never talk to the real chatgpt.com, grok.com, chat.deepseek.com or claude accounts unless the owner runs a named live-smoke command themselves |
 
 Commands that need the owner, as prefixes; `git-guard` refuses them in every session:
 
 ```deny
 git push
 npm publish
+electron-builder --publish
+electron-builder -p
 npx electron-builder --publish
+npx electron-builder -p
 xcrun notarytool
 gh release
 ```
+
+The electron-builder config sets `publish: never`, so a plain local build can never upload (`git-guard` matches word prefixes and would not see `-p` inside an npm script).
 
 ## 6. Gate checks
 
@@ -99,27 +95,27 @@ Commands that must exit 0 before any task is marked `[x]`. `/plan` copies them i
 ```
 npx tsc --noEmit
 npx eslint .
-npx vitest run tests/unit tests/integration
+python3 scripts/coverage_gate.py --run
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*.sh' -- shellcheck -S warning
 python3 scripts/lint_changed.py --base 2393fe1 --glob '.github/workflows/*.yml' --glob '.github/workflows/*.yaml' -- actionlint
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*' -- sh -c 'for f do gitleaks dir --no-banner --log-level error "$f" || exit 1; done' sh
 gitleaks git --no-banner --log-level error --log-opts="2393fe1..HEAD"
 ```
 
-`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
+`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project; the coverage gate runs the unit and integration tests once, with coverage, and ratchets the floor — the tests are not run a second time without coverage. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
 
 ### Full tier
 
 Run by the night full run and at the end of a milestone, never before a single `[x]`: the whole suite, mutation testing, fuzzing, long integration. The runner does not stop at a failing command; it reports every one. A red full run holds the milestone; surviving mutants become tasks and do not hold it.
 
 ```
-#: budget=10m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
+#: budget=7m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
 npx vitest run tests/full --reporter=junit --outputFile=reports/junit-vitest-full.xml
-#: budget=10m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
+#: budget=7m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
 npx playwright test --project=electron-smoke --reporter=junit
 ```
 
-Reporter and list flags are confirmed against the versions `T00` pins (`docs/tech/`); the playwright JUnit output path is set in its config to match `report=`.
+Budgets are provisional until `T00` measures a run; the whole-run budget below is the cap. Reporter and list flags (`vitest list`, `--sequence.shuffle`, the pool options) are confirmed against the versions `T00` pins (`docs/tech/`); the playwright JUnit output path is set in its config to match `report=`.
 
 A command may carry attributes on a `#:` line directly above it. Keys: `budget` (`40m`; over it the command is stopped with its children and reported `timeout`; without it, twice the last passing time), `expect` (a postcondition on the result; exit 0 with a failed `expect` is `empty`), `report` (JUnit XML the command writes), `list` (a command that lists the tests without running them — `pytest --collect-only -q`, `go test -list .`, `cargo nextest list`, `jest --listTests`), `shards` and `parallel` (the command uses `{shard}`/`{shards}`; shard 1 runs alone first and the rest start only after it passed its budget, its `expect` and its census), `repeat` with `reason` (a declared repetition; anything else that runs a test twice is a duplicate), `mem` (`512M`, `2G`; the peak of the command's process group is sampled every half second, over it the command is stopped and reported `mem`, which holds a milestone; without it, 75% of the machine's RAM), `leftover` (a command printing one number — databases, temp dirs, containers named by tests — counted before and after; growth is a finding). With `report` and `list` the run is censused: each test ran exactly once, every listed test ran, shards are disjoint. `{shard}` counts from 1, `{shard0}` from 0 — tools differ, check yours.
 
@@ -139,8 +135,8 @@ The first line uses pytest-split (`--splits N --group k`, groups from 1 — http
 | How a test is marked full-only here (marker, build tag, `#[ignore]`, a directory, a separate command) | directory `tests/full/` (pty and Electron smoke); everything else under `tests/unit/` and `tests/integration/` |
 | Fast tier wall time at `T00`, seconds, from the run | measured at `T00` once the project exists |
 | Full tier budget, minutes, whole run (over it: a finding, and `/test-audit` is due) | 15 |
-| Audit: run in another order (a command, for `/test-audit`; e.g. `pytest -p random_order`, `go test -shuffle=on`) | `npx vitest run --sequence.shuffle` |
-| Audit: run in parallel (a command, for `/test-audit`; e.g. `pytest -n 4`, `go test -p 4`, `cargo nextest run`) | `npx vitest run --pool=forks --poolOptions.forks.maxForks=4` |
+| Audit: run in another order (a command, for `/test-audit`; e.g. `pytest -p random_order`, `go test -shuffle=on`) | `npx vitest run tests/unit tests/integration --sequence.shuffle` |
+| Audit: run in parallel (a command, for `/test-audit`; e.g. `pytest -n 4`, `go test -p 4`, `cargo nextest run`) | `npx vitest run tests/unit tests/integration --pool=forks --poolOptions.forks.maxForks=4` |
 | Audit: isolation between parallel workers (a command that runs two workers and fails when one sees the other's data) | n/a: no shared external resource; tests use per-test temp directories |
 | Audit: calls to the external resource per test (a command printing `<test id> <count>` lines; PostgreSQL: `pg_stat_statements` deltas or driver tracing) | n/a |
 
@@ -153,8 +149,8 @@ recorded here, with a date and a reason, and never a way to make a check pass.
 
 | Question | Answer |
 |---|---|
-| Coverage command | `npx vitest run --coverage` |
-| Report format (`coverage-py` / `json-summary` / `cobertura` / `lcov` / `go`) | json-summary |
+| Coverage command | `npx vitest run tests/unit tests/integration --coverage --coverage.reporter=json-summary` (the `command` key of `.coverage-gate.json`, written at `T00`) |
+| Report format (`coverage-py` / `json-summary` / `cobertura` / `lcov` / `go`) | json-summary, `coverage/coverage-summary.json` |
 | Floor today (from the tool, not from memory) | recorded at `T00` with `--set-floor` |
 | Ratchet per task or per plan | per task |
 | Areas deliberately left uncovered, and why | none yet; DOM adapters are covered by recorded HTML fixtures, not live sites |
@@ -175,7 +171,7 @@ Read the target's `CONTRIBUTING.md` / `AGENTS.md` before filling this in; the an
 |---|---|---|
 | this repository | none | none |
 
-Whatever this says, a direct question from a person is answered by the owner, not by the session, and the session never writes in his voice outside this machine.
+Whatever this says, a direct question from a person is answered by the owner, not by the session, and the session never writes in their voice outside this machine.
 
 ## 9. Owning docs
 
