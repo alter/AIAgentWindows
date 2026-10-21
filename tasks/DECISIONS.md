@@ -11,22 +11,25 @@ cancelled, with a date and a reason.
 
 ---
 
-## D1. User agent of the embedded chat views — 2026-10-21 [proposed]
+## D1. User agent of the embedded chat views — 2026-10-21, decided by the owner
 
-**Decided.** Waiting for the owner. Proposed: the DeepSeek view sends the
-Chromium user agent without the `Electron/44.6.0` token; ChatGPT and Grok keep
-the default until a site objects.
+**Decided.** The DeepSeek view sends the Chromium user agent without the
+`Electron/44.6.0` token. ChatGPT and Grok keep the default until a site
+objects. The owner asked to remove the "Abnormal usage environment" dialog
+either at its cause or by clicking it away; the cause was chosen.
 
 **Why.** With the default user agent chat.deepseek.com shows "Abnormal usage
 environment … we recommend using our official product"; without the token it
-shows its normal sign-in form (`docs/EVIDENCE.md` W3, W4). Removing the token
-presents the app as plain Chrome to a site that asked for its official product;
-whether that is acceptable is the owner's call, next to the terms risk already
-recorded (W12–W14).
+shows its normal sign-in form (`docs/EVIDENCE.md` W3, W4). One line in the main
+process, no code running inside DeepSeek's page.
 
-**Rejected.** Keeping the default for DeepSeek: the user is told the
-environment is abnormal before signing in. Spoofing another browser's full user
-agent: more than the evidence requires.
+**Rejected.** Clicking the dialog away automatically: it would run adapter code
+on DeepSeek's page on every load, against the ledger rule "only on a user
+action, never in a loop"; it is tied to the dialog's markup; and a blind click
+on a site's warning could one day dismiss a different warning the user should
+read. Spoofing the client-hint brands too: the page still sees `Chromium`
+without `Google Chrome` in `navigator.userAgentData` (W15), but DeepSeek does
+not act on it today; revisit with the owner if it starts to.
 
 ## D2. TypeScript 6.0.3, not 7.0.2 — 2026-10-21 [already in the project]
 

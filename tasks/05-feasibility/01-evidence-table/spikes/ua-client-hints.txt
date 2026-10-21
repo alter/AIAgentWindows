@@ -1,0 +1,40 @@
+Electron 44.6.0, user agent with the Electron token removed, page https://example.com/ (secure context), 2026-10-21
+{
+ "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Safari/537.36",
+ "brands": [
+  {
+   "brand": "Not?A_Brand",
+   "version": "24"
+  },
+  {
+   "brand": "Chromium",
+   "version": "152"
+  }
+ ],
+ "high": {
+  "brands": [
+   {
+    "brand": "Not?A_Brand",
+    "version": "24"
+   },
+   {
+    "brand": "Chromium",
+    "version": "152"
+   }
+  ],
+  "fullVersionList": [
+   {
+    "brand": "Not?A_Brand",
+    "version": "24.0.0.0"
+   },
+   {
+    "brand": "Chromium",
+    "version": "152.0.7977.130"
+   }
+  ],
+  "mobile": false,
+  "platform": "macOS"
+ },
+ "webdriver": false,
+ "electronGlobals": []
+}
