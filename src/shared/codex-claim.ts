@@ -5,6 +5,7 @@ export interface Rollout {
   fileName: string;
   firstLine: string;
   createdAtMs: number;
+  filePath?: string;
 }
 
 export interface ClaimRequest {

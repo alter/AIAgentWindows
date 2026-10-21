@@ -7,13 +7,18 @@ export function claudeConfigDir(env: Readonly<Record<string, string | undefined>
   return env['CLAUDE_CONFIG_DIR'] || path.join(os.homedir(), '.claude');
 }
 
-export function claudeTranscriptExists(env: Readonly<Record<string, string | undefined>>, sessionId: string): boolean {
+export function claudeTranscriptPath(env: Readonly<Record<string, string | undefined>>, sessionId: string): string | null {
   const projects = path.join(claudeConfigDir(env), 'projects');
   let names: string[];
   try {
     names = readdirSync(projects);
   } catch {
-    return false;
+    return null;
   }
-  return names.some((name) => existsSync(path.join(projects, name, `${sessionId}.jsonl`)));
+  const found = names.map((name) => path.join(projects, name, `${sessionId}.jsonl`)).find((file) => existsSync(file));
+  return found ?? null;
+}
+
+export function claudeTranscriptExists(env: Readonly<Record<string, string | undefined>>, sessionId: string): boolean {
+  return claudeTranscriptPath(env, sessionId) !== null;
 }

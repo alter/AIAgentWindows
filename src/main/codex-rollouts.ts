@@ -1,8 +1,8 @@
 // codex-rollouts.ts
-import { open, readdir, stat } from 'node:fs/promises';
+import { open, readdir, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { Rollout } from '../shared/codex-claim';
+import { claimRollout, rolloutId, type Rollout } from '../shared/codex-claim';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_DAYS = 60;
@@ -35,7 +35,7 @@ async function readRollout(directory: string, fileName: string): Promise<Rollout
   const file = path.join(directory, fileName);
   try {
     const info = await stat(file);
-    return { fileName, firstLine: await readFirstLine(file), createdAtMs: info.birthtimeMs || info.mtimeMs };
+    return { fileName, firstLine: await readFirstLine(file), createdAtMs: info.birthtimeMs || info.mtimeMs, filePath: file };
   } catch {
     return null;
   }
@@ -58,4 +58,26 @@ export async function listRollouts(home: string, sinceMs: number, nowMs: number 
   for (let time = first; time <= nowMs + DAY_MS; time += DAY_MS) directories.add(dayDirectory(home, time));
   const lists = await Promise.all([...directories].map((directory) => listDirectory(directory)));
   return lists.flat();
+}
+
+export interface RolloutLocatorRequest {
+  cwd: string;
+  spawnedAtMs: number;
+  claimed: ReadonlySet<string>;
+}
+
+export function codexRolloutLocator(
+  env: Readonly<Record<string, string | undefined>>,
+  request: RolloutLocatorRequest,
+): () => Promise<string | null> {
+  let found: string | null = null;
+  return async () => {
+    if (found !== null) return found;
+    const rollouts = await listRollouts(codexHome(env), request.spawnedAtMs);
+    const cwd = await realpath(request.cwd).catch(() => request.cwd);
+    const id = claimRollout({ ...request, cwd, rollouts });
+    const match = rollouts.find((rollout) => rolloutId(rollout.fileName) === id);
+    found = id === null ? null : (match?.filePath ?? null);
+    return found;
+  };
 }
