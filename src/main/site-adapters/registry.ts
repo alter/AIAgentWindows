@@ -1,9 +1,8 @@
 // registry.ts
-import type { SiteKind } from '../../shared/agents';
+import { SITE_KINDS_WITH_ADAPTER, type SiteKind } from '../../shared/agents';
+import { createGenericAdapter } from './generic-adapter';
 import type { SiteAdapter } from './types';
 
-const ADAPTERS: Readonly<Partial<Record<SiteKind, SiteAdapter>>> = {};
-
 export function adapterFor(kind: SiteKind): SiteAdapter | null {
-  return ADAPTERS[kind] ?? null;
+  return SITE_KINDS_WITH_ADAPTER.includes(kind) ? createGenericAdapter(kind) : null;
 }

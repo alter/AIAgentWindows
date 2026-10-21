@@ -213,34 +213,34 @@ describe('formToConfig', () => {
 
 describe('participants without an adapter', () => {
   const WEB: readonly SiteKind[] = ['chatgpt', 'grok', 'deepseek'];
+  const NONE: readonly SiteKind[] = [];
 
-  it('CLI participants are available, a web participant without an adapter is not and says what is needed', () => {
+  it('CLI participants are always available; a web participant is available only with an adapter and says what is missing', () => {
     for (const item of ROOM_PARTICIPANTS) {
-      const state = participantAvailability(item);
-      const withoutAdapter = isSiteKind(item.kind) && !SITE_KINDS_WITH_ADAPTER.includes(item.kind);
-      expect(state.available).toBe(!withoutAdapter);
-      if (withoutAdapter) expect(state.note).toContain('npm run capture-sites');
+      const web = isSiteKind(item.kind);
+      expect(participantAvailability(item, NONE).available).toBe(!web);
+      expect(participantAvailability(item).available).toBe(true);
+      if (web) expect(participantAvailability(item, NONE).note).toContain('no site adapter');
     }
   });
 
-  it('the list of sites with an adapter is the registry', () => {
+  it('every web site has an adapter and the list of sites with an adapter is the registry', () => {
+    expect([...SITE_KINDS_WITH_ADAPTER].sort()).toEqual([...WEB].sort());
     for (const kind of WEB) expect(adapterFor(kind) !== null).toBe(SITE_KINDS_WITH_ADAPTER.includes(kind));
   });
 
   it('a ticked web participant without an adapter is refused before the run starts', () => {
     const form: RoomFormValues = { prompt: 'hello', mode: 'broadcast', rounds: '1', timeoutMinutes: '10', checked: ['claude', 'deepseek'] };
-    const result = formToConfig(form);
+    const result = formToConfig(form, NONE);
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error).toContain('DeepSeek');
-      expect(result.error).toContain('npm run capture-sites');
-    }
+    if (!result.ok) expect(result.error).toContain('DeepSeek');
+    expect(formToConfig(form).ok).toBe(true);
   });
 
   it('the driver error for a missing adapter names the missing adapter, not the chat page', () => {
     const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, adapterFor: () => null });
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
-    expect(() => seats(deepseek)).toThrow(/DeepSeek.*npm run capture-sites/);
+    expect(() => seats(deepseek)).toThrow(/DeepSeek has no site adapter/);
   });
 });

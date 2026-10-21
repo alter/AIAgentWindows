@@ -1,5 +1,5 @@
 // room-view.ts
-import { SITE_KINDS_WITH_ADAPTER, isSiteKind } from './agents';
+import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
 import { renderCarryHistory } from './room-history';
 import {
   ROOM_PARTICIPANTS,
@@ -46,12 +46,15 @@ export interface ParticipantAvailability {
 }
 
 export function missingAdapterNote(label: string): string {
-  return `${label} has no site adapter yet (needs \`npm run capture-sites\`)`;
+  return `${label} has no site adapter`;
 }
 
-export function participantAvailability(participant: RoomParticipant): ParticipantAvailability {
+export function participantAvailability(
+  participant: RoomParticipant,
+  withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER,
+): ParticipantAvailability {
   const kind = participant.kind;
-  if (!isSiteKind(kind) || SITE_KINDS_WITH_ADAPTER.includes(kind)) return { available: true, note: '' };
+  if (!isSiteKind(kind) || withAdapter.includes(kind)) return { available: true, note: '' };
   return { available: false, note: missingAdapterNote(participant.label) };
 }
 
@@ -83,10 +86,10 @@ export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | nul
   return last === undefined || last.text.length === 0 ? null : last.text;
 }
 
-export function formToConfig(form: RoomFormValues): RoomConfigResult {
+export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): RoomConfigResult {
   const participants = ROOM_PARTICIPANTS.filter((item) => form.checked.includes(item.id));
-  const unavailable = participants.find((item) => !participantAvailability(item).available);
-  if (unavailable !== undefined) return { ok: false, error: participantAvailability(unavailable).note };
+  const unavailable = participants.find((item) => !participantAvailability(item, withAdapter).available);
+  if (unavailable !== undefined) return { ok: false, error: participantAvailability(unavailable, withAdapter).note };
   const rounds = Number(form.rounds);
   const minutes = form.timeoutMinutes.trim() === '' ? Number.NaN : Number(form.timeoutMinutes);
   return parseRoomConfig({

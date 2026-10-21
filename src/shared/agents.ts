@@ -4,7 +4,7 @@ export type AgentKind = (typeof AGENT_KINDS)[number];
 export type CliKind = 'claude' | 'codex';
 export type SiteKind = 'chatgpt' | 'grok' | 'deepseek';
 
-export const SITE_KINDS_WITH_ADAPTER: readonly SiteKind[] = [];
+export const SITE_KINDS_WITH_ADAPTER: readonly SiteKind[] = ['chatgpt', 'grok', 'deepseek'];
 
 export const AGENT_LABELS: Readonly<Record<AgentKind, string>> = {
   claude: 'Claude Code',

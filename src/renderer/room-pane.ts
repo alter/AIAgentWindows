@@ -129,7 +129,7 @@ export class RoomPane {
       if (!availability.available) {
         item.title = availability.note;
         item.classList.add('unavailable');
-        item.append(el('span', 'room-unavailable', 'needs `npm run capture-sites`'));
+        item.append(el('span', 'room-unavailable', 'no adapter'));
       }
       people.append(item);
     }

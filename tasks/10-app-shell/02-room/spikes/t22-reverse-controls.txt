@@ -1,0 +1,33 @@
+T22 reverse controls (code broken in place, restored byte for byte; failing tests of tests/unit/generic-adapter.test.ts)
+--- C1
+     × falls back to the send button next to the composer when Enter does nothing 58ms
+     × fails with a typed error when neither Enter nor an enabled button submits 59ms
+     × reads the whole streamed reply of a contenteditable submitted by the button 666ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  3 failed | 21 passed (24)
+--- C2
+     × finishes a repeated identical prompt, whose text is also inside the earlier reply 627ms
+     × fails with no-response when the page never answers 228ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 22 passed (24)
+--- C3
+     × reads the whole streamed reply of a textarea without a stop button 94ms
+     × times out when the reply keeps growing 90ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 22 passed (24)
+--- C4
+     × inserts markup as literal text into the visible composer ?composer=editable 22ms
+     × inserts markup as literal text into the visible composer ?composer=editable&badexec=1 14ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  2 failed | 22 passed (24)
+--- C5
+     × reads the whole streamed reply of a textarea with a stop button 4060ms
+     × reads the whole streamed reply of a contenteditable with a stop button 4058ms
+     × reads the whole streamed reply of a textarea without a stop button 666ms
+     × reads the whole streamed reply of a contenteditable submitted by the button 4056ms
+     × takes the text after the prompt only: no sidebar, no footer, no earlier messages 4061ms
+     × finishes a repeated identical prompt, whose text is also inside the earlier reply 4059ms
+     × returns reply markup as text 4057ms
+     × never returns more than the reply limit 4064ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  8 failed | 16 passed (24)

@@ -1,0 +1,111 @@
+<!doctype html>
+<!-- composer.html -->
+<html lang="en">
+  <head><meta charset="utf-8" /><title>Composer fixture</title></head>
+  <body>
+    <nav id="history"><ul><li>Older chat about cats</li></ul></nav>
+    <main id="log"><div class="msg assistant">Welcome. Ask me anything.</div></main>
+    <footer id="disclaimer">The model can make mistakes.</footer>
+    <form id="composer" onsubmit="return false">
+      <textarea id="decoy" aria-label="Hidden fallback" hidden></textarea>
+      <textarea id="ta" aria-label="Message"></textarea>
+      <div id="ce" contenteditable="true" role="textbox" aria-label="Message"><p></p></div>
+      <button id="attach" type="button" aria-label="Attach file">+</button>
+      <button id="mic" type="button" aria-label="Voice input">mic</button>
+      <button id="send" type="button" aria-label="Send message" disabled>Send</button>
+      <button id="stop" type="button" aria-label="Stop generating" hidden>Stop</button>
+      <input id="file" type="file" />
+    </form>
+    <script>
+      const query = new URLSearchParams(location.search);
+      const composerKind = query.get('composer') === 'editable' ? 'editable' : 'textarea';
+      const ta = document.getElementById('ta');
+      const ce = document.getElementById('ce');
+      const send = document.getElementById('send');
+      const stop = document.getElementById('stop');
+      const log = document.getElementById('log');
+      const history = document.querySelector('#history ul');
+      window.attachClicks = 0;
+      window.micClicks = 0;
+      window.submissions = 0;
+      if (composerKind === 'editable') ta.hidden = true;
+      else ce.hidden = true;
+      if (query.has('exec')) {
+        document.execCommand = (name, _ui, value) => {
+          if (name !== 'insertText') return false;
+          ce.replaceChildren(...String(value).split('\n').map((line) => {
+            const row = document.createElement('p');
+            row.textContent = line;
+            return row;
+          }));
+          ce.dispatchEvent(new InputEvent('input', { bubbles: true }));
+          return true;
+        };
+      }
+      if (query.has('badexec')) document.execCommand = () => false;
+
+      function ceText() {
+        return Array.from(ce.children).map((kid) => kid.textContent).join('\n');
+      }
+      function pending() {
+        return composerKind === 'editable' ? ceText() : ta.value;
+      }
+      function refresh() {
+        send.disabled = pending().trim() === '' || query.has('sendoff');
+      }
+      function add(role, lines) {
+        const node = document.createElement('div');
+        node.className = 'msg ' + role;
+        for (const line of lines) {
+          const row = document.createElement('p');
+          row.textContent = line;
+          node.appendChild(row);
+        }
+        log.appendChild(node);
+        return node;
+      }
+      function submit() {
+        const text = pending();
+        if (text.trim() === '') return;
+        window.submissions += 1;
+        ta.value = '';
+        ce.replaceChildren(document.createElement('p'));
+        refresh();
+        add('user', text.split('\n'));
+        const item = document.createElement('li');
+        item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
+        history.appendChild(item);
+        if (query.has('silent')) return;
+        const stopVisible = !query.has('nostop');
+        if (stopVisible) stop.hidden = false;
+        const reply = add('assistant', []);
+        const row = document.createElement('p');
+        reply.appendChild(row);
+        const chunks = ['ECHO: ' + text, ' part-2', ' part-3'];
+        let index = 0;
+        const timer = setInterval(() => {
+          row.textContent += chunks[index];
+          index += 1;
+          if (index < chunks.length) return;
+          if (query.has('stall')) { row.textContent += ' ' + Date.now(); return; }
+          clearInterval(timer);
+          stop.hidden = true;
+        }, 40);
+      }
+      for (const [id, key] of [['ta', 'ta'], ['ce', 'ce']]) {
+        const el = document.getElementById(id);
+        el.addEventListener('input', refresh);
+        el.addEventListener('keydown', (event) => {
+          if (query.has('noenter')) return;
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            submit();
+          }
+        });
+      }
+      send.addEventListener('click', submit);
+      document.getElementById('attach').addEventListener('click', () => { window.attachClicks += 1; });
+      document.getElementById('mic').addEventListener('click', () => { window.micClicks += 1; });
+    </script>
+  </body>
+</html>
