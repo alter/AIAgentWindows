@@ -1,0 +1,56 @@
+{
+  "site": "deepseek",
+  "status": "saved",
+  "landingPath": "/",
+  "conversationLinkFound": true,
+  "loadedPath": "/a/chat/s/:id",
+  "wait": {
+    "polls": 4,
+    "waitedMs": 1510,
+    "messageListSeen": true,
+    "replySeen": false,
+    "settled": true,
+    "timedOut": false
+  },
+  "viewport": {
+    "width": 1340,
+    "height": 964
+  },
+  "mainRegion": false,
+  "elements": {
+    "before": {
+      "a": 4,
+      "body": 1,
+      "div": 144,
+      "input": 1,
+      "other": 75,
+      "p": 1,
+      "script": 1,
+      "span": 3,
+      "svg": 17,
+      "textarea": 1
+    },
+    "after": {
+      "a": 4,
+      "body": 1,
+      "div": 144,
+      "input": 1,
+      "p": 1,
+      "span": 3,
+      "svg": 17,
+      "textarea": 1
+    }
+  },
+  "classes": {
+    "seen": 273,
+    "closed": 1,
+    "stylesheet": 0,
+    "dropped": 272
+  },
+  "stylesheets": {
+    "total": 4,
+    "readable": 2,
+    "unreadable": 2,
+    "classNames": 8
+  }
+}
