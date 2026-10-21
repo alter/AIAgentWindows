@@ -389,10 +389,51 @@ describe('room broadcast', () => {
       return `held ${call}`;
     };
     const t = rig({ a: hold, c: hold });
-    const result = await t.room.start(config([A, C], { mode: 'broadcast', rounds: 5 })).done;
+    const result = await t.room.start(config([A, C], { mode: 'broadcast', rounds: 1 })).done;
     expect(started).toBe(2);
     expect(t.drivers.get('c')?.requests[0]?.text).not.toContain('held');
     expect(result.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(2);
+    expect(t.drivers.get('a')?.requests).toHaveLength(1);
+  });
+
+  it('runs every round for everyone in parallel and hands each later round the whole history so far', async () => {
+    const t = rig();
+    const result = await t.room.start(config([A, B], { mode: 'broadcast', rounds: 3 })).done;
+    expect(result.status).toBe('done');
+    expect(result.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(6);
+    const a = t.drivers.get('a');
+    const b = t.drivers.get('b');
+    expect(a?.requests).toHaveLength(3);
+    expect(b?.requests).toHaveLength(3);
+    for (const driver of [a, b]) {
+      const first = driver?.requests[0]?.historyText ?? '';
+      expect(first).toContain('the question');
+      expect(first).not.toContain('reply a1');
+      expect(first).not.toContain('reply b1');
+      const second = driver?.requests[1]?.historyText ?? '';
+      expect(ascending(positions(second, ['the question', 'reply a1', 'reply b1']))).toBe(true);
+      expect(second).not.toContain('reply a2');
+      expect(second).not.toContain('reply b2');
+      const third = driver?.requests[2]?.historyText ?? '';
+      expect(ascending(positions(third, ['the question', 'reply a1', 'reply b1', 'reply a2', 'reply b2']))).toBe(true);
+      expect(third).not.toContain('reply a3');
+    }
+    expect(a?.requests[1]?.text).not.toBe(a?.requests[0]?.text);
+    const total = t.events.filter((event) => event.type === 'progress').map((event) => event.total);
+    expect(new Set(total)).toEqual(new Set([6]));
+  });
+
+  it('stops between rounds when the owner presses Stop', async () => {
+    let room: Room | null = null;
+    const t = rig({
+      a: (_request, call) => {
+        if (call === 1) room?.stop();
+        return Promise.resolve(`reply a${call}`);
+      },
+    });
+    room = t.room;
+    const result = await room.start(config([A, B], { mode: 'broadcast', rounds: 3 })).done;
+    expect(result.status).toBe('stopped');
     expect(t.drivers.get('a')?.requests).toHaveLength(1);
   });
 });

@@ -87,7 +87,7 @@ export function formToConfig(form: RoomFormValues): RoomConfigResult {
   const participants = ROOM_PARTICIPANTS.filter((item) => form.checked.includes(item.id));
   const unavailable = participants.find((item) => !participantAvailability(item).available);
   if (unavailable !== undefined) return { ok: false, error: participantAvailability(unavailable).note };
-  const rounds = form.mode === 'broadcast' ? 1 : Number(form.rounds);
+  const rounds = Number(form.rounds);
   const minutes = form.timeoutMinutes.trim() === '' ? Number.NaN : Number(form.timeoutMinutes);
   return parseRoomConfig({
     prompt: form.prompt,

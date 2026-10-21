@@ -234,7 +234,7 @@ export class RoomPane {
     this.prompt.disabled = busy;
     this.mode.disabled = busy;
     this.timeout.disabled = busy;
-    this.rounds.disabled = busy || this.mode.value === 'broadcast';
+    this.rounds.disabled = busy;
     for (const participant of ROOM_PARTICIPANTS) {
       const input = this.boxes.get(participant.id);
       if (input !== undefined) input.disabled = busy || !participantAvailability(participant).available;

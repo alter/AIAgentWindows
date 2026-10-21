@@ -44,7 +44,7 @@ async function fill(page: Page, mode: 'broadcast' | 'relay', rounds: number, pro
   await field(page, 'prompt').fill(prompt);
   for (const id of ['claude', 'codex']) await page.locator(`input[data-participant="${id}"]`).check();
   await field(page, 'mode').selectOption(mode);
-  if (mode === 'relay') await field(page, 'rounds').fill(String(rounds));
+  await field(page, 'rounds').fill(String(rounds));
 }
 
 async function run(page: Page, mode: 'broadcast' | 'relay', rounds: number, prompt: string): Promise<void> {
@@ -148,6 +148,7 @@ test('a folder trust dialog pauses the run, shows the terminal, and Resume finis
     await field(page, 'prompt').fill('trust question');
     await page.locator('input[data-participant="claude"]').check();
     await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'rounds').fill('1');
     await field(page, 'start').click();
     await expect(field(page, 'resume')).toBeVisible();
     await expect(field(page, 'pause-note')).toContainText('accept the folder once');

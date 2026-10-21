@@ -59,6 +59,16 @@ describe('buildParticipantPrompt', () => {
     expect(prompt.text).not.toContain('an answer');
   });
 
+  it('asks a continuing participant for something other than the plain first answer, keeping the history delivery', () => {
+    for (const participant of [A, B]) {
+      const first = buildParticipantPrompt(participant, 'r1', history);
+      const next = buildParticipantPrompt(participant, 'r1', history, true);
+      expect(next.text).not.toBe(first.text);
+      expect(next.attachHistory).toBe(first.attachHistory);
+      expect(next.placeHistory).toBe(first.placeHistory);
+    }
+  });
+
   it('inlines the whole history for a web participant up to the limit', () => {
     const prompt = buildParticipantPrompt(B, 'r1', history);
     expect(prompt.attachHistory).toBe(false);

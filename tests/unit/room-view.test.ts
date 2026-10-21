@@ -204,9 +204,10 @@ describe('formToConfig', () => {
     expect(result.ok && result.config.participants.length).toBe(1);
   });
 
-  it('broadcast ignores the rounds field', () => {
-    const result = formToConfig({ ...form, mode: 'broadcast', rounds: 'junk' });
-    expect(result.ok && result.config.rounds).toBe(1);
+  it('broadcast takes the rounds field like relay does', () => {
+    const result = formToConfig({ ...form, mode: 'broadcast', rounds: '4' });
+    expect(result.ok && result.config.rounds).toBe(4);
+    expect(formToConfig({ ...form, mode: 'broadcast', rounds: 'junk' }).ok).toBe(false);
   });
 });
 

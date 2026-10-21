@@ -170,7 +170,7 @@ export class Room {
     const now = this.now();
     const roomId = this.deps.newId?.() ?? defaultRoomId(now);
     const historyPath = path.join(this.deps.roomsDir, `${roomId}.md`);
-    const total = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length;
+    const total = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length * config.rounds;
     const run = new RunState(roomId, historyPath, config, total, this.deps.newNonce);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
@@ -227,13 +227,16 @@ export class Room {
   private async relay(run: RunState): Promise<void> {
     for (const participant of relaySchedule(run.config.participants, run.config.rounds)) {
       if (run.signal.aborted) return;
-      await this.step(run, participant, [...run.entries]);
+      await this.step(run, participant, [...run.entries], false);
     }
   }
 
   private async broadcast(run: RunState): Promise<void> {
-    const seen = [...run.entries];
-    await Promise.all(run.config.participants.map((participant) => this.step(run, participant, seen)));
+    for (let round = 0; round < run.config.rounds; round += 1) {
+      if (run.signal.aborted) return;
+      const seen = [...run.entries];
+      await Promise.all(run.config.participants.map((participant) => this.step(run, participant, seen, round > 0)));
+    }
   }
 
   private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string): void {
@@ -258,9 +261,9 @@ export class Room {
     return driver;
   }
 
-  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[]): Promise<void> {
+  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], continuation: boolean): Promise<void> {
     this.progress(run, participant, 'running');
-    const outcome = await this.turn(run, participant, seen);
+    const outcome = await this.turn(run, participant, seen, continuation);
     if (outcome.kind === 'aborted') return;
     const kind: RoomEntryKind = outcome.kind === 'reply' ? 'reply' : 'error';
     this.append(run, participant.id, participant.label, kind, outcome.text);
@@ -268,11 +271,16 @@ export class Room {
     this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : 'failed');
   }
 
-  private async turn(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[]): Promise<TurnOutcome> {
+  private async turn(
+    run: RunState,
+    participant: RoomParticipant,
+    seen: readonly RoomEntry[],
+    continuation: boolean,
+  ): Promise<TurnOutcome> {
     let driver: ParticipantDriver | null = null;
     try {
       driver = await this.driver(participant);
-      const prompt = buildParticipantPrompt(participant, run.id, seen);
+      const prompt = buildParticipantPrompt(participant, run.id, seen, continuation);
       const request: TurnRequest = {
         text: prompt.text,
         attachPath: prompt.attachHistory ? run.historyPath : null,
