@@ -3,7 +3,7 @@ intake: completed 2026-10-21
 ---
 # PROJECT
 
-Single source of truth for what this project is, what it contains, and what the agent may decide alone. `/plan` reads it before every task. Cells hold `_unanswered_` until asked, `n/a` when not applicable.
+Single source of truth for what this project is, what it contains, and what the agent may decide alone. `/plan` reads it before every task. Unasked cells stay open until asked, `n/a` when not applicable.
 
 ## 1. Identity
 
@@ -171,7 +171,7 @@ recorded here, with a date and a reason, and never a way to make a check pass.
 
 ## 8. Disclosure required by the receiving repository
 
-Read the target's `CONTRIBUTING.md` / `AGENTS.md` before filling this in; the answer belongs to them, not to us. `none` means the repository asks for nothing and nothing is volunteered. A wording means it is inserted verbatim into the pull-request body. `_unanswered_` blocks opening a pull request there.
+Read the target's `CONTRIBUTING.md` / `AGENTS.md` before filling this in; the answer belongs to them, not to us. `none` means the repository asks for nothing and nothing is volunteered. A wording means it is inserted verbatim into the pull-request body. An open cell blocks opening a pull request there.
 
 | Target | What it requires | Wording to use |
 |---|---|---|
