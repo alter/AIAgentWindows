@@ -164,8 +164,9 @@ body {
   opacity: 0.7;
 }
 
-.terminal-pane { position: relative; flex: 1; min-height: 0; padding: 8px 0 0 12px; background: var(--content-bg); }
-.terminal-pane .xterm { height: 100%; }
+.terminal-pane { position: relative; flex: 1; min-height: 0; background: var(--content-bg); }
+.terminal-host { position: absolute; inset: 10px; }
+.terminal-host .xterm { height: 100%; }
 
 .agent-list li { position: relative; }
 .agent-item { padding-right: 30px; }

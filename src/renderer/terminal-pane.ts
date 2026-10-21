@@ -16,6 +16,7 @@ export class TerminalPane {
     fontSize: 13,
     theme: { background: '#1a1d21', foreground: '#d1d2d3' },
   });
+  private readonly host = el('div', 'terminal-host');
   private readonly fit = new FitAddon();
   private readonly restartButton = el('button', 'restart-button', 'Restart');
   private opened = false;
@@ -28,7 +29,7 @@ export class TerminalPane {
     this.restartButton.type = 'button';
     this.restartButton.hidden = true;
     this.restartButton.addEventListener('click', () => void this.restart());
-    this.element.append(this.restartButton);
+    this.element.append(this.host, this.restartButton);
     this.terminal.loadAddon(this.fit);
     this.terminal.attachCustomKeyEventHandler((event) => this.handleKey(event));
     this.terminal.onData((data) => void api.ptyWrite(this.id, data));
@@ -64,7 +65,7 @@ export class TerminalPane {
     this.element.hidden = false;
     if (!this.opened) {
       this.opened = true;
-      this.terminal.open(this.element);
+      this.terminal.open(this.host);
     }
     this.refit();
     this.terminal.focus();

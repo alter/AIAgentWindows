@@ -85,8 +85,8 @@ test('switching between two terminal agents keeps the visible pane filling the w
         const screen = pane?.querySelector<HTMLElement>('.xterm-screen');
         const rows = pane?.querySelector<HTMLElement>('.xterm-rows');
         if (!pane || !screen || !rows) return { gap: Number.POSITIVE_INFINITY, row: 1 };
-        const style = getComputedStyle(pane);
-        const inner = pane.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+        const host = pane?.querySelector<HTMLElement>('.terminal-host');
+        const inner = host?.clientHeight ?? 0;
         const row = rows.firstElementChild?.getBoundingClientRect().height ?? 1;
         return { gap: inner - screen.getBoundingClientRect().height, row };
       });
@@ -99,6 +99,33 @@ test('switching between two terminal agents keeps the visible pane filling the w
           return gap < row;
         })
         .toBe(true);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
+test('the terminal text keeps a gap of at least 4 px from every edge of the pane for a Claude and a Codex agent', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder);
+  try {
+    const page = await app.firstWindow();
+    for (const kind of ['claude', 'codex']) {
+      await addAgent(page, kind);
+      await expect(page.locator('.terminal-pane:not([hidden]) .xterm-rows')).toContainText('STUB-CLI BANNER');
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const pane = document.querySelector<HTMLElement>('.terminal-pane:not([hidden])');
+            const screen = pane?.querySelector<HTMLElement>('.xterm-screen');
+            if (!pane || !screen) return Number.NEGATIVE_INFINITY;
+            const outer = pane.getBoundingClientRect();
+            const inner = screen.getBoundingClientRect();
+            return Math.min(inner.top - outer.top, inner.left - outer.left, outer.right - inner.right, outer.bottom - inner.bottom);
+          }),
+        )
+        .toBeGreaterThanOrEqual(4);
     }
   } finally {
     await app.close();
