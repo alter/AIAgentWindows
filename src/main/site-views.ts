@@ -84,7 +84,7 @@ export class SiteViews {
     const partition = `persist:${id}`;
     this.configureSession(partition, kind);
     const view = new WebContentsView({
-      webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true },
+      webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: !this.unattended() },
     });
     const contents = view.webContents;
     contents.setWindowOpenHandler(({ url }) => {
@@ -132,6 +132,10 @@ export class SiteViews {
       this.log(kind, 'check', { permission, origin: requestingOrigin, allowed });
       return allowed;
     });
+  }
+
+  private unattended(): boolean {
+    return (this.env['AIAW_CAPTURE_AUTO'] ?? '').length > 0;
   }
 
   private layout(): void {

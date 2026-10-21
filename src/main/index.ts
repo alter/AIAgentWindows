@@ -7,6 +7,8 @@ import { roomChildEnv, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
+import { CAPTURE_AUTO_ENV } from './capture-auto';
+import { runAutoCapture } from './capture-auto-main';
 import { CAPTURE_ENV, captureSites, summarizeCapture } from './capture-sites';
 import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
@@ -138,7 +140,28 @@ async function start(): Promise<void> {
   active.syncSelection();
 }
 
-void app.whenReady().then(start);
+const AUTO_LIMIT_MS = 6 * 60 * 1000;
+
+async function startAuto(outDir: string): Promise<void> {
+  const limit = setTimeout(() => app.exit(1), AUTO_LIMIT_MS);
+  try {
+    app.exit(await runAutoCapture(outDir, process.env));
+  } catch (error) {
+    console.error(`capture --auto failed: ${error instanceof Error ? error.message : 'unknown error'}`);
+    app.exit(1);
+  } finally {
+    clearTimeout(limit);
+  }
+}
+
+const autoDir = process.env[CAPTURE_AUTO_ENV];
+void app.whenReady().then(() => {
+  if (autoDir === undefined || autoDir === '') return start();
+  if (path.isAbsolute(autoDir)) return startAuto(autoDir);
+  console.error(`${CAPTURE_AUTO_ENV} must be an absolute path`);
+  app.exit(2);
+  return undefined;
+});
 let quitting = false;
 app.on('before-quit', (event) => {
   const active = controller;

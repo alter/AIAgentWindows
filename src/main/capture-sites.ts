@@ -18,6 +18,7 @@ export interface CaptureResult {
   ok: boolean;
   path?: string;
   error?: string;
+  leak?: boolean;
 }
 
 interface PageAnswer {
@@ -36,7 +37,7 @@ function parseAnswer(raw: unknown): PageAnswer {
   }
 }
 
-async function captureOne(target: CaptureTarget, outDir: string): Promise<CaptureResult> {
+export async function captureOne(target: CaptureTarget, outDir: string): Promise<CaptureResult> {
   const site = target.kind;
   let answer: PageAnswer;
   try {
@@ -46,7 +47,8 @@ async function captureOne(target: CaptureTarget, outDir: string): Promise<Captur
   }
   if (!answer.ok || typeof answer.html !== 'string') return { site, ok: false, error: answer.error ?? 'page-error' };
   const problems = findLeaks(answer.html);
-  if (problems.length > 0) return { site, ok: false, error: `not saved, sanitizer check failed: ${problems.join(', ')}` };
+  if (problems.length > 0) return { site, ok: false, leak: true, error: `not saved, sanitizer check failed: ${problems.join(', ')}` };
+  await mkdir(outDir, { recursive: true });
   const file = path.join(outDir, `${site}.html`);
   const temporary = `${file}.tmp`;
   await writeFile(temporary, answer.html, 'utf8');

@@ -1,0 +1,15 @@
+<!doctype html>
+<!-- conversation-late.html -->
+<html lang="en"><head><meta charset="utf-8"><title>Late conversation fixture</title></head>
+<body>
+<main id="log"></main>
+<script>
+  setTimeout(() => {
+    const reply = document.createElement('div');
+    reply.setAttribute('data-message-author-role', 'assistant');
+    reply.className = 'msg assistant markdown';
+    reply.textContent = 'late reply text that must not be saved';
+    document.getElementById('log').appendChild(reply);
+  }, 1500);
+</script>
+</body></html>

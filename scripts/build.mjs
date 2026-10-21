@@ -24,6 +24,13 @@ await Promise.all([
   }),
   build({
     ...common,
+    entryPoints: [at('src/main/profile-lock.ts')],
+    outfile: at('dist/scripts/profile-lock.js'),
+    platform: 'node',
+    format: 'cjs',
+  }),
+  build({
+    ...common,
     entryPoints: [at('src/preload/index.ts')],
     outfile: at('dist/preload/index.js'),
     platform: 'node',
