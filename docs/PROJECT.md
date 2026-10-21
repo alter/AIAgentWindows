@@ -122,8 +122,6 @@ Run by the night full run and at the end of a milestone, never before a single `
 ```
 #: budget=3m report=reports/junit-vitest-fast.xml list="npx vitest list tests/unit tests/integration"
 npx vitest run tests/unit tests/integration --reporter=junit --outputFile=reports/junit-vitest-fast.xml
-#: budget=6m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
-npx vitest run tests/full --reporter=junit --outputFile=reports/junit-vitest-full.xml
 #: budget=6m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
 PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit
 ```
@@ -145,7 +143,7 @@ The first line uses pytest-split (`--splits N --group k`, groups from 1 — http
 
 | Question | Answer |
 |---|---|
-| How a test is marked full-only here (marker, build tag, `#[ignore]`, a directory, a separate command) | directory `tests/full/` (pty and Electron smoke); everything else under `tests/unit/` and `tests/integration/` |
+| How a test is marked full-only here (marker, build tag, `#[ignore]`, a directory, a separate command) | directory `tests/full/`, run by Playwright (`electron-smoke`). The vitest line for `tests/full` was removed 2026-10-21: the first full run reported it `empty` (no vitest test lives there, FULLRUN-2026-10-21-171409079665 of tasks/10-app-shell/01-app-skeleton); it comes back when a vitest test is added there; everything else under `tests/unit/` and `tests/integration/` |
 | Fast tier wall time at `T00`, seconds, from the run | measured at `T00` once the project exists |
 | Full tier budget, minutes, whole run (over it: a finding, and `/test-audit` is due) | 15 |
 | Audit: run in another order (a command, for `/test-audit`; e.g. `pytest -p random_order`, `go test -shuffle=on`) | `npx vitest run tests/unit tests/integration --sequence.shuffle` |
