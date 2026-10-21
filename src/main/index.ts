@@ -5,6 +5,7 @@ import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
+import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { installMenu } from './menu';
 import { SiteViews } from './site-views';
@@ -67,10 +68,12 @@ async function start(): Promise<void> {
       },
       siteNav: (id, action) => siteViews.navigate(id, action),
       showSite: (agent) => siteViews.show(agent),
+      listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
     },
     state,
   );
   const active = controller;
+  await active.restore();
   registerIpc(active, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   installMenu(process.platform === 'darwin', (action) => {
     const selected = active.selectedAgent();
@@ -82,8 +85,19 @@ async function start(): Promise<void> {
 }
 
 void app.whenReady().then(start);
-app.on('before-quit', () => {
-  controller?.shutdown();
-  sites?.closeAll();
+let quitting = false;
+app.on('before-quit', (event) => {
+  const active = controller;
+  if (quitting || active === null) {
+    active?.shutdown();
+    sites?.closeAll();
+    return;
+  }
+  quitting = true;
+  event.preventDefault();
+  void active
+    .flush()
+    .catch(() => undefined)
+    .finally(() => app.quit());
 });
 app.on('window-all-closed', () => app.quit());

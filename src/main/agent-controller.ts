@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { isCliKind, isSiteKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn } from '../shared/cli-args';
+import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { OutputBuffer } from '../shared/output-buffer';
+import { claimForAgents, restoreSpawn } from '../shared/restore';
 import { PtyManager } from './pty-manager';
 import { saveState } from './state-file';
 
@@ -25,6 +27,7 @@ export interface ControllerDeps {
   emit(channel: EventChannel, payload: unknown): void;
   siteNav?(id: string, action: SiteAction): void;
   showSite?(agent: Agent | null): void;
+  listRollouts?(sinceMs: number): Promise<Rollout[]>;
 }
 
 export class AgentController {
@@ -32,6 +35,8 @@ export class AgentController {
   private selectedId: string | null;
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
+  private readonly spawnedAt = new Map<string, number>();
+  private saving: Promise<void> = Promise.resolve();
 
   constructor(private readonly deps: ControllerDeps, initial: AppState) {
     this.agents = [...initial.agents];
@@ -89,6 +94,16 @@ export class AgentController {
     this.deps.siteNav?.(id, action);
   }
 
+  async restore(): Promise<void> {
+    const claimed = await this.claimSessions();
+    for (const agent of this.agents) this.respawn(agent);
+    if (claimed) await this.persist();
+  }
+
+  flush(): Promise<void> {
+    return this.persist();
+  }
+
   shutdown(): void {
     this.pty.killAll();
   }
@@ -107,6 +122,7 @@ export class AgentController {
       env: this.deps.env,
     });
     this.pty.spawn(id, spec);
+    this.spawnedAt.set(id, Date.now());
     const title = `${KIND_LABELS[kind]} · ${path.basename(cwd) || cwd}`;
     return sessionId === undefined
       ? { id, kind, title, cwd, createdAt: Date.now() }
@@ -126,9 +142,39 @@ export class AgentController {
     return buffer;
   }
 
+  private respawn(agent: Agent): void {
+    const spec = restoreSpawn(agent, { sharedDir: this.deps.sharedDir, platform: this.deps.platform, env: this.deps.env });
+    if (spec === null) return;
+    try {
+      this.pty.spawn(agent.id, spec);
+      this.spawnedAt.set(agent.id, Date.now());
+    } catch {
+      return;
+    }
+  }
+
+  private async claimSessions(): Promise<boolean> {
+    const open = this.agents.filter((agent) => agent.kind === 'codex' && agent.sessionId === undefined && agent.cwd !== undefined);
+    if (open.length === 0 || this.deps.listRollouts === undefined) return false;
+    const bound = (agent: Agent): number => this.spawnedAt.get(agent.id) ?? agent.createdAt;
+    const rollouts = await this.deps.listRollouts(Math.min(...open.map(bound)));
+    const claims = claimForAgents(this.agents, rollouts, bound);
+    if (claims.size === 0) return false;
+    this.agents = this.agents.map((agent) => {
+      const sessionId = claims.get(agent.id);
+      return sessionId === undefined ? agent : { ...agent, sessionId };
+    });
+    return true;
+  }
+
   private persist(): Promise<void> {
-    const state: AppState = { version: 1, agents: this.agents };
-    return saveState(this.deps.stateFile, state);
+    const run = async (): Promise<void> => {
+      await this.claimSessions();
+      const state: AppState = { version: 1, agents: this.agents };
+      await saveState(this.deps.stateFile, state);
+    };
+    this.saving = this.saving.then(run, run);
+    return this.saving;
   }
 
   private selectedSiteAgent(): Agent | null {

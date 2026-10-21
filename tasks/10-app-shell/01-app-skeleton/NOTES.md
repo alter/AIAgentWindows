@@ -10,3 +10,7 @@ Scratch copies of scripts/arch_check.py with one rule disabled each, run against
 Limits: `preload` is matched inside the `new WebContentsView(...)` / `new BrowserWindow(...)` argument text only; a BrowserWindow counts as a site window when the same argument text carries `partition` or `persist:` (the app's own main window has a preload and no partition). Options built in a variable declared elsewhere are not seen.
 
 T11 for T12: sidebar width is `--sidebar-width: 260px` and the nav bar `--nav-bar-height: 36px` in src/renderer/styles.css; the content area has a `.site-area` placeholder (hidden for CLI agents) where the renderer-drawn navigation bar goes; panes exist per CLI agent, only the selected one is shown. Dropped paths are single-quoted POSIX style (Windows quoting is a per-OS task).
+
+## T13 reverse controls
+Restore: `restoreSpawn` with `resume: false` forced and `persist()` without the Codex claim step, run against the unchanged tests: tests/unit/restore.test.ts 2 failed, tests/integration/restore-controller.test.ts 3 failed. Restored; 9 + 5 passed.
+AC9: scratch package.json `{"scripts":{"dist":"electron-builder --mac"}}` -> `python3 scripts/check_publish_flags.py --package <scratch>` rc=1 (`[publish-flag]`); the repository package.json rc=0. Limit: the check reads package.json scripts only (not electron-builder.yml, not CI files).
