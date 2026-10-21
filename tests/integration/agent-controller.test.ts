@@ -148,4 +148,27 @@ describe('agent controller', () => {
     controller.syncSelection();
     expect(showSite).toHaveBeenCalledWith(site);
   });
+
+  it('shows the refusal in the pane and spawns nothing when test mode has no binary override', async () => {
+    const guarded = new AgentController(
+      {
+        stateFile: path.join(dir, 'guarded.json'),
+        sharedDir: path.join(dir, 'shared'),
+        platform: 'win32',
+        env: { PATH: process.env.PATH, AIAW_USER_DATA: dir },
+        pickFolder: async () => folder,
+        emit: (channel, payload) => events.push({ channel, payload }),
+      },
+      emptyState(),
+    );
+    try {
+      await guarded.add('codex');
+      const agent = guarded.snapshot().agents[0];
+      expect(agent?.kind).toBe('codex');
+      expect(guarded.ptyBacklog(agent?.id ?? '').data).toContain('AIAW_CODEX_BIN');
+      expect(events.some((event) => event.channel === EVENT_CHANNELS.ptyExit)).toBe(false);
+    } finally {
+      guarded.shutdown();
+    }
+  });
 });

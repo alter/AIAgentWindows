@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { isCliKind, isSiteKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
-import { buildSpawn } from '../shared/cli-args';
+import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { OutputBuffer } from '../shared/output-buffer';
@@ -114,16 +114,16 @@ export class AgentController {
     if (cwd === null) return null;
     const id = randomUUID();
     const sessionId = kind === 'claude' ? randomUUID() : undefined;
-    const spec = buildSpawn(kind, {
-      cwd,
-      sessionId,
-      sharedDir: this.deps.sharedDir,
-      resume: false,
-      platform: this.deps.platform,
-      env: this.deps.env,
-    });
-    this.pty.spawn(id, spec);
-    this.spawnedAt.set(id, Date.now());
+    this.startPty(id, () =>
+      buildSpawn(kind, {
+        cwd,
+        sessionId,
+        sharedDir: this.deps.sharedDir,
+        resume: false,
+        platform: this.deps.platform,
+        env: this.deps.env,
+      }),
+    );
     const title = `${KIND_LABELS[kind]} · ${path.basename(cwd) || cwd}`;
     return sessionId === undefined
       ? { id, kind, title, cwd, createdAt: Date.now() }
@@ -144,18 +144,26 @@ export class AgentController {
   }
 
   private respawn(agent: Agent): void {
-    const spec = restoreSpawn(agent, {
-      sharedDir: this.deps.sharedDir,
-      platform: this.deps.platform,
-      env: this.deps.env,
-      claudeTranscriptExists: (sessionId) => claudeTranscriptExists(this.deps.env, sessionId),
-    });
-    if (spec === null) return;
+    this.startPty(agent.id, () =>
+      restoreSpawn(agent, {
+        sharedDir: this.deps.sharedDir,
+        platform: this.deps.platform,
+        env: this.deps.env,
+        claudeTranscriptExists: (sessionId) => claudeTranscriptExists(this.deps.env, sessionId),
+      }),
+    );
+  }
+
+  private startPty(id: string, build: () => SpawnSpec | null): void {
     try {
-      this.pty.spawn(agent.id, spec);
-      this.spawnedAt.set(agent.id, Date.now());
-    } catch {
-      return;
+      const spec = build();
+      if (spec === null) return;
+      this.pty.spawn(id, spec);
+      this.spawnedAt.set(id, Date.now());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const data = `${message}\r\n`;
+      this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) });
     }
   }
 

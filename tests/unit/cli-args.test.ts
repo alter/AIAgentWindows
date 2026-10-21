@@ -106,3 +106,19 @@ describe('buildSpawn validation', () => {
     expect(() => buildSpawn('codex', options({ cwd: '' }))).toThrow();
   });
 });
+
+describe('buildSpawn in test mode', () => {
+  it('refuses to start a real claude or codex when AIAW_USER_DATA is set without a binary override', () => {
+    const env = { SHELL: '/bin/bash', AIAW_USER_DATA: '/tmp/ud' };
+    expect(() => buildSpawn('claude', options({ env }))).toThrow(/AIAW_CLAUDE_BIN/);
+    expect(() => buildSpawn('codex', options({ env }))).toThrow(/AIAW_CODEX_BIN/);
+    expect(() => buildSpawn('claude', options({ env: { ...env, AIAW_CODEX_BIN: '/t/stub' } }))).toThrow();
+    expect(() => buildSpawn('codex', options({ env: { ...env, AIAW_CLAUDE_BIN: '/t/stub' } }))).toThrow();
+  });
+
+  it('starts the named binary in test mode', () => {
+    const env = { SHELL: '/bin/bash', AIAW_USER_DATA: '/tmp/ud', AIAW_CLAUDE_BIN: '/t/stub', AIAW_CODEX_BIN: '/t/stub' };
+    expect(buildSpawn('claude', options({ env })).args[5]).toBe('/t/stub');
+    expect(buildSpawn('codex', options({ env })).args[5]).toBe('/t/stub');
+  });
+});

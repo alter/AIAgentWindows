@@ -46,9 +46,18 @@ function cliArgs(kind: CliKind, options: SpawnOptions): string[] {
   return options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
 }
 
+function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
+  const override = env[BIN_OVERRIDE[kind]];
+  if (override) return override;
+  if (env.AIAW_USER_DATA) {
+    throw new Error(`test mode: ${BIN_OVERRIDE[kind]} must name the ${kind} binary, a real CLI is never started`);
+  }
+  return kind;
+}
+
 export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
   if (options.cwd.length === 0) throw new Error('cwd is required');
-  const bin = options.env[BIN_OVERRIDE[kind]] || kind;
+  const bin = binaryFor(kind, options.env);
   const args = cliArgs(kind, options);
   const env = childEnv(options.env);
   if (options.platform === 'win32') return { file: bin, args, cwd: options.cwd, env };
