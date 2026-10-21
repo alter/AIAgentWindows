@@ -5,6 +5,7 @@ import {
   MAX_REPLY_CHARS,
   MAX_ROUNDS,
   MIN_ROUNDS,
+  defaultFinalizerId,
   parseRoomConfig,
   ROOM_PARTICIPANTS,
   relaySchedule,
@@ -140,5 +141,26 @@ describe('truncateText', () => {
 
   it('with a limit below the marker size leaves only the marker', () => {
     expect(truncateText('abcdef', 0)).toMatch(/^\n\[truncated 6 chars\]$/);
+  });
+});
+
+describe('finalizer', () => {
+  const base = { prompt: 'hello', mode: 'relay', rounds: 1, turnTimeoutMs: 600000 };
+
+  it('defaults to Claude Code when it is ticked and to the first ticked participant otherwise', () => {
+    expect(defaultFinalizerId([B, A, C])).toBe('a');
+    expect(defaultFinalizerId([C, B])).toBe('c');
+    const withClaude = parseRoomConfig({ ...base, participants: [B, A] });
+    expect(withClaude.ok && withClaude.config.finalizerId).toBe('a');
+    const without = parseRoomConfig({ ...base, participants: [B, C] });
+    expect(without.ok && without.config.finalizerId).toBe('b');
+  });
+
+  it('keeps a chosen finalizer among the participants and rejects one that is not ticked', () => {
+    const chosen = parseRoomConfig({ ...base, participants: [A, B, C], finalizerId: 'c' });
+    expect(chosen.ok && chosen.config.finalizerId).toBe('c');
+    expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: 'c' }).ok).toBe(false);
+    expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: 7 }).ok).toBe(false);
+    expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: '' }).ok).toBe(false);
   });
 });

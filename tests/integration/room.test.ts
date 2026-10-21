@@ -4,13 +4,13 @@ import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { JSDOM } from 'jsdom';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OwnerPause, Room, type DriverFactory, type ParticipantDriver, type RoomEvent, type TurnRequest } from '../../src/main/room';
 import { DEFAULT_ROOM_TIMING, createRoomDrivers } from '../../src/main/room-drivers';
 import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
 import type { PageRunner, SiteAdapter } from '../../src/main/site-adapters/types';
 import { escapeBody, historyNonce } from '../../src/shared/room-history';
-import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
+import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, defaultFinalizerId, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const FIXTURE = readFileSync(path.resolve(__dirname, '..', 'fixtures', 'sites', 'generic.html'), 'utf8');
@@ -34,7 +34,7 @@ afterEach(async () => {
 });
 
 function config(participants: RoomParticipant[], overrides: Partial<RoomConfig> = {}): RoomConfig {
-  return { prompt: 'the question', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 5000, ...overrides };
+  return { prompt: 'the question', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 5000, finalizerId: defaultFinalizerId(participants), ...overrides };
 }
 
 type Behaviour = (request: TurnRequest, call: number) => Promise<string | null>;
@@ -127,11 +127,11 @@ describe('room relay', () => {
     const run = t.room.start(config([A, B, C], { rounds: 2 }));
     const result = await run.done;
     expect(result.status).toBe('done');
-    expect(t.trace).toEqual(['a', 'b', 'c', 'a', 'b', 'c']);
+    expect(t.trace).toEqual(['a', 'b', 'c', 'a', 'b', 'c', 'a']);
     const final = await readFile(run.historyPath, 'utf8');
     expect(ascending(positions(final, ['the question', 'reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2', 'reply c2']))).toBe(true);
-    expect(t.snapshots).toHaveLength(6);
-    t.snapshots.forEach((snapshot, index) => {
+    expect(t.snapshots).toHaveLength(7);
+    t.snapshots.slice(0, 6).forEach((snapshot, index) => {
       const earlier = ['reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2'].slice(0, index);
       expect(ascending(positions(snapshot, ['the question', ...earlier]))).toBe(true);
       expect(snapshot).not.toContain(['reply a1', 'reply b1', 'reply c1', 'reply a2', 'reply b2', 'reply c2'][index] ?? '');
@@ -154,7 +154,7 @@ describe('room relay', () => {
     const t = rig();
     await t.room.start(config([A, B, C], { rounds: 2 })).done;
     const requests = [...(t.drivers.get('a')?.requests ?? []), ...(t.drivers.get('b')?.requests ?? [])];
-    expect(requests).toHaveLength(4);
+    expect(requests).toHaveLength(5);
     const byCall = [t.drivers.get('a')?.requests[0], t.drivers.get('b')?.requests[0], t.drivers.get('a')?.requests[1], t.drivers.get('b')?.requests[1]];
     const snapshotIndexes = [0, 1, 3, 4];
     byCall.forEach((request, index) => {
@@ -198,17 +198,17 @@ describe('room relay', () => {
     const file = await readFile(run.historyPath, 'utf8');
     const nonce = historyNonce(file) ?? '';
     const seen = file.split('\n').map((line) => line.normalize('NFKC').replace(/[\p{Default_Ignorable_Code_Point}\p{Cc}\p{Cf}\p{Mn}\p{Me}\s]/gu, ''));
-    expect(seen.filter((line) => line.startsWith(`<<<entry-${nonce}`))).toHaveLength(2);
-    expect(seen.filter((line) => line === `<<<end-${nonce}>>>`)).toHaveLength(2);
+    expect(seen.filter((line) => line.startsWith(`<<<entry-${nonce}`))).toHaveLength(3);
+    expect(seen.filter((line) => line === `<<<end-${nonce}>>>`)).toHaveLength(3);
   });
 
   it('marks a failed participant, restarts its session and goes on with the next one', async () => {
     const t = rig({ b: () => Promise.reject(new Error('boom')) });
     const result = await t.room.start(config([A, B, C])).done;
     expect(result.status).toBe('done');
-    expect(t.trace).toEqual(['a', 'b', 'c']);
+    expect(t.trace).toEqual(['a', 'b', 'c', 'a']);
     const kinds = result.entries.map((entry) => `${entry.authorId}:${entry.kind}`);
-    expect(kinds).toEqual(['owner:prompt', 'a:reply', 'b:error', 'c:reply']);
+    expect(kinds).toEqual(['owner:prompt', 'a:reply', 'b:error', 'c:reply', 'a:final']);
     expect(result.entries[2]?.text).toBe('boom');
     expect(t.drivers.get('b')?.resets).toBe(1);
     expect(t.drivers.get('a')?.resets).toBe(0);
@@ -222,10 +222,11 @@ describe('room relay', () => {
       'a:error',
       'b:error',
       'c:reply',
+      'a:error',
     ]);
     expect(result.entries[2]?.text).toBe('no session for Codex');
     await t.room.start(config([B])).done;
-    expect(t.created.filter((id) => id === 'b')).toHaveLength(2);
+    expect(t.created.filter((id) => id === 'b')).toHaveLength(3);
   });
 
   it('passes the turn timeout and the history file to the driver for a long history', async () => {
@@ -247,7 +248,7 @@ describe('room relay', () => {
     expect(t.room.isRunning()).toBe(false);
     await t.room.start(config([A])).done;
     expect(t.created).toEqual(['a']);
-    expect(t.drivers.get('a')?.requests).toHaveLength(2);
+    expect(t.drivers.get('a')?.requests).toHaveLength(4);
   });
 
   it('reports progress and the end of the run', async () => {
@@ -255,10 +256,11 @@ describe('room relay', () => {
     await t.room.start(config([A, B], { rounds: 2 })).done;
     const progress = t.events.filter((event) => event.type === 'progress' && event.state !== 'running');
     expect(progress.map((event) => (event.type === 'progress' ? `${event.completed}/${event.total}` : ''))).toEqual([
-      '1/4',
-      '2/4',
-      '3/4',
-      '4/4',
+      '1/5',
+      '2/5',
+      '3/5',
+      '4/5',
+      '5/5',
     ]);
     expect(t.events[0]?.type).toBe('started');
     expect(t.events[t.events.length - 1]).toMatchObject({ type: 'finished', status: 'done' });
@@ -325,8 +327,9 @@ describe('room reply size and history file', () => {
     const file = await readFile(result.historyPath, 'utf8');
     expect(result.status).toBe('done');
     expect(file.length).toBeLessThan(budget + 20_000);
-    expect(result.entries).toHaveLength(10);
+    expect(result.entries).toHaveLength(11);
     expect(result.entries[9]?.text).toMatch(/\[truncated \d+ chars\]$/);
+    expect(result.entries[10]).toMatchObject({ kind: 'final' });
   });
 
   it('keeps the default history budget at 4,000,000 characters', () => {
@@ -357,7 +360,7 @@ describe('room reply size and history file', () => {
     const room = scripted([new Error('E'.repeat(1_000_000))]);
     const result = await room.start(config([A, B], { rounds: 3 })).done;
     const errors = result.entries.filter((entry) => entry.kind === 'error');
-    expect(errors).toHaveLength(6);
+    expect(errors).toHaveLength(7);
     for (const entry of errors) expect(entry.text.length).toBeLessThanOrEqual(MAX_ERROR_CHARS);
     const file = await readFile(result.historyPath, 'utf8');
     expect(file.length).toBeLessThan(100_000);
@@ -376,7 +379,7 @@ describe('room reply size and history file', () => {
     const t = sized('short reply');
     await t.room.start(config([A, B, C], { rounds: 2 })).done;
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(t.inodes).toHaveLength(6);
+    expect(t.inodes).toHaveLength(7);
     expect(new Set(t.inodes.slice(1)).size).toBe(1);
   });
 
@@ -386,7 +389,7 @@ describe('room reply size and history file', () => {
     const result = await t.room.start(config([A, B], { rounds: 3 })).done;
     const file = await readFile(result.historyPath, 'utf8');
     expect(historyNonce(file)).toBe(first);
-    expect(file.split('\n').filter((line) => line.startsWith(`<<<entry-${first} `))).toHaveLength(7);
+    expect(file.split('\n').filter((line) => line.startsWith(`<<<entry-${first} `))).toHaveLength(8);
     expect(file).toContain(`\\<<<entry-${first} author="Owner"`);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(new Set(t.inodes.slice(1)).size).toBe(1);
@@ -398,7 +401,7 @@ describe('room reply size and history file', () => {
     const file = await readFile(result.historyPath, 'utf8');
     const nonce = historyNonce(file);
     const starts = file.split('\n').filter((line) => line.startsWith('<<<entry-'));
-    expect(starts).toHaveLength(3);
+    expect(starts).toHaveLength(4);
     expect(starts.every((line) => line.startsWith(`<<<entry-${nonce} `))).toBe(true);
   });
 });
@@ -418,10 +421,10 @@ describe('room broadcast', () => {
     };
     const t = rig({ a: hold, c: hold });
     const result = await t.room.start(config([A, C], { mode: 'broadcast', rounds: 1 })).done;
-    expect(started).toBe(2);
+    expect(started).toBe(3);
     expect(t.drivers.get('c')?.requests[0]?.text).not.toContain('held');
     expect(result.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(2);
-    expect(t.drivers.get('a')?.requests).toHaveLength(1);
+    expect(t.drivers.get('a')?.requests).toHaveLength(2);
   });
 
   it('runs every round for everyone in parallel and hands each later round the whole history so far', async () => {
@@ -431,7 +434,7 @@ describe('room broadcast', () => {
     expect(result.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(6);
     const a = t.drivers.get('a');
     const b = t.drivers.get('b');
-    expect(a?.requests).toHaveLength(3);
+    expect(a?.requests).toHaveLength(4);
     expect(b?.requests).toHaveLength(3);
     for (const driver of [a, b]) {
       const first = driver?.requests[0]?.historyText ?? '';
@@ -448,7 +451,7 @@ describe('room broadcast', () => {
     }
     expect(a?.requests[1]?.text).not.toBe(a?.requests[0]?.text);
     const total = t.events.filter((event) => event.type === 'progress').map((event) => event.total);
-    expect(new Set(total)).toEqual(new Set([6]));
+    expect(new Set(total)).toEqual(new Set([7]));
   });
 
   it('keeps each round before the next when the first participant answers last', async () => {
@@ -561,6 +564,7 @@ describe('room with stub CLIs', () => {
       'b:reply',
       'a:reply',
       'b:reply',
+      'a:final',
     ]);
     expect(result.entries[1]?.text).toContain('the question');
     expect(result.entries[1]?.text).not.toContain('history.md');
@@ -570,7 +574,7 @@ describe('room with stub CLIs', () => {
     expect(historyNonce(own)).toBe(historyNonce(history));
     expect(own).toContain(escapeBody(result.entries[3]?.text ?? 'missing'));
     const starts = (text: string): number => text.split('\n').filter((line) => line.startsWith('<<<entry-')).length;
-    expect(starts(history)).toBe(5);
+    expect(starts(history)).toBe(6);
     expect(starts(own)).toBe(4);
     expect(ascending(positions(history, ['<<<entry-', 'author="Claude Code" time', 'author="Codex" time']))).toBe(true);
   });
@@ -583,10 +587,10 @@ describe('room with stub CLIs', () => {
     await room.shutdown();
     drivers.shutdown();
     const all = await calls();
-    expect(all).toHaveLength(4);
+    expect(all).toHaveLength(5);
     const claude = all.filter((call) => call.argv.includes('-p'));
     const codex = all.filter((call) => call.argv[0] === 'exec');
-    expect(claude).toHaveLength(2);
+    expect(claude).toHaveLength(3);
     expect(codex).toHaveLength(2);
     for (const call of claude) {
       expect(flagValue(call, '--permission-mode')).toBe('plan');
@@ -600,7 +604,7 @@ describe('room with stub CLIs', () => {
       expect(call.argv.join(' ')).not.toContain('./history.md');
       expect(call.argv.join(' ')).not.toMatch(/dangerously|bypass|danger-full-access|workspace-write/);
     }
-    expect(claude.map((call) => path.basename(call.cwd))).toEqual(['claude-1', 'claude-1']);
+    expect(claude.map((call) => path.basename(call.cwd))).toEqual(['claude-1', 'claude-1', 'claude-1']);
     expect(codex.map((call) => path.basename(call.cwd))).toEqual(['codex-1', 'codex-1']);
   });
 
@@ -611,14 +615,15 @@ describe('room with stub CLIs', () => {
     const result = await room.start(config([A, B], { rounds: 3, turnTimeoutMs: 10000 })).done;
     await room.shutdown();
     drivers.shutdown();
-    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'reply', 'reply', 'reply', 'reply', 'reply']);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'reply', 'reply', 'reply', 'reply', 'reply', 'final']);
     const all = await calls();
     const claude = all.filter((call) => call.argv.includes('-p'));
-    expect(claude.map((call) => call.argv.includes('--resume'))).toEqual([false, true, true]);
+    expect(claude.map((call) => call.argv.includes('--resume'))).toEqual([false, true, true, true]);
     const created = flagValue(claude[0], '--session-id');
     expect(created).toMatch(/^[0-9a-f-]{36}$/);
     expect(flagValue(claude[1], '--resume')).toBe(created);
     expect(flagValue(claude[2], '--resume')).toBe(created);
+    expect(flagValue(claude[3], '--resume')).toBe(created);
     const codex = all.filter((call) => call.argv[0] === 'exec');
     expect(codex.map((call) => call.argv.includes('resume'))).toEqual([false, true, true]);
     const thread = flagValue(codex[1], 'resume');
@@ -632,17 +637,19 @@ describe('room with stub CLIs', () => {
     const room = new Room({ roomsDir, driverFor: drivers.factory });
     rooms.push(room);
     const first = await room.start(config([A, B], { turnTimeoutMs: 1000 })).done;
-    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply']);
+    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error']);
     expect(first.entries[1]?.text).toContain('did not end');
     delete extra['a'];
     const second = await room.start(config([A], { turnTimeoutMs: 10000 })).done;
     await room.shutdown();
     drivers.shutdown();
-    expect(second.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply']);
+    expect(second.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply', 'a:final']);
     const claude = (await calls()).filter((call) => call.argv.includes('-p'));
-    expect(claude).toHaveLength(2);
+    expect(claude).toHaveLength(4);
     expect(claude[1]?.argv).not.toContain('--resume');
     expect(flagValue(claude[1], '--session-id')).not.toBe(flagValue(claude[0], '--session-id'));
+    expect(claude[2]?.argv).not.toContain('--resume');
+    expect(flagValue(claude[2], '--session-id')).not.toBe(flagValue(claude[1], '--session-id'));
     expect(() => process.kill(claude[0]?.pid ?? 0, 0)).toThrow();
   });
 
@@ -652,15 +659,16 @@ describe('room with stub CLIs', () => {
     const room = new Room({ roomsDir, driverFor: drivers.factory });
     rooms.push(room);
     const first = await room.start(config([B], { turnTimeoutMs: 10000 })).done;
-    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'b:error']);
+    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'b:error', 'b:error']);
     expect(first.entries[1]?.text).toContain('stub failure');
     delete extra['b'];
     const second = await room.start(config([B], { turnTimeoutMs: 10000 })).done;
     await room.shutdown();
     drivers.shutdown();
-    expect(second.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(second.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'final']);
     const codex = await calls();
     expect(codex[1]?.argv).not.toContain('resume');
+    expect(codex[2]?.argv).not.toContain('resume');
   });
 
   it('Stop kills the CLI process of the turn in flight', async () => {
@@ -679,15 +687,17 @@ describe('room with stub CLIs', () => {
   });
 
   it('shutting the drivers down kills a process that is still running', async () => {
-    const drivers = stubDrivers({ a: { AIAW_STUB_HANG: '1' } });
+    const extra: Record<string, Record<string, string>> = { a: { AIAW_STUB_HANG: '1' } };
+    const drivers = stubDrivers(extra);
     const room = new Room({ roomsDir, driverFor: drivers.factory });
     rooms.push(room);
     const run = room.start(config([A], { turnTimeoutMs: 60000 }));
     await until(async () => (await calls()).length === 1, 'the CLI process');
     const pid = (await calls())[0]?.pid ?? 0;
+    delete extra['a'];
     drivers.shutdown();
     const result = await run.done;
-    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error', 'final']);
     await until(() => !alive(pid), 'the process to end');
   });
 
@@ -703,7 +713,7 @@ describe('room with stub CLIs', () => {
     rooms.push(room);
     const result = await room.start(config([A, B], { turnTimeoutMs: 10000 })).done;
     await room.shutdown();
-    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply']);
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error']);
     expect(result.entries[1]?.text).toContain('could not be started');
   });
 });
@@ -756,7 +766,7 @@ describe('room folder trust pause', () => {
     room.resume();
     const result = await run.done;
     expect(result.status).toBe('done');
-    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'final']);
     expect(events.some((event) => event.type === 'resumed')).toBe(true);
   });
 
@@ -816,22 +826,22 @@ describe('room with a web participant', () => {
     const long = room.start(config([C], { prompt: 'y'.repeat(13000), turnTimeoutMs: 20000 }));
     const result = await long.done;
     expect(result.entries[1]?.kind).toBe('reply');
-    expect(attached).toEqual([[long.historyPath]]);
+    expect(attached).toEqual([[long.historyPath], [long.historyPath]]);
   });
 });
 
 describe('room with a web participant whose reply carries entry markers', () => {
   function markerRig(page: string) {
-    let submitted = false;
+    let submits = 0;
     const adapter: SiteAdapter = {
       site: 'fake',
       insertText: () => Promise.resolve(),
       submit: () => {
-        submitted = true;
+        submits += 1;
         return Promise.resolve();
       },
       isGenerating: () => Promise.resolve(false),
-      lastReply: () => Promise.resolve(submitted ? page : null),
+      lastReply: () => Promise.resolve(submits === 0 ? null : submits === 1 ? page : `${page}\nagain`),
       attachFile: () => Promise.resolve(),
     };
     const runner: PageRunner = { run: () => Promise.resolve('') };
@@ -893,7 +903,7 @@ describe('room with a web participant that is not ready at first', () => {
     const { room, trace } = webRig((call) => call >= 4);
     const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
     expect(result.entries[1]?.kind).toBe('reply');
-    expect(trace).toEqual(['ready?', 'ready?', 'ready?', 'ready?', 'insert']);
+    expect(trace).toEqual(['ready?', 'ready?', 'ready?', 'ready?', 'insert', 'ready?', 'insert']);
   });
 
   it('reports "page not ready" and inserts nothing when the composer never appears', async () => {
@@ -912,9 +922,71 @@ describe('room with a web participant that is not ready at first', () => {
     };
     const { room, trace } = webRig(() => true, prepare);
     const result = await room.start(config([C], { rounds: 2, turnTimeoutMs: 20000 })).done;
-    expect(order).toEqual(['prepare', 'prepare']);
-    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error']);
+    expect(order).toEqual(['prepare', 'prepare', 'prepare']);
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error', 'error']);
     expect(result.entries[2]?.text).toContain('page not ready');
     expect(trace.filter((item) => item === 'insert')).toHaveLength(1);
+  });
+});
+
+describe('room finalizer', () => {
+  const answer: Behaviour = (_request, call) => Promise.resolve(call === 3 ? 'FINAL ANSWER' : `reply ${call}`);
+
+  it('gives the finalizer one more turn after the last relay round with the whole history and marks the entry final', async () => {
+    const t = rig({ a: answer });
+    const run = t.room.start(config([A, B], { rounds: 2 }));
+    const result = await run.done;
+    expect(result.status).toBe('done');
+    expect(t.trace).toEqual(['a', 'b', 'a', 'b', 'a']);
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual([
+      'owner:prompt',
+      'a:reply',
+      'b:reply',
+      'a:reply',
+      'b:reply',
+      'a:final',
+    ]);
+    const request = t.drivers.get('a')?.requests[2];
+    expect(groupsInOrder(request?.text ?? '', [['the question'], ['reply 1'], ['reply b1'], ['reply 2'], ['reply b2']])).toBe(true);
+    expect(request?.text).toContain('final');
+    expect(result.entries[5]?.text).toBe('FINAL ANSWER');
+    const file = await readFile(run.historyPath, 'utf8');
+    expect(file).toContain('kind=final>>>');
+    expect(file).toContain('Finalizer: Claude Code');
+  });
+
+  it('runs the chosen finalizer after a broadcast, counts the extra step in the progress and reports it', async () => {
+    const t = rig();
+    const result = await t.room.start(config([A, B, C], { mode: 'broadcast', rounds: 1, finalizerId: 'c' })).done;
+    expect(t.trace.slice(-1)).toEqual(['c']);
+    expect(t.trace).toHaveLength(4);
+    expect(result.entries[result.entries.length - 1]).toMatchObject({ authorId: 'c', kind: 'final' });
+    const started = t.events.find((event) => event.type === 'started');
+    expect(started).toMatchObject({ total: 4 });
+    const progress = t.events.filter((event) => event.type === 'progress' && event.state !== 'running');
+    expect(progress[progress.length - 1]).toMatchObject({ completed: 4, total: 4, participantId: 'c' });
+  });
+
+  it('a failing finalizer leaves an error entry and the run still ends done', async () => {
+    const t = rig({ a: (_request, call) => (call > 1 ? Promise.reject(new Error('no final')) : Promise.resolve('first')) });
+    const result = await t.room.start(config([A, B])).done;
+    expect(result.status).toBe('done');
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply', 'b:reply', 'a:error']);
+  });
+
+  it('a stopped run gets no final turn', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const t = rig({ a: async () => { await gate; return 'late'; } });
+    const run = t.room.start(config([A, B]));
+    await vi.waitFor(() => expect(t.trace).toEqual(['a']));
+    t.room.stop();
+    release();
+    const result = await run.done;
+    expect(result.status).toBe('stopped');
+    expect(result.entries.some((entry) => entry.kind === 'final')).toBe(false);
+    expect(t.trace).toEqual(['a']);
   });
 });

@@ -75,8 +75,9 @@ export function historyNonce(history: string): string | null {
   return match?.[1] ?? null;
 }
 
-export function renderHistoryHeader(roomId: string, nonce: string): string {
-  return `# Room ${roomId}\n\n${historyNotice(nonce)}\n`;
+export function renderHistoryHeader(roomId: string, nonce: string, finalizer?: string): string {
+  const named = finalizer === undefined ? '' : `\nFinalizer: ${plainLabel(finalizer)}\n`;
+  return `# Room ${roomId}\n${named}\n${historyNotice(nonce)}\n`;
 }
 
 export function renderEntryBlock(nonce: string, entry: RoomEntry): string {
@@ -87,9 +88,10 @@ export function renderHistory(
   roomId: string,
   entries: readonly RoomEntry[],
   random: () => string = randomNonce,
+  finalizer?: string,
 ): string {
   const nonce = newNonce(random);
-  return renderHistoryHeader(roomId, nonce) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
+  return renderHistoryHeader(roomId, nonce, finalizer) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
 }
 
 function carryEntryBlock(entry: RoomEntry): string {
@@ -101,10 +103,19 @@ export function renderCarryHistory(roomId: string, entries: readonly RoomEntry[]
   return `# Room ${roomId}\n${entries.map(carryEntryBlock).join('')}`;
 }
 
-function introFor(participant: RoomParticipant, continuation: boolean): string {
-  const task = continuation
-    ? 'Read the whole history, in order, then continue the discussion: respond to what the other participants wrote and add what is still missing.'
-    : 'Read the whole history, in order, then answer the latest request.';
+export type PromptPhase = boolean | 'final';
+
+const FINAL_TASK =
+  'Read the whole history, in order, then write the final consolidated answer to the owner\'s request: resolve the disagreements between the participants, give one answer, and do not talk about the discussion itself.';
+
+function taskFor(phase: PromptPhase): string {
+  if (phase === 'final') return FINAL_TASK;
+  if (phase) return 'Read the whole history, in order, then continue the discussion: respond to what the other participants wrote and add what is still missing.';
+  return 'Read the whole history, in order, then answer the latest request.';
+}
+
+function introFor(participant: RoomParticipant, phase: PromptPhase): string {
+  const task = taskFor(phase);
   return [
     `You are ${participant.label} in a room where several AI agents and the owner take turns.`,
     task,
@@ -117,7 +128,7 @@ function cliPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
-  continuation: boolean,
+  continuation: PromptPhase,
 ): ParticipantPrompt {
   const text = `${introFor(participant, continuation)}\n\n${renderHistory(roomId, entries)}`;
   return { text, attachHistory: false, placeHistory: true };
@@ -127,7 +138,7 @@ function webPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
-  continuation: boolean,
+  continuation: PromptPhase,
 ): ParticipantPrompt {
   const intro = introFor(participant, continuation);
   const history = renderHistory(roomId, entries);
@@ -141,7 +152,7 @@ export function buildParticipantPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
-  continuation = false,
+  continuation: PromptPhase = false,
 ): ParticipantPrompt {
   if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, roomId, entries, continuation);
   return webPrompt(participant, roomId, entries, continuation);

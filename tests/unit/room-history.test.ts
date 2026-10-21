@@ -7,6 +7,7 @@ import {
   historyNonce,
   renderCarryHistory,
   renderHistory,
+  renderHistoryHeader,
 } from '../../src/shared/room-history';
 import type { RoomEntry, RoomParticipant } from '../../src/shared/room-model';
 
@@ -264,5 +265,33 @@ describe('renderCarryHistory', () => {
 
   it('the history sent to participants still escapes the same lines', () => {
     expect(renderHistory('r1', entries)).toContain('\\- item one\n\\* item two');
+  });
+});
+
+describe('finalizer in history and prompts', () => {
+  const NONCE = 'feedfacefeedfacefeedface';
+
+  it('the history header names the finalizer and the nonce is still found', () => {
+    const text = renderHistory('r1', [entry({})], () => NONCE, 'Claude Code');
+    expect(text.split('\n').slice(0, 5).join('\n')).toContain('Finalizer: Claude Code');
+    expect(historyNonce(text)).toBe(NONCE);
+    expect(renderHistoryHeader('r1', NONCE)).not.toContain('Finalizer');
+  });
+
+  it('a final entry is written with kind=final', () => {
+    const text = renderHistory('r1', [entry({ kind: 'final', authorId: 'a', label: 'Claude Code', text: 'the answer' })], () => NONCE);
+    expect(text).toContain('author="Claude Code" time=2026-10-21T12:00:00.000Z kind=final>>>');
+  });
+
+  it('the final prompt asks for one consolidated answer, for CLI and web alike, with the whole history', () => {
+    const history = [entry({ text: 'question' }), entry({ kind: 'reply', authorId: 'b', label: 'ChatGPT', text: 'other view' })];
+    for (const participant of [A, B]) {
+      const final = buildParticipantPrompt(participant, 'r1', history, 'final');
+      const normal = buildParticipantPrompt(participant, 'r1', history, false);
+      expect(final.text).toContain('final');
+      expect(final.text).not.toBe(normal.text);
+      expect(final.text).toContain('question');
+      expect(final.text).toContain('other view');
+    }
   });
 });

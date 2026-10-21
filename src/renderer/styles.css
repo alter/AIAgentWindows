@@ -283,6 +283,7 @@ body {
 .room-entry { padding: 8px 12px; border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
 .room-entry.kind-prompt { background: rgba(17, 100, 163, 0.25); }
 .room-entry.kind-error { background: rgba(224, 30, 90, 0.2); }
+.room-entry.kind-final { background: rgba(46, 182, 125, 0.2); }
 .room-entry-head { display: flex; gap: 8px; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
 .room-entry-author { font-weight: 700; color: #fff; }
 .room-entry-text { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }

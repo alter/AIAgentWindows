@@ -8,6 +8,7 @@ import {
   renderEntryBlock,
   renderHistory,
   renderHistoryHeader,
+  type PromptPhase,
 } from '../shared/room-history';
 import {
   MAX_ERROR_CHARS,
@@ -80,6 +81,7 @@ const OWNER_LABEL = 'Owner';
 const ROOM_ID = 'room';
 const ROOM_LABEL = 'Room';
 const STOP_TEXT = 'Stopped by the owner.';
+const FALLBACK_FINALIZER: RoomParticipant = { id: ROOM_ID, kind: 'claude', label: ROOM_LABEL };
 const NO_REPLY_TEXT = 'The participant ended its turn without a reply.';
 
 function defaultRoomId(now: number): string {
@@ -111,6 +113,7 @@ class RunState {
   completed = 0;
   chars = 0;
   readonly waiting = new Set<() => void>();
+  readonly finalizer: RoomParticipant;
   private nonce: string | null = null;
   private writing: Promise<void> = Promise.resolve();
 
@@ -120,7 +123,9 @@ class RunState {
     readonly config: RoomConfig,
     readonly total: number,
     private readonly random: (() => string) | undefined,
-  ) {}
+  ) {
+    this.finalizer = config.participants.find((participant) => participant.id === config.finalizerId) ?? config.participants[0] ?? FALLBACK_FINALIZER;
+  }
 
   get signal(): AbortSignal {
     return this.controller.signal;
@@ -136,14 +141,14 @@ class RunState {
     }
     const fresh = newNonce(this.random);
     this.nonce = fresh;
-    const text = renderHistory(this.id, this.entries, () => fresh);
+    const text = renderHistory(this.id, this.entries, () => fresh, this.finalizer.label);
     this.enqueue(() => writeAtomic(this.historyPath, text));
   }
 
   render(entries: readonly RoomEntry[]): string {
     const nonce = this.nonce;
-    if (nonce === null) return renderHistory(this.id, entries);
-    return renderHistoryHeader(this.id, nonce) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
+    if (nonce === null) return renderHistory(this.id, entries, undefined, this.finalizer.label);
+    return renderHistoryHeader(this.id, nonce, this.finalizer.label) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
   }
 
   flushed(): Promise<void> {
@@ -171,7 +176,8 @@ export class Room {
     const now = this.now();
     const roomId = this.deps.newId?.() ?? defaultRoomId(now);
     const historyPath = path.join(this.deps.roomsDir, `${roomId}.md`);
-    const total = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length * config.rounds;
+    const turns = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length * config.rounds;
+    const total = turns + 1;
     const run = new RunState(roomId, historyPath, config, total, this.deps.newNonce);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
@@ -211,6 +217,7 @@ export class Room {
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
       else await this.broadcast(run);
+      if (!run.signal.aborted) await this.step(run, run.finalizer, [...run.entries], 'final');
       if (run.signal.aborted) {
         status = 'stopped';
         this.append(run, ROOM_ID, ROOM_LABEL, 'error', STOP_TEXT);
@@ -262,11 +269,11 @@ export class Room {
     return driver;
   }
 
-  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], continuation: boolean): Promise<void> {
+  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase): Promise<void> {
     this.progress(run, participant, 'running');
-    const outcome = await this.turn(run, participant, seen, continuation);
+    const outcome = await this.turn(run, participant, seen, phase);
     if (outcome.kind === 'aborted') return;
-    const kind: RoomEntryKind = outcome.kind === 'reply' ? 'reply' : 'error';
+    const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
     this.append(run, participant.id, participant.label, kind, outcome.text);
     await run.flushed();
     this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : 'failed');
@@ -276,12 +283,12 @@ export class Room {
     run: RunState,
     participant: RoomParticipant,
     seen: readonly RoomEntry[],
-    continuation: boolean,
+    phase: PromptPhase,
   ): Promise<TurnOutcome> {
     let driver: ParticipantDriver | null = null;
     try {
       driver = await this.driver(participant);
-      const prompt = buildParticipantPrompt(participant, run.id, seen, continuation);
+      const prompt = buildParticipantPrompt(participant, run.id, seen, phase);
       const request: TurnRequest = {
         text: prompt.text,
         attachPath: prompt.attachHistory ? run.historyPath : null,

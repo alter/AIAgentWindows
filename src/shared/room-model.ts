@@ -15,7 +15,7 @@ export const MAX_ERROR_CHARS = 500;
 const TRUNCATION_RESERVE = 64;
 
 export type RoomMode = 'broadcast' | 'relay';
-export type RoomEntryKind = 'prompt' | 'reply' | 'error';
+export type RoomEntryKind = 'prompt' | 'reply' | 'final' | 'error';
 
 export interface RoomParticipant {
   id: string;
@@ -28,6 +28,7 @@ export interface RoomConfig {
   mode: RoomMode;
   rounds: number;
   participants: RoomParticipant[];
+  finalizerId: string;
   turnTimeoutMs: number;
 }
 
@@ -61,6 +62,11 @@ export const ROOM_PARTICIPANTS: readonly RoomParticipant[] = AGENT_KINDS.map((ki
   kind,
   label: AGENT_LABELS[kind],
 }));
+
+export function defaultFinalizerId(participants: readonly RoomParticipant[]): string {
+  const claude = participants.find((participant) => participant.kind === 'claude');
+  return (claude ?? participants[0])?.id ?? '';
+}
 
 export type RoomConfigResult = { ok: true; config: RoomConfig } | { ok: false; error: string };
 
@@ -126,7 +132,11 @@ export function parseRoomConfig(value: unknown): RoomConfigResult {
   if (!isInRange(turnTimeoutMs, MIN_TURN_TIMEOUT_MS, MAX_TURN_TIMEOUT_MS)) return { ok: false, error: 'turn timeout out of range' };
   const parsed = parseParticipants(participants);
   if (!parsed) return { ok: false, error: 'participants must be 1..16 unique known agents' };
-  return { ok: true, config: { prompt, mode, rounds, participants: parsed, turnTimeoutMs } };
+  const finalizerId = value['finalizerId'] === undefined ? defaultFinalizerId(parsed) : value['finalizerId'];
+  if (typeof finalizerId !== 'string' || !parsed.some((participant) => participant.id === finalizerId)) {
+    return { ok: false, error: 'finalizer must be one of the participants' };
+  }
+  return { ok: true, config: { prompt, mode, rounds, participants: parsed, finalizerId, turnTimeoutMs } };
 }
 
 export function truncateText(text: string, limit: number): string {

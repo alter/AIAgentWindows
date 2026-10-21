@@ -9,6 +9,7 @@ import {
   emptyRoomSnapshot,
   formToConfig,
   participantAvailability,
+  resolveFinalizer,
   type RoomFormValues,
 } from '../../src/shared/room-view';
 import { adapterFor } from '../../src/main/site-adapters/registry';
@@ -261,5 +262,46 @@ describe('participants without an adapter', () => {
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
     expect(() => seats(deepseek)).toThrow(/DeepSeek has no site adapter/);
+  });
+});
+
+describe('finalizer choice', () => {
+  const form: RoomFormValues = { prompt: 'hello', mode: 'relay', rounds: '1', timeoutMinutes: '10', checked: ['codex', 'claude', 'grok'] };
+
+  it('keeps the previous choice while it is ticked and falls back to Claude Code, then to the first ticked', () => {
+    expect(resolveFinalizer(['codex', 'claude', 'grok'], 'grok')).toBe('grok');
+    expect(resolveFinalizer(['claude', 'codex'], 'grok')).toBe('claude');
+    expect(resolveFinalizer(['grok', 'codex'], '')).toBe('codex');
+    expect(resolveFinalizer(['bash'], 'claude')).toBe('');
+    expect(resolveFinalizer([], '')).toBe('');
+  });
+
+  it('formToConfig puts the choice into the config and defaults it when missing or not ticked', () => {
+    const chosen = formToConfig({ ...form, finalizerId: 'grok' });
+    expect(chosen.ok && chosen.config.finalizerId).toBe('grok');
+    const missing = formToConfig(form);
+    expect(missing.ok && missing.config.finalizerId).toBe('claude');
+    const stale = formToConfig({ ...form, checked: ['codex', 'grok'], finalizerId: 'claude' });
+    expect(stale.ok && stale.config.finalizerId).toBe('codex');
+  });
+
+  it('carry final takes the final entry, not the last reply; without one it takes the last reply', () => {
+    const done: RoomEvent = { type: 'finished', roomId: 'r1', status: 'done' };
+    const withFinal = run([
+      STARTED,
+      { type: 'entry', roomId: 'r1', entry: entry('final', 'consolidated', 'Claude') },
+      { type: 'entry', roomId: 'r1', entry: entry('reply', 'late reply') },
+      done,
+    ]);
+    expect(carryText(withFinal, 'final')).toBe('consolidated');
+    const noFinal = run([STARTED, { type: 'entry', roomId: 'r1', entry: entry('reply', 'only reply') }, done]);
+    expect(carryText(noFinal, 'final')).toBe('only reply');
+    const failedFinal = run([
+      STARTED,
+      { type: 'entry', roomId: 'r1', entry: entry('reply', 'a reply') },
+      { type: 'entry', roomId: 'r1', entry: entry('error', 'boom', 'Claude') },
+      done,
+    ]);
+    expect(carryText(failedFinal, 'final')).toBe('a reply');
   });
 });

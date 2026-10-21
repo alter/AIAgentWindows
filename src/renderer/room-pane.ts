@@ -2,7 +2,7 @@
 import { isCliKind, type Agent } from '../shared/agents';
 import type { PtyDataEvent } from '../shared/ipc';
 import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEntry, type RoomEvent, type RoomMode } from '../shared/room-model';
-import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
+import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
@@ -39,6 +39,7 @@ export class RoomPane {
   private readonly mode = el('select');
   private readonly rounds = el('input');
   private readonly timeout = el('input');
+  private readonly finalizer = el('select');
   private readonly start = el('button', 'room-button', 'Start');
   private readonly stop = el('button', 'room-button stop', 'Stop');
   private readonly status = el('div', 'room-status');
@@ -122,6 +123,7 @@ export class RoomPane {
       const input = el('input');
       input.type = 'checkbox';
       input.dataset['participant'] = participant.id;
+      input.addEventListener('change', () => this.renderFinalizer());
       this.boxes.set(participant.id, input);
       const availability = participantAvailability(participant);
       input.disabled = !availability.available;
@@ -149,12 +151,13 @@ export class RoomPane {
     this.timeout.step = 'any';
     this.timeout.value = DEFAULT_TIMEOUT_MINUTES;
     this.timeout.dataset['room'] = 'timeout';
+    this.finalizer.dataset['room'] = 'finalizer';
     this.start.type = 'button';
     this.start.dataset['room'] = 'start';
     this.stop.type = 'button';
     this.stop.dataset['room'] = 'stop';
     const settings = el('div', 'room-row');
-    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), this.start, this.stop);
+    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), field('Finalizer', this.finalizer), this.start, this.stop);
     const carry = el('div', 'room-row');
     this.target.dataset['room'] = 'carry-target';
     this.carryFinal.type = 'button';
@@ -171,6 +174,22 @@ export class RoomPane {
     return box;
   }
 
+  private checkedIds(): string[] {
+    return [...this.boxes].filter(([, input]) => input.checked).map(([id]) => id);
+  }
+
+  private renderFinalizer(): void {
+    const checked = this.checkedIds();
+    const chosen = resolveFinalizer(checked, this.finalizer.value);
+    this.finalizer.replaceChildren();
+    for (const participant of ROOM_PARTICIPANTS.filter((item) => checked.includes(item.id))) {
+      const option = el('option', undefined, participant.label);
+      option.value = participant.id;
+      this.finalizer.append(option);
+    }
+    this.finalizer.value = chosen;
+  }
+
   private async onStart(): Promise<void> {
     this.message.textContent = '';
     const result = formToConfig({
@@ -178,7 +197,8 @@ export class RoomPane {
       mode: this.mode.value as RoomMode,
       rounds: this.rounds.value,
       timeoutMinutes: this.timeout.value,
-      checked: [...this.boxes].filter(([, input]) => input.checked).map(([id]) => id),
+      checked: this.checkedIds(),
+      finalizerId: this.finalizer.value,
     });
     if (!result.ok) {
       this.message.textContent = result.error;
@@ -241,6 +261,7 @@ export class RoomPane {
     this.mode.disabled = busy;
     this.timeout.disabled = busy;
     this.rounds.disabled = busy;
+    this.finalizer.disabled = busy;
     for (const participant of ROOM_PARTICIPANTS) {
       const input = this.boxes.get(participant.id);
       if (input !== undefined) input.disabled = busy || !participantAvailability(participant).available;

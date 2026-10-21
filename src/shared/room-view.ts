@@ -3,6 +3,7 @@ import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
 import { renderCarryHistory } from './room-history';
 import {
   ROOM_PARTICIPANTS,
+  defaultFinalizerId,
   parseRoomConfig,
   type RoomConfigResult,
   type RoomEntry,
@@ -36,6 +37,7 @@ export interface RoomFormValues {
   rounds: string;
   timeoutMinutes: string;
   checked: readonly string[];
+  finalizerId?: string;
 }
 
 const MS_PER_MINUTE = 60_000;
@@ -82,8 +84,14 @@ export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSn
 export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | null {
   if (snapshot.phase === 'running' || snapshot.roomId === null) return null;
   if (what === 'history') return renderCarryHistory(snapshot.roomId, snapshot.entries);
-  const last = [...snapshot.entries].reverse().find((entry) => entry.kind === 'reply');
+  const newest = [...snapshot.entries].reverse();
+  const last = newest.find((entry) => entry.kind === 'final') ?? newest.find((entry) => entry.kind === 'reply');
   return last === undefined || last.text.length === 0 ? null : last.text;
+}
+
+export function resolveFinalizer(checked: readonly string[], previous: string): string {
+  const ticked = ROOM_PARTICIPANTS.filter((item) => checked.includes(item.id));
+  return ticked.some((item) => item.id === previous) ? previous : defaultFinalizerId(ticked);
 }
 
 export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): RoomConfigResult {
@@ -97,6 +105,7 @@ export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKin
     mode: form.mode,
     rounds,
     participants,
+    finalizerId: resolveFinalizer(form.checked, form.finalizerId ?? ''),
     turnTimeoutMs: Math.round(minutes * MS_PER_MINUTE),
   });
 }

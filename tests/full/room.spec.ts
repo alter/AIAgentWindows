@@ -76,8 +76,31 @@ test('a relay of two stub participants for 2 rounds writes the history in the re
       'Codex | reply',
       'Claude Code | reply',
       'Codex | reply',
+      'Claude Code | final',
     ]);
     await expect(page.locator('.room-entry.kind-reply')).toHaveCount(4);
+    await expect(page.locator('.room-entry.kind-final')).toHaveCount(1);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the finalizer lists the ticked participants, defaults to Claude Code and writes the final answer', async () => {
+  const { app, page } = await open();
+  try {
+    await fill(page, 'relay', 1, 'finalizer question');
+    const options = field(page, 'finalizer').locator('option');
+    await expect(options).toHaveText(['Claude Code', 'Codex']);
+    await expect(field(page, 'finalizer')).toHaveValue('claude');
+    await field(page, 'finalizer').selectOption('codex');
+    await page.locator('input[data-participant="claude"]').uncheck();
+    await expect(options).toHaveText(['Codex']);
+    await page.locator('input[data-participant="claude"]').check();
+    await field(page, 'finalizer').selectOption('codex');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done');
+    expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'Claude Code | reply', 'Codex | reply', 'Codex | final']);
+    await expect(page.locator('.room-entry.kind-final')).toHaveCount(1);
   } finally {
     await app.close();
   }
@@ -115,7 +138,7 @@ test('a broadcast sends the prompt to every participant once', async () => {
     await run(page, 'broadcast', 1, 'broadcast question');
     const headings = await historyHeadings(page);
     expect(headings[0]).toBe('Owner | prompt');
-    expect(headings.slice(1).sort()).toEqual(['Claude Code | reply', 'Codex | reply']);
+    expect(headings.slice(1).sort()).toEqual(['Claude Code | final', 'Claude Code | reply', 'Codex | reply']);
   } finally {
     await app.close();
   }
@@ -200,7 +223,8 @@ setTimeout(() => {
     send.disabled = true;
     say('user', text);
     stop.hidden = false;
-    setTimeout(() => say('assistant', 'LATE-REPLY'), 60);
+    const n = log.querySelectorAll('.assistant').length;
+    setTimeout(() => say('assistant', n === 0 ? 'LATE-REPLY' : 'LATE-REPLY again ' + n), 60);
     setTimeout(() => { stop.hidden = true; }, 90);
   };
   ta.addEventListener('input', () => { send.disabled = ta.value === ''; });
@@ -261,7 +285,7 @@ test('a web participant whose view was never opened answers on its first turn', 
     await field(page, 'rounds').fill('1');
     await field(page, 'start').click();
     await expect(field(page, 'status')).toContainText('done');
-    expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'DeepSeek | reply']);
+    expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'DeepSeek | reply', 'DeepSeek | final']);
     await expect(page.locator('.room-entry.kind-reply .room-entry-text').first()).toContainText('LATE-REPLY');
   } finally {
     await second.close();

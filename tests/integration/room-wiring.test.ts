@@ -147,7 +147,7 @@ function echoDriver(): DriverFactory {
 }
 
 function config(overrides: Partial<RoomConfig> = {}): RoomConfig {
-  return { prompt: 'the question', mode: 'relay', rounds: 1, participants: [CLAUDE, CODEX], turnTimeoutMs: 5000, ...overrides };
+  return { prompt: 'the question', mode: 'relay', rounds: 1, participants: [CLAUDE, CODEX], turnTimeoutMs: 5000, finalizerId: CLAUDE.id, ...overrides };
 }
 
 async function finished(seen: RoomEvent[]): Promise<void> {
@@ -163,7 +163,7 @@ describe('room service', () => {
     await finished(seen);
     const state = room.state();
     expect(state.phase).toBe('done');
-    expect(state.entries.map((entry) => entry.label)).toEqual(['Owner', 'Claude Code', 'Codex']);
+    expect(state.entries.map((entry) => entry.label)).toEqual(['Owner', 'Claude Code', 'Codex', 'Claude Code']);
     const history = await readFile(state.historyPath ?? '', 'utf8');
     expect(history.indexOf('reply of Claude Code')).toBeLessThan(history.indexOf('reply of Codex'));
   });
@@ -185,8 +185,13 @@ describe('room service', () => {
   it('carries the final reply or the history into a session by id, never while running', async () => {
     const pasted: Array<[string, string]> = [];
     const gate: { release: () => void } = { release: () => undefined };
+    let turns = 0;
     const slow: DriverFactory = async (participant) => ({
-      turn: () => new Promise((resolve) => (gate.release = () => resolve(`reply of ${participant.label}`))),
+      turn: () => {
+        turns += 1;
+        if (turns > 1) return Promise.resolve(`final of ${participant.label}`);
+        return new Promise((resolve) => (gate.release = () => resolve(`reply of ${participant.label}`)));
+      },
       reset: async () => undefined,
       dispose: () => undefined,
     });
@@ -199,7 +204,7 @@ describe('room service', () => {
     expect(room.carry('s1', 'final')).toBe(true);
     expect(room.carry('s1', 'history')).toBe(true);
     expect(room.carry('gone', 'final')).toBe(false);
-    expect(pasted[0]).toEqual(['s1', 'reply of Claude Code']);
+    expect(pasted[0]).toEqual(['s1', 'final of Claude Code']);
     expect(pasted[1]?.[1]).toContain('# Room');
   });
 
@@ -241,7 +246,7 @@ describe('room service terminal of a paused session', () => {
     room.resume();
     await finished(seen);
     expect(room.state().paused).toEqual([]);
-    expect(room.state().entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(room.state().entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'final']);
     expect(room.terminalWrite('room-claude-1', 'x')).toBe(false);
   });
 });

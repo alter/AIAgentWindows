@@ -113,6 +113,7 @@ describe('room channels', () => {
     mode: 'relay',
     rounds: 2,
     participants: [{ id: 'claude', kind: 'claude', label: 'Claude Code' }],
+    finalizerId: 'claude',
     turnTimeoutMs: 600000,
   };
 
@@ -120,6 +121,7 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomStart, config)).toEqual({ ok: true, value: config });
     expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, rounds: 51 }).ok).toBe(false);
     expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, prompt: '' }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, finalizerId: 'codex' }).ok).toBe(false);
     expect(validateRequest(INVOKE_CHANNELS.roomStart, null).ok).toBe(false);
   });
 
