@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Application skeleton — one Slack-like window with CLI and web agents
@@ -124,3 +124,4 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 - 2026-10-21 T20 done: root cause confirmed by probe (check handler returning false makes iframe storage-access `denied`, no handler `granted`); permissionCheckAllowed + SENSITIVE_PERMISSIONS in src/shared/site-policy.ts, formatSiteLog (src/shared/site-log.ts), src/main/site-log-file.ts logs request/check/popup-denied/load-failed to stdout and <userData>/logs/sites.log; docs/tech/electron@44.6.0.md section added; unit tests red first (import missing), smoke storage-access test red with old check ("denied") then green; tsc/eslint/coverage 100.00/unittest/evidence/arch/publish flags/gitleaks rc=0, electron-smoke 7 passed, integrity 0 findings
 - 2026-10-21 T21 done: windowsVisible(env) in src/shared/window-visibility.ts (hidden when AIAW_USER_DATA is set unless AIAW_SHOW_WINDOWS=1); main window and site popups get show from it, site view focus() skipped when hidden; unit test red first (module missing) then 3 passed; smoke test 'main window stays hidden' added, no existing smoke test needed AIAW_SHOW_WINDOWS; all Electron runs in test mode, no visible window launched; electron-smoke 8 passed, fast tier 11/11 rc=0, tsc/eslint rc=0
 - 2026-10-21 T21a done: dockHidden(env, platform) in src/shared/window-visibility.ts (darwin and test mode, not with AIAW_SHOW_WINDOWS=1); main calls app.dock?.hide() right after the userData override, before ready; no app.focus()/app.show() exists in src/main; unit test red first (dockHidden undefined, 1 failed) then 4 passed; smoke test 'main window stays hidden' asserts app.dock.isVisible() false, red without the hide line (Received: true), restored; electron-smoke 8 passed, fast tier 11/11 rc=0, tsc/eslint rc=0, integrity 0 findings
+- 2026-10-21 coordinator: T19, T20, T21, T21a verified (electron-smoke 8/8 hidden, fast tier rc=0, coverage 100.00%). Owner's run 18:10: Grok sign-in now reaches accounts.x.ai (sites.log check line 14:10:41Z) and is then stopped by Cloudflare; a hidden probe from this machine loads grok.com itself with status 200 and no challenge. Waiting for the owner's screenshot of the block page. Paused on AC10.
