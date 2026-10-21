@@ -74,3 +74,12 @@ The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
 - Provenance of the navigation requirement: after Google refused the sign-in, the owner reported (in the session, 2026-10-21) "I can't go back to the normal sign-in either". The spike windows had no menu or address bar; `signin.js` gained a Go menu (Back, Forward, Home, Reload) in dc13631, and `spikes/nav-smoke.out` shows Back and Home returning from example.com to chatgpt.com. Forward and Reload were not exercised.
 - W16 now says what the log shows: failed name lookups (attempts), not connections.
 - P2, W8, W17, G7 reworded or re-cited per the third VERIFY.md.
+
+# NOTES — verify:passed (2026-10-21, fourth round)
+
+Residual minor items from the fourth VERIFY.md, left as they are so the verified text stays the verified text; they go into the first task that touches these files:
+- P2: no artefact records the `chmod +x` step itself; `docs/tech/node-pty@1.1.0.md` still says "every spawn then fails".
+- G7: the anchor `base.ts#L660-L675` ends two lines before `path.resolve(outputDir, reportName)` at line 677.
+- The owner's navigation message is quoted in English; the original (Russian) is "я и назад выйти к обычной авторизации не могу".
+- W16: no record says which window made the STUN lookups.
+Gate 1 still needs the owner's confirmation (tasks/README.md, "Order of work", step 3).

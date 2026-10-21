@@ -2,8 +2,8 @@ phase:feasibility
 role:ARCH
 type:research
 priority:P0
-status:review
-verify:failed
+status:done
+verify:passed
 milestone:M1
 gate:yes
 format:2
