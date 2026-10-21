@@ -107,3 +107,10 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - Tests (red first, 5 failed before the change): `room.test.ts` "room CLI dialogs decided on the rendered screen" (between turns, after 32 KB, after the quiet window, split and reordered, trust between turns), `screen-reader.test.ts`, `start-screen.test.ts` "generic selection dialogs".
 - Reverse control (2026-10-21): both `await options.guard?.()` calls removed from `cli-turn.ts` -> `npx vitest run tests/integration/room.test.ts -t "rendered screen"` -> `Tests  3 failed | 2 passed | 25 skipped (30)` (between turns, late, trust between turns; flood/split/reorder are still caught by the check after start-up). Restored.
 - Not verified: how the real claude/codex render a mid-session dialog (never started); the generic `choice` rule and the marker phrases come from the CLI start-up screens in docs/tech and the Round 2 stub.
+
+## T12i capture sanitizer closes names
+- `src/shared/capture-sanitize.ts`: `isKeptAttributeName` (fixed set from the policy, or `data-` + lowercase words all in CLOSED_WORDS), `HTML_TAGS` (other element names become `div`), `isClosedValue` allows at most one number of up to 4 digits; `findLeaks` flags `attribute name`, `element name` and digit-group values with the same functions.
+- Tests (red first, 12 failed before the change): `tests/unit/capture-sanitize.test.ts` "capture sanitizer closed names" (Round 2 payload through sanitizePage and findLeaks, custom element to div with children kept, data-* names, digit groups, 8 leak-check cases).
+- Reverse control (2026-10-21): data-name rule inverted (`return true`), the digit-group count removed and every tag treated as known -> `npx vitest run tests/unit/capture-sanitize.test.ts` -> `Tests  11 failed | 35 passed (46)`. Restored.
+- Test strings avoid the shape `sk-live-...` (gitleaks generic-api-key / stripe rule fired on the first draft of the payload).
+

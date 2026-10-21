@@ -5,7 +5,7 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { captureSites, summarizeCapture } from '../../src/main/capture-sites';
-import { SANITIZE_POLICY, findLeaks, sanitizePage, sanitizeScript } from '../../src/shared/capture-sanitize';
+import { SANITIZE_POLICY, findLeaks, isClosedValue, sanitizePage, sanitizeScript } from '../../src/shared/capture-sanitize';
 import type { PageRunner } from '../../src/main/site-adapters/types';
 
 const SECRETS = [
@@ -163,6 +163,63 @@ describe('capture sanitizer attribute values', () => {
   });
 });
 
+const R2_PAGE = `<!doctype html><body>
+  <div data-private-token-value="x" zq-probe7f3abc123 data-state="4111-1111-1111-1111" aria-valuenow="0142 7788 5512 9031" class="1234.5678.9012.3456">
+  <private-token-value role="status">x</private-token-value></div></body>`;
+
+describe('capture sanitizer closed names', () => {
+  it('keeps no attribute name, element name or digit-group value from the page', () => {
+    const html = sanitizePage(new JSDOM(R2_PAGE).window.document, 'probe', SANITIZE_POLICY);
+    for (const leak of ['private-token-value', 'probe7f3', '4111', '0142', '1234.5678']) expect(html, leak).not.toContain(leak);
+    expect(html).toContain('role="status"');
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it('rebuilds a custom element as a plain div and keeps its children', () => {
+    const page = '<body><my-widget-9f3 data-testid="send-button"><button aria-label="Send">q</button></my-widget-9f3></body>';
+    const html = sanitizePage(new JSDOM(page).window.document, 'probe', SANITIZE_POLICY);
+    const out = new JSDOM(html).window.document;
+    expect(html).not.toContain('widget');
+    expect(out.querySelector('div[data-testid="send-button"] > button')).not.toBeNull();
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it('keeps data-* names made of closed words and drops the rest', () => {
+    const page = '<body><div data-message-author-role="user" data-turn-id="abc" data-turn-9="a" data-Zq="a" data-state-="x">x</div></body>';
+    const html = sanitizePage(new JSDOM(page).window.document, 'probe', SANITIZE_POLICY);
+    expect(html).toContain('data-message-author-role="user"');
+    expect(html).toMatch(/data-turn-id="id-\d+"/);
+    expect(html).not.toContain('data-turn-9');
+    expect(html).not.toContain('data-zq');
+    expect(html).not.toContain('data-state-');
+  });
+
+  it('never calls a value with several digit groups closed', () => {
+    const words = new Set(SANITIZE_POLICY.words);
+    for (const value of ['4111-1111-1111-1111', '0142 7788', '12.34', 'turn-3-4']) expect(isClosedValue(value, words), value).toBe(false);
+    for (const value of ['conversation-turn-3', '42', 'step-1']) expect(isClosedValue(value, words), value).toBe(true);
+  });
+
+  it.each([
+    ['an attribute name outside the closed set', '<html><body><div data-private-token-value="x">x</div></body></html>'],
+    ['a bare attribute name', '<html><body><div zq-probe7f3abc123>x</div></body></html>'],
+    ['a data name with digits', '<html><body><div data-turn-4111="x">x</div></body></html>'],
+    ['an aria name outside the list', '<html><body><div aria-secret-note="x">x</div></body></html>'],
+    ['a custom element name', '<html><body><private-token-value>x</private-token-value></body></html>'],
+    ['digit groups in a value', '<html><body><div data-state="4111-1111-1111-1111">x</div></body></html>'],
+    ['digit groups in a class', '<html><body><div class="1234.5678.9012.3456">x</div></body></html>'],
+    ['digit groups in an aria value', '<html><body><div aria-valuenow="0142 7788 5512 9031">x</div></body></html>'],
+  ])('leak check flags %s without echoing it', (_name, html) => {
+    const problems = findLeaks(html);
+    expect(problems.length).toBeGreaterThan(0);
+    for (const word of ['private-token', 'probe7f3', '4111', '0142', '1234', 'secret']) expect(problems.join('\n')).not.toContain(word);
+  });
+
+  it('accepts what the sanitizer writes for a normal page', () => {
+    expect(findLeaks(sanitizePage(openPage().window.document, 'chatgpt', SANITIZE_POLICY))).toEqual([]);
+  });
+});
+
 describe('capture sanitizer limits', () => {
   it('stops at the depth limit and marks the page as truncated', () => {
     const dom = new JSDOM('<body></body>');
@@ -193,7 +250,7 @@ describe('capture sanitizer limits', () => {
     expect(sanitizeScript('x')).toContain('"maxNodes":60000');
   });
 
-  it('skips an element whose name cannot be recreated and a class with no safe token', () => {
+  it('rebuilds an element whose name cannot be recreated and drops a class with no safe token', () => {
     const dom = new JSDOM('<body><a$b>words</a$b><p class="café">x</p><p id="  " 9x="a" aria-labelledby="one two">y</p></body>');
     const html = sanitizePage(dom.window.document, 'x', SANITIZE_POLICY);
     expect(html).not.toContain('words');
