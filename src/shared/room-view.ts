@@ -1,4 +1,5 @@
 // room-view.ts
+import { SITE_KINDS_WITH_ADAPTER, isSiteKind } from './agents';
 import { renderHistory } from './room-history';
 import {
   ROOM_PARTICIPANTS,
@@ -8,6 +9,7 @@ import {
   type RoomEvent,
   type PausedSession,
   type RoomMode,
+  type RoomParticipant,
   type RoomStatus,
 } from './room-model';
 
@@ -37,6 +39,21 @@ export interface RoomFormValues {
 }
 
 const MS_PER_MINUTE = 60_000;
+
+export interface ParticipantAvailability {
+  available: boolean;
+  note: string;
+}
+
+export function missingAdapterNote(label: string): string {
+  return `${label} has no site adapter yet (needs \`npm run capture-sites\`)`;
+}
+
+export function participantAvailability(participant: RoomParticipant): ParticipantAvailability {
+  const kind = participant.kind;
+  if (!isSiteKind(kind) || SITE_KINDS_WITH_ADAPTER.includes(kind)) return { available: true, note: '' };
+  return { available: false, note: missingAdapterNote(participant.label) };
+}
 
 export function emptyRoomSnapshot(): RoomSnapshot {
   return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0 };
@@ -68,6 +85,8 @@ export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | nul
 
 export function formToConfig(form: RoomFormValues): RoomConfigResult {
   const participants = ROOM_PARTICIPANTS.filter((item) => form.checked.includes(item.id));
+  const unavailable = participants.find((item) => !participantAvailability(item).available);
+  if (unavailable !== undefined) return { ok: false, error: participantAvailability(unavailable).note };
   const rounds = form.mode === 'broadcast' ? 1 : Number(form.rounds);
   const minutes = form.timeoutMinutes.trim() === '' ? Number.NaN : Number(form.timeoutMinutes);
   return parseRoomConfig({

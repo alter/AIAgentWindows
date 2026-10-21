@@ -1,6 +1,6 @@
 // room-view.test.ts
 import { describe, expect, it } from 'vitest';
-import { AGENT_KINDS, AGENT_LABELS } from '../../src/shared/agents';
+import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
 import type { RoomEntry, RoomEvent } from '../../src/shared/room-model';
 import { ROOM_PARTICIPANTS } from '../../src/shared/room-model';
 import {
@@ -8,8 +8,11 @@ import {
   carryText,
   emptyRoomSnapshot,
   formToConfig,
+  participantAvailability,
   type RoomFormValues,
 } from '../../src/shared/room-view';
+import { adapterFor } from '../../src/main/site-adapters/registry';
+import { createSiteSeats } from '../../src/main/site-seats';
 
 function entry(kind: RoomEntry['kind'], text: string, label = 'Codex'): RoomEntry {
   return { authorId: label.toLowerCase(), label, time: 1_700_000_000_000, kind, text };
@@ -193,5 +196,39 @@ describe('formToConfig', () => {
   it('broadcast ignores the rounds field', () => {
     const result = formToConfig({ ...form, mode: 'broadcast', rounds: 'junk' });
     expect(result.ok && result.config.rounds).toBe(1);
+  });
+});
+
+describe('participants without an adapter', () => {
+  const WEB: readonly SiteKind[] = ['chatgpt', 'grok', 'deepseek'];
+
+  it('CLI participants are available, a web participant without an adapter is not and says what is needed', () => {
+    for (const item of ROOM_PARTICIPANTS) {
+      const state = participantAvailability(item);
+      const withoutAdapter = isSiteKind(item.kind) && !SITE_KINDS_WITH_ADAPTER.includes(item.kind);
+      expect(state.available).toBe(!withoutAdapter);
+      if (withoutAdapter) expect(state.note).toContain('npm run capture-sites');
+    }
+  });
+
+  it('the list of sites with an adapter is the registry', () => {
+    for (const kind of WEB) expect(adapterFor(kind) !== null).toBe(SITE_KINDS_WITH_ADAPTER.includes(kind));
+  });
+
+  it('a ticked web participant without an adapter is refused before the run starts', () => {
+    const form: RoomFormValues = { prompt: 'hello', mode: 'broadcast', rounds: '1', timeoutMinutes: '10', checked: ['claude', 'deepseek'] };
+    const result = formToConfig(form);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('DeepSeek');
+      expect(result.error).toContain('npm run capture-sites');
+    }
+  });
+
+  it('the driver error for a missing adapter names the missing adapter, not the chat page', () => {
+    const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, adapterFor: () => null });
+    const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
+    if (deepseek === undefined) throw new Error('no deepseek participant');
+    expect(() => seats(deepseek)).toThrow(/DeepSeek.*npm run capture-sites/);
   });
 });

@@ -2,7 +2,7 @@
 import { isCliKind, type Agent } from '../shared/agents';
 import type { PtyDataEvent } from '../shared/ipc';
 import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEntry, type RoomEvent, type RoomMode } from '../shared/room-model';
-import { applyRoomEvent, emptyRoomSnapshot, formToConfig, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
+import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
@@ -117,7 +117,15 @@ export class RoomPane {
       input.type = 'checkbox';
       input.dataset['participant'] = participant.id;
       this.boxes.set(participant.id, input);
-      people.append(labeled(participant.label, input));
+      const availability = participantAvailability(participant);
+      input.disabled = !availability.available;
+      const item = labeled(participant.label, input);
+      if (!availability.available) {
+        item.title = availability.note;
+        item.classList.add('unavailable');
+        item.append(el('span', 'room-unavailable', 'needs `npm run capture-sites`'));
+      }
+      people.append(item);
     }
     this.mode.dataset['room'] = 'mode';
     for (const [value, text] of [['broadcast', 'To all'], ['relay', 'Relay']] as const) {
@@ -227,7 +235,10 @@ export class RoomPane {
     this.mode.disabled = busy;
     this.timeout.disabled = busy;
     this.rounds.disabled = busy || this.mode.value === 'broadcast';
-    for (const input of this.boxes.values()) input.disabled = busy;
+    for (const participant of ROOM_PARTICIPANTS) {
+      const input = this.boxes.get(participant.id);
+      if (input !== undefined) input.disabled = busy || !participantAvailability(participant).available;
+    }
     const canCarry = !busy && this.snapshot.roomId !== null && this.target.value.length > 0;
     this.carryFinal.disabled = !canCarry;
     this.carryHistory.disabled = !canCarry;
