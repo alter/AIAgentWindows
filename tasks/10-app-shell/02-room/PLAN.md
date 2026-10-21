@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -177,3 +177,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 coordinator: T26 verified (room-view 38, electron-smoke 20/20 hidden, fast tier rc=0). T26's worker saw one unexplained failure of the 2-round smoke and then reran it six times — outside a declared repeat, recorded as a breach; the coordinator's full smoke run passed. The failure stays open as a possible flake for the next declared investigation.
 - 2026-10-22 03:40 T28 done: cause = echo filter dropped reply lines that equal a line of the prompt (history carries earlier replies) and the baseline read before insert was the previous turn's reply; red first (generic-adapter repeated-answer test timed out, reply-lines tests failed on the old file); fix in reply-lines.ts and turn.ts; smoke LATE_SITE now answers identically and `room.spec` never-opened test passes (reply + final); vitest generic-adapter+room.test+reply-lines 93/93, fast tier 11/11 (FASTRUN-2026-10-22-033736012933)
 - 2026-10-22 03:47 T28a done: measured (zsh -l -i -c 'exec "$@"' + stub, 2 runs): 1.93/1.94 s per turn via the login shell vs 0.16/0.15 s direct, so ~1.8 s of each turn is the owner's rc files (the rest of the old ~5 s was the app's own spawn under load); in test mode only (`roomLoginShell` = AIAW_USER_DATA + AIAW_ROOM_FAST=1) room CLI turns exec the binary directly (`SpawnOptions.loginShell`, production unchanged); the smoke waits for `done` with (participants x rounds + 1) x 5 s + 5 s instead of the fixed 15 s; red first (3 tests: spawn spec both ways, roomLoginShell, driver with a nonexistent SHELL), smoke 20/20 hidden (relay 2 rounds 13.0 s -> 1.7 s, carry 25.1 s -> 3.5 s), fast tier 11/11 (FASTRUN-2026-10-22-034653298524)
+- 2026-10-22 coordinator: T28, T28a verified (electron-smoke 20/20 hidden, fast tier rc=0). Product note: each real room CLI turn also pays the owner's login shell (~1.9 s measured with the stub, plus rc side effects such as ssh-add) — candidate follow-up: resolve the CLI path once through the login shell and spawn directly. Paused on AC7.
