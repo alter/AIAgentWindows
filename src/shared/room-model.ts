@@ -42,8 +42,16 @@ export interface RoomEntry {
 export type RoomStatus = 'done' | 'stopped' | 'failed';
 export type StepState = 'running' | 'replied' | 'failed';
 
+export interface PausedSession {
+  participantId: string;
+  sessionId: string;
+  note: string;
+}
+
 export type RoomEvent =
   | { type: 'started'; roomId: string; historyPath: string; total: number }
+  | { type: 'paused'; roomId: string; participantId: string; sessionId: string; note: string }
+  | { type: 'resumed'; roomId: string; participantId: string }
   | { type: 'progress'; roomId: string; participantId: string; state: StepState; completed: number; total: number }
   | { type: 'entry'; roomId: string; entry: RoomEntry }
   | { type: 'finished'; roomId: string; status: RoomStatus };

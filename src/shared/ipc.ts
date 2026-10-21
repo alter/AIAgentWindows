@@ -19,6 +19,10 @@ export const INVOKE_CHANNELS = {
   roomStart: 'room:start',
   roomStop: 'room:stop',
   roomCarry: 'room:carry',
+  roomResume: 'room:resume',
+  roomTerminalBacklog: 'room:terminal-backlog',
+  roomTerminalWrite: 'room:terminal-write',
+  roomTerminalResize: 'room:terminal-resize',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -27,6 +31,7 @@ export const EVENT_CHANNELS = {
   ptyExit: 'pty:exit',
   siteState: 'site:state',
   roomEvent: 'room:event',
+  roomTerminalData: 'room:terminal-data',
 } as const;
 
 export const MAX_PTY_WRITE_BYTES = 1024 * 1024;
@@ -77,6 +82,10 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomStart]: RoomConfig;
   [INVOKE_CHANNELS.roomStop]: undefined;
   [INVOKE_CHANNELS.roomCarry]: { id: string; what: CarryWhat };
+  [INVOKE_CHANNELS.roomResume]: undefined;
+  [INVOKE_CHANNELS.roomTerminalBacklog]: { id: string };
+  [INVOKE_CHANNELS.roomTerminalWrite]: { id: string; data: string };
+  [INVOKE_CHANNELS.roomTerminalResize]: { id: string; cols: number; rows: number };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -100,11 +109,16 @@ export interface AppApi {
   roomStart(config: RoomConfig): Promise<RoomStartResult>;
   roomStop(): Promise<void>;
   roomCarry(id: string, what: CarryWhat): Promise<boolean>;
+  roomResume(): Promise<void>;
+  roomTerminalBacklog(id: string): Promise<PtyBacklog>;
+  roomTerminalWrite(id: string, data: string): Promise<void>;
+  roomTerminalResize(id: string, cols: number, rows: number): Promise<void>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
   onSiteState(listener: (event: SiteStateEvent) => void): () => void;
   onRoomEvent(listener: (event: RoomEvent) => void): () => void;
+  onRoomTerminalData(listener: (event: PtyDataEvent) => void): () => void;
 }
 
 type Parser<T> = (payload: unknown) => T | null;
@@ -133,6 +147,22 @@ function noPayload(payload: unknown): undefined | null {
   return payload === undefined ? undefined : null;
 }
 
+function parseWrite(payload: unknown): { id: string; data: string } | null {
+  return withId(payload, (record, id) => {
+    const data = record['data'];
+    if (typeof data !== 'string' || Buffer.byteLength(data, 'utf8') > MAX_PTY_WRITE_BYTES) return null;
+    return { id, data };
+  });
+}
+
+function parseResize(payload: unknown): { id: string; cols: number; rows: number } | null {
+  return withId(payload, (record, id) => {
+    const cols = parseDimension(record['cols']);
+    const rows = parseDimension(record['rows']);
+    return cols === null || rows === null ? null : { id, cols, rows };
+  });
+}
+
 const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.listAgents]: noPayload,
   [INVOKE_CHANNELS.addAgent]: (payload) => {
@@ -143,18 +173,8 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.selectAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.closeAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.restartAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
-  [INVOKE_CHANNELS.ptyWrite]: (payload) =>
-    withId(payload, (record, id) => {
-      const data = record['data'];
-      if (typeof data !== 'string' || Buffer.byteLength(data, 'utf8') > MAX_PTY_WRITE_BYTES) return null;
-      return { id, data };
-    }),
-  [INVOKE_CHANNELS.ptyResize]: (payload) =>
-    withId(payload, (record, id) => {
-      const cols = parseDimension(record['cols']);
-      const rows = parseDimension(record['rows']);
-      return cols === null || rows === null ? null : { id, cols, rows };
-    }),
+  [INVOKE_CHANNELS.ptyWrite]: parseWrite,
+  [INVOKE_CHANNELS.ptyResize]: parseResize,
   [INVOKE_CHANNELS.ptyBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.siteNav]: (payload) =>
     withId(payload, (record, id) => {
@@ -173,6 +193,10 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       const what = record['what'];
       return (CARRY_KINDS as readonly unknown[]).includes(what) ? { id, what: what as CarryWhat } : null;
     }),
+  [INVOKE_CHANNELS.roomResume]: noPayload,
+  [INVOKE_CHANNELS.roomTerminalBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.roomTerminalWrite]: parseWrite,
+  [INVOKE_CHANNELS.roomTerminalResize]: parseResize,
 };
 
 export function validateRequest(channel: string, payload: unknown): Validation<unknown> {

@@ -6,7 +6,7 @@ import type { RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 import { NavBar } from './nav-bar';
 import { RoomPane } from './room-pane';
-import { TerminalPane } from './terminal-pane';
+import { TerminalPane, agentIo } from './terminal-pane';
 
 export class Content {
   readonly element = el('main', 'content');
@@ -35,7 +35,7 @@ export class Content {
     }
     for (const id of wanted) {
       if (this.panes.has(id)) continue;
-      const pane = new TerminalPane(id);
+      const pane = new TerminalPane(agentIo(id));
       this.panes.set(id, pane);
       this.element.append(pane.element);
       this.observer.observe(pane.element);
@@ -59,6 +59,10 @@ export class Content {
 
   roomEvent(event: RoomEvent): void {
     this.room.apply(event);
+  }
+
+  roomTerminalData(event: PtyDataEvent): void {
+    this.room.terminalData(event);
   }
 
   ptyData(event: PtyDataEvent): void {

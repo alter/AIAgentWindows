@@ -315,3 +315,10 @@ body {
 .room-button.stop { background: #e01e5a; }
 .room-status { font-size: 12px; opacity: 0.85; }
 .room-message { font-size: 12px; color: #f2a0b8; min-height: 16px; }
+
+.room-pause { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: rgba(242, 199, 68, 0.12); }
+.room-pause[hidden] { display: none; }
+.room-pause-note { font-size: 13px; }
+.room-terminals { display: flex; flex-direction: column; gap: 8px; height: 260px; }
+.room-terminals .terminal-pane { border-radius: 6px; overflow: hidden; }
+.room-pause .room-button { align-self: flex-start; }

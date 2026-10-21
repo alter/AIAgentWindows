@@ -23,6 +23,7 @@ root.append(sidebar.element, content.element);
 
 api.onPtyData((event) => content.ptyData(event));
 api.onRoomEvent((event) => content.roomEvent(event));
+api.onRoomTerminalData((event) => content.roomTerminalData(event));
 api.onSiteState((event) => content.siteState(event));
 api.onPtyExit((event) => content.ptyExit(event.id, event.exitCode));
 api.onAgentsChanged((snapshot) => {

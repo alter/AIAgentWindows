@@ -1,6 +1,6 @@
 // room.spec.ts
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -11,6 +11,7 @@ const MARKUP = '<img src=x onerror="window.__pwned=1"><b>bold</b>';
 interface Session {
   app: ElectronApplication;
   page: Page;
+  base: string;
 }
 
 async function open(extraEnv: Record<string, string> = {}): Promise<Session> {
@@ -32,7 +33,7 @@ async function open(extraEnv: Record<string, string> = {}): Promise<Session> {
   const page = await app.firstWindow();
   await page.locator('[data-room="open"]').click();
   await expect(page.locator('[data-room="pane"]')).toBeVisible();
-  return { app, page };
+  return { app, page, base };
 }
 
 function field(page: Page, name: string): Locator {
@@ -136,6 +137,29 @@ test('markup in a reply is shown as text', async () => {
     await expect(reply).toHaveText(MARKUP);
     await expect(page.locator('[data-room="feed"] img, [data-room="feed"] b')).toHaveCount(0);
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
+  } finally {
+    await app.close();
+  }
+});
+
+test('a folder trust dialog pauses the run, shows the terminal, and Resume finishes the same step', async () => {
+  const { app, page, base } = await open({ AIAW_STUB_DIALOG: 'trust' });
+  try {
+    await field(page, 'prompt').fill('trust question');
+    await page.locator('input[data-participant="claude"]').check();
+    await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'start').click();
+    await expect(field(page, 'resume')).toBeVisible();
+    await expect(field(page, 'pause-note')).toContainText('accept the folder once');
+    await expect(field(page, 'terminals').locator('.xterm-rows')).toContainText('I trust this folder');
+    await expect(page.locator('.room-entry.kind-reply')).toHaveCount(0);
+    const folder = path.join(base, 'profile', 'shared', 'rooms', 'claude-1');
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, '.aiaw-stub-trusted'), '');
+    await field(page, 'resume').click();
+    await expect(field(page, 'status')).toContainText('done');
+    await expect(page.locator('.room-entry.kind-reply')).toHaveCount(1);
+    await expect(field(page, 'pause')).toBeHidden();
   } finally {
     await app.close();
   }

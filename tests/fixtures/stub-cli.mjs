@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // stub-cli.mjs
-import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -18,7 +18,8 @@ const DIALOGS = {
   update: '  Update available \u00b7 0.159.2 \u2192 0.163.0\r\n\r\n\u203a 1. Update now (runs `probe-installer`)\r\n  2. Skip\r\n  3. Skip until next version\r\n\r\n  enter continue \u00b7 esc skip\r\n',
   trust: ' Quick safety check: Is this a project you created or one you trust?\r\n\r\n \u276f No, exit\r\n   Yes, I trust this folder\r\n\r\n Enter to confirm \u00b7 Esc to cancel\r\n',
 };
-if (DIALOG && DIALOGS[DIALOG]) process.stdout.write(DIALOGS[DIALOG]);
+const TRUSTED = existsSync(path.join(process.cwd(), '.aiaw-stub-trusted'));
+if (DIALOG && DIALOGS[DIALOG] && !(DIALOG === 'trust' && TRUSTED)) process.stdout.write(DIALOGS[DIALOG]);
 
 const TRANSCRIPT = process.env.AIAW_STUB_TRANSCRIPT;
 const REPLY_DELAY_MS = Number(process.env.AIAW_STUB_REPLY_DELAY_MS ?? '50');

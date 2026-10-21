@@ -124,7 +124,7 @@ describe('room channels', () => {
   });
 
   it('takes no payload for state, select and stop', () => {
-    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop]) {
+    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);
       expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
     }
@@ -138,7 +138,19 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomCarry, { what: 'final' }).ok).toBe(false);
   });
 
-  it('the room event channel is an event, not an invoke', () => {
+  it('validates the paused-terminal channels like the pty ones: an id, bounded data, positive sizes', () => {
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalBacklog, { id: ID })).toEqual({ ok: true, value: { id: ID } });
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalBacklog, {}).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalWrite, { id: ID, data: 'a' })).toEqual({ ok: true, value: { id: ID, data: 'a' } });
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalWrite, { id: ID, data: 5 }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalWrite, { id: ID, data: 'x'.repeat(MAX_PTY_WRITE_BYTES + 1) }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalResize, { id: ID, cols: 80, rows: 24 }).ok).toBe(true);
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalResize, { id: ID, cols: 0, rows: 24 }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomTerminalResize, { id: ID, cols: 80 }).ok).toBe(false);
+  });
+
+  it('the room event channels are events, not invokes', () => {
+    expect(isEventChannel(EVENT_CHANNELS.roomTerminalData)).toBe(true);
     expect(isEventChannel(EVENT_CHANNELS.roomEvent)).toBe(true);
   });
 });

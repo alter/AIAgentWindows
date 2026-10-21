@@ -1,9 +1,11 @@
 // room-pane.ts
 import { isCliKind, type Agent } from '../shared/agents';
+import type { PtyDataEvent } from '../shared/ipc';
 import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEntry, type RoomEvent, type RoomMode } from '../shared/room-model';
 import { applyRoomEvent, emptyRoomSnapshot, formToConfig, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
+import { TerminalPane, roomSessionIo } from './terminal-pane';
 
 const DEFAULT_TIMEOUT_MINUTES = '10';
 
@@ -38,6 +40,14 @@ export class RoomPane {
   private readonly target = el('select');
   private readonly carryFinal = el('button', 'room-button', 'Carry final reply');
   private readonly carryHistory = el('button', 'room-button', 'Carry history');
+  private readonly pause = el('div', 'room-pause');
+  private readonly pauseNotes = el('div', 'room-pause-notes');
+  private readonly terminals = el('div', 'room-terminals');
+  private readonly resume = el('button', 'room-button', 'Resume');
+  private readonly sessions = new Map<string, TerminalPane>();
+  private readonly observer = new ResizeObserver(() => {
+    for (const pane of this.sessions.values()) pane.refit();
+  });
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
   private shown = 0;
 
@@ -50,7 +60,15 @@ export class RoomPane {
     this.prompt.dataset['room'] = 'prompt';
     this.status.dataset['room'] = 'status';
     this.message.dataset['room'] = 'message';
-    this.element.append(el('h2', 'room-title', 'Room'), this.feed, this.controls());
+    this.pause.hidden = true;
+    this.pause.dataset['room'] = 'pause';
+    this.pauseNotes.dataset['room'] = 'pause-note';
+    this.terminals.dataset['room'] = 'terminals';
+    this.resume.type = 'button';
+    this.resume.dataset['room'] = 'resume';
+    this.resume.addEventListener('click', () => void api.roomResume());
+    this.pause.append(this.pauseNotes, this.terminals, this.resume);
+    this.element.append(el('h2', 'room-title', 'Room'), this.feed, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
   }
@@ -73,6 +91,10 @@ export class RoomPane {
     this.snapshot = applyRoomEvent(this.snapshot, event);
     this.renderFeed();
     this.renderState();
+  }
+
+  terminalData(event: PtyDataEvent): void {
+    this.sessions.get(event.id)?.push(event);
   }
 
   setAgents(agents: readonly Agent[]): void {
@@ -175,8 +197,29 @@ export class RoomPane {
     this.feed.scrollTop = this.feed.scrollHeight;
   }
 
+  private renderPause(): void {
+    const { paused } = this.snapshot;
+    this.pause.hidden = paused.length === 0;
+    this.pauseNotes.replaceChildren(...paused.map((item) => el('div', 'room-pause-note', item.note)));
+    for (const [id, pane] of this.sessions) {
+      if (paused.some((item) => item.sessionId === id)) continue;
+      this.observer.unobserve(pane.element);
+      pane.dispose();
+      this.sessions.delete(id);
+    }
+    for (const item of paused) {
+      if (this.sessions.has(item.sessionId)) continue;
+      const pane = new TerminalPane(roomSessionIo(item.sessionId));
+      this.sessions.set(item.sessionId, pane);
+      this.terminals.append(pane.element);
+      this.observer.observe(pane.element);
+      pane.show();
+    }
+  }
+
   private renderState(): void {
-    const { phase, completed, total, running, historyPath } = this.snapshot;
+    this.renderPause();
+    const { phase, completed, total, running, historyPath, paused } = this.snapshot;
     const busy = phase === 'running';
     this.start.disabled = busy;
     this.stop.disabled = !busy;
@@ -191,6 +234,6 @@ export class RoomPane {
     const names = ROOM_PARTICIPANTS.filter((item) => running.includes(item.id)).map((item) => item.label);
     const where = historyPath === null ? '' : ` History: ${historyPath}`;
     this.status.textContent =
-      phase === 'idle' ? 'Idle.' : `${busy ? `Running ${names.join(', ')}` : phase} (${completed}/${total}).${where}`;
+      phase === 'idle' ? 'Idle.' : `${busy ? (paused.length > 0 ? 'Waiting for you' : `Running ${names.join(', ')}`) : phase} (${completed}/${total}).${where}`;
   }
 }

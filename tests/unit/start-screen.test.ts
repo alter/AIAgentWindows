@@ -1,6 +1,6 @@
 // start-screen.test.ts
 import { describe, expect, it } from 'vitest';
-import { blockingStartScreen } from '../../src/shared/start-screen';
+import { blockingStartScreen, startScreenIssue } from '../../src/shared/start-screen';
 
 const CODEX_UPDATE =
   '\x1b[2J\x1b[H  Update available · 0.159.2 → 0.163.0\r\n  Release notes: https://github.com/openai/codex/releases/latest\r\n\r\n› 1. Update now (runs `sh -c \'curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh\'`)\r\n  2. Skip\r\n  3. Skip until next version\r\n\r\n  enter continue · esc skip';
@@ -33,5 +33,19 @@ describe('blocking start-up screens', () => {
 
   it('names the reason', () => {
     expect(blockingStartScreen(CODEX_UPDATE)).toContain('dialog');
+  });
+});
+
+describe('start-up screen kinds', () => {
+  it('tells a folder trust dialog from an update dialog, and the update dialog wins when both are on screen', () => {
+    expect(startScreenIssue(CLAUDE_TRUST)?.kind).toBe('trust');
+    expect(startScreenIssue(CODEX_TRUST)?.kind).toBe('trust');
+    expect(startScreenIssue(CODEX_UPDATE)?.kind).toBe('update');
+    expect(startScreenIssue(CODEX_TRUST + CODEX_UPDATE)?.kind).toBe('update');
+  });
+
+  it('a dialog that only waits for Enter is its own kind and a clean screen has none', () => {
+    expect(startScreenIssue('  Something new\r\n  enter continue')?.kind).toBe('enter');
+    expect(startScreenIssue(CLAUDE_PROMPT)).toBeNull();
   });
 });

@@ -31,6 +31,25 @@ describe('room participants', () => {
   });
 });
 
+describe('paused sessions', () => {
+  const PAUSE: RoomEvent = { type: 'paused', roomId: 'r1', participantId: 'a', sessionId: 'room-a-1', note: 'accept, then Resume' };
+
+  it('a pause is listed once per participant and replaced by a later pause of the same participant', () => {
+    const first = run([STARTED, PAUSE]);
+    expect(first.paused).toEqual([{ participantId: 'a', sessionId: 'room-a-1', note: 'accept, then Resume' }]);
+    const again = applyRoomEvent(first, { ...PAUSE, sessionId: 'room-a-2' } as RoomEvent);
+    expect(again.paused.map((item) => item.sessionId)).toEqual(['room-a-2']);
+  });
+
+  it('resume removes the pause, finish clears them all and a stray room is ignored', () => {
+    const two = run([STARTED, PAUSE, { ...PAUSE, participantId: 'b', sessionId: 'room-b-1' } as RoomEvent]);
+    expect(two.paused).toHaveLength(2);
+    expect(applyRoomEvent(two, { type: 'resumed', roomId: 'r1', participantId: 'a' }).paused.map((item) => item.participantId)).toEqual(['b']);
+    expect(applyRoomEvent(two, { type: 'finished', roomId: 'r1', status: 'stopped' }).paused).toEqual([]);
+    expect(applyRoomEvent(two, { type: 'resumed', roomId: 'other', participantId: 'a' })).toBe(two);
+  });
+});
+
 describe('applyRoomEvent', () => {
   it('starts idle and empty', () => {
     expect(emptyRoomSnapshot()).toEqual({
@@ -39,6 +58,7 @@ describe('applyRoomEvent', () => {
       historyPath: null,
       entries: [],
       running: [],
+      paused: [],
       completed: 0,
       total: 0,
     });

@@ -38,6 +38,16 @@ export interface ParticipantDriver {
   dispose(): void;
 }
 
+export class OwnerPause extends Error {
+  constructor(
+    readonly sessionId: string,
+    readonly note: string,
+  ) {
+    super(note);
+    this.name = 'OwnerPause';
+  }
+}
+
 export type DriverFactory = (participant: RoomParticipant) => Promise<ParticipantDriver>;
 
 export interface RoomDeps {
@@ -97,6 +107,7 @@ class RunState {
   readonly controller = new AbortController();
   completed = 0;
   chars = 0;
+  readonly waiting = new Set<() => void>();
   private nonce: string | null = null;
   private writing: Promise<void> = Promise.resolve();
 
@@ -160,6 +171,10 @@ export class Room {
 
   stop(): void {
     this.current?.controller.abort();
+  }
+
+  resume(): void {
+    for (const release of [...(this.current?.waiting ?? [])]) release();
   }
 
   async shutdown(): Promise<void> {
@@ -257,18 +272,43 @@ export class Room {
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,
       };
-      const first = driver.turn(request);
-      first.catch(() => undefined);
-      const result = await Promise.race([first, abortion(run.signal)]);
-      if (result === 'aborted') {
-        await driver.reset().catch(() => undefined);
-        return { kind: 'aborted' };
+      for (;;) {
+        const first = driver.turn(request);
+        first.catch(() => undefined);
+        try {
+          const result = await Promise.race([first, abortion(run.signal)]);
+          if (result === 'aborted') {
+            await driver.reset().catch(() => undefined);
+            return { kind: 'aborted' };
+          }
+          return result === null ? { kind: 'error', text: NO_REPLY_TEXT } : { kind: 'reply', text: result };
+        } catch (error) {
+          if (!(error instanceof OwnerPause) || run.signal.aborted) throw error;
+          if (!(await this.waitForOwner(run, participant, error))) {
+            await driver.reset().catch(() => undefined);
+            return { kind: 'aborted' };
+          }
+          await driver.reset().catch(() => undefined);
+        }
       }
-      return result === null ? { kind: 'error', text: NO_REPLY_TEXT } : { kind: 'reply', text: result };
     } catch (error) {
       await driver?.reset().catch(() => undefined);
       return run.signal.aborted ? { kind: 'aborted' } : { kind: 'error', text: errorText(error) };
     }
+  }
+
+  private async waitForOwner(run: RunState, participant: RoomParticipant, pause: OwnerPause): Promise<boolean> {
+    this.emit({ type: 'paused', roomId: run.id, participantId: participant.id, sessionId: pause.sessionId, note: pause.note });
+    const released = new Promise<'resumed'>((resolve) => {
+      const release = (): void => {
+        run.waiting.delete(release);
+        resolve('resumed');
+      };
+      run.waiting.add(release);
+    });
+    const outcome = await Promise.race([released, abortion(run.signal)]);
+    this.emit({ type: 'resumed', roomId: run.id, participantId: participant.id });
+    return outcome === 'resumed';
   }
 }
 

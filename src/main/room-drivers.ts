@@ -1,17 +1,18 @@
 // room-drivers.ts
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomSpawn } from '../shared/cli-args';
 import { rolloutId } from '../shared/codex-claim';
 import type { RoomParticipant } from '../shared/room-model';
-import { blockingStartScreen } from '../shared/start-screen';
+import { OutputBuffer, type OutputSnapshot } from '../shared/output-buffer';
+import { startScreenIssue } from '../shared/start-screen';
 import { claudeTranscriptPath } from './claude-transcripts';
 import { runCliTurn, CliTurnError } from './cli-turn';
 import { codexRolloutLocator } from './codex-rollouts';
 import { PtyManager } from './pty-manager';
-import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
+import { OwnerPause, type DriverFactory, type ParticipantDriver, type TurnRequest } from './room';
 import type { PageRunner, SiteAdapter } from './site-adapters/types';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
@@ -44,13 +45,25 @@ export interface RoomDriverDeps {
   platform: string;
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
   siteFor(participant: RoomParticipant): SiteSeat | null;
-  onOutput?(sessionId: string, data: string): void;
+  onOutput?(sessionId: string, data: string, end: number): void;
   timing?: Partial<RoomTiming>;
 }
 
-function safeName(id: string): string {
-  const readable = id.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 32);
-  return `${readable}-${createHash('sha1').update(id).digest('hex').slice(0, 8)}`;
+const TRUST_NOTE = 'accept the folder once in the terminal below, then press Resume';
+
+class FolderNames {
+  private readonly names = new Map<string, string>();
+  private readonly counts = new Map<string, number>();
+
+  of(participant: RoomParticipant): string {
+    const known = this.names.get(participant.id);
+    if (known !== undefined) return known;
+    const next = (this.counts.get(participant.kind) ?? 0) + 1;
+    this.counts.set(participant.kind, next);
+    const name = `${participant.kind}-${next}`;
+    this.names.set(participant.id, name);
+    return name;
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -62,6 +75,7 @@ const START_SCREEN_LIMIT = 32768;
 class SessionHost {
   private readonly lastData = new Map<string, number>();
   private readonly startScreens = new Map<string, string>();
+  private readonly buffers = new Map<string, OutputBuffer>();
   private readonly pty: PtyManager;
 
   constructor(onOutput: RoomDriverDeps['onOutput']) {
@@ -70,12 +84,34 @@ class SessionHost {
         this.lastData.set(id, Date.now());
         const seen = this.startScreens.get(id) ?? '';
         if (seen.length < START_SCREEN_LIMIT) this.startScreens.set(id, seen + data);
-        onOutput?.(id, data);
+        const end = this.bufferOf(id).append(data);
+        onOutput?.(id, data, end);
       },
       onExit: (id) => {
         this.lastData.delete(id);
       },
     });
+  }
+
+  private bufferOf(id: string): OutputBuffer {
+    let buffer = this.buffers.get(id);
+    if (buffer === undefined) {
+      buffer = new OutputBuffer();
+      this.buffers.set(id, buffer);
+    }
+    return buffer;
+  }
+
+  backlog(id: string): OutputSnapshot {
+    return this.bufferOf(id).snapshot();
+  }
+
+  forget(id: string): void {
+    this.buffers.delete(id);
+  }
+
+  resize(id: string, cols: number, rows: number): boolean {
+    return this.pty.resize(id, { cols, rows });
   }
 
   startScreen(id: string): string {
@@ -121,6 +157,7 @@ class CliDriver implements ParticipantDriver {
     private readonly deps: RoomDriverDeps,
     private readonly timing: RoomTiming,
     private readonly claimed: Set<string>,
+    private readonly folder: string,
   ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
@@ -148,6 +185,7 @@ class CliDriver implements ParticipantDriver {
     this.host.kill(ptyId);
     const deadline = Date.now() + this.timing.killWaitMs;
     while (this.host.has(ptyId) && Date.now() < deadline) await sleep(20);
+    this.host.forget(ptyId);
   }
 
   dispose(): void {
@@ -162,7 +200,7 @@ class CliDriver implements ParticipantDriver {
     this.counter += 1;
     const ptyId = `room-${this.participant.id}-${this.counter}`;
     const sessionId = randomUUID();
-    const cwd = path.join(this.deps.cwd, safeName(this.participant.id));
+    const cwd = path.join(this.deps.cwd, this.folder);
     await mkdir(cwd, { recursive: true });
     const spawnedAtMs = Date.now();
     const spec = buildRoomSpawn(this.kind, {
@@ -180,10 +218,11 @@ class CliDriver implements ParticipantDriver {
         ? async () => claudeTranscriptPath(env, sessionId)
         : this.claiming(codexRolloutLocator(env, { cwd, spawnedAtMs, claimed: this.claimed }));
     await this.untilReady(ptyId, signal);
-    const blocked = blockingStartScreen(this.host.startScreen(ptyId));
-    if (blocked !== null) {
+    const issue = startScreenIssue(this.host.startScreen(ptyId));
+    if (issue?.kind === 'trust') throw new OwnerPause(ptyId, `${this.participant.label}: ${TRUST_NOTE}`);
+    if (issue !== null) {
       await this.reset();
-      throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${blocked}`);
+      throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${issue.reason}`);
     }
     return ptyId;
   }
@@ -234,8 +273,15 @@ class SiteDriver implements ParticipantDriver {
   }
 }
 
+export interface RoomTerminals {
+  backlog(sessionId: string): OutputSnapshot;
+  write(sessionId: string, data: string): boolean;
+  resize(sessionId: string, cols: number, rows: number): boolean;
+}
+
 export interface RoomDrivers {
   factory: DriverFactory;
+  terminal: RoomTerminals;
   shutdown(): void;
 }
 
@@ -243,11 +289,17 @@ export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const timing: RoomTiming = { ...DEFAULT_ROOM_TIMING, ...deps.timing };
   const host = new SessionHost(deps.onOutput);
   const claimed = new Set<string>();
+  const folders = new FolderNames();
   const factory: DriverFactory = async (participant) => {
-    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, host, deps, timing, claimed);
+    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, host, deps, timing, claimed, folders.of(participant));
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
     return new SiteDriver(seat);
   };
-  return { factory, shutdown: () => host.killAll() };
+  const terminal: RoomTerminals = {
+    backlog: (id) => host.backlog(id),
+    write: (id, data) => host.write(id, data),
+    resize: (id, cols, rows) => host.resize(id, cols, rows),
+  };
+  return { factory, terminal, shutdown: () => host.killAll() };
 }

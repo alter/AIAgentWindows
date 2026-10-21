@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentController, type ControllerDeps } from '../../src/main/agent-controller';
-import type { DriverFactory, ParticipantDriver } from '../../src/main/room';
+import { OwnerPause, type DriverFactory, type ParticipantDriver } from '../../src/main/room';
+import type { RoomTerminals } from '../../src/main/room-drivers';
 import { RoomService } from '../../src/main/room-service';
 import { emptyState } from '../../src/shared/agents';
 import { EVENT_CHANNELS } from '../../src/shared/ipc';
@@ -102,11 +103,12 @@ describe('carry into a working session', () => {
   });
 });
 
-function service(driverFor: DriverFactory, pasted: Array<[string, string]> = []): { room: RoomService; seen: RoomEvent[] } {
+function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [], terminal: RoomTerminals = noTerminal()): { room: RoomService; seen: RoomEvent[] } {
   const seen: RoomEvent[] = [];
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
     driverFor,
+    terminal,
     emit: (event) => seen.push(event),
     paste: (id, text) => {
       pasted.push([id, text]);
@@ -115,6 +117,25 @@ function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [])
   });
   services.push(room);
   return { room, seen };
+}
+
+function noTerminal(): RoomTerminals {
+  return { backlog: () => ({ data: 'screen', end: 6 }), write: () => true, resize: () => true };
+}
+
+function pausingDriver(): DriverFactory {
+  return async (participant): Promise<ParticipantDriver> => {
+    let calls = 0;
+    return {
+      turn: async () => {
+        calls += 1;
+        if (calls === 1) throw new OwnerPause(`room-${participant.id}-1`, 'accept the folder, then Resume');
+        return `reply of ${participant.label}`;
+      },
+      reset: async () => undefined,
+      dispose: () => undefined,
+    };
+  };
 }
 
 function echoDriver(): DriverFactory {
@@ -187,5 +208,40 @@ describe('room service', () => {
     const { room } = service(echoDriver(), pasted);
     expect(room.carry('s1', 'final')).toBe(false);
     expect(pasted).toEqual([]);
+  });
+});
+
+describe('room service terminal of a paused session', () => {
+  it('lets the renderer see and type into a paused session only, and Resume lets the run finish', async () => {
+    const writes: Array<[string, string]> = [];
+    const sizes: Array<[string, number, number]> = [];
+    const terminal: RoomTerminals = {
+      backlog: () => ({ data: 'dialog', end: 6 }),
+      write: (id, data) => {
+        writes.push([id, data]);
+        return true;
+      },
+      resize: (id, cols, rows) => {
+        sizes.push([id, cols, rows]);
+        return true;
+      },
+    };
+    const { room, seen } = service(pausingDriver(), [], terminal);
+    expect(room.terminalWrite('room-claude-1', 'x')).toBe(false);
+    expect(room.terminalBacklog('room-claude-1')).toEqual({ data: '', end: 0 });
+    room.start(config({ participants: [CLAUDE] }));
+    await vi.waitFor(() => expect(room.state().paused.map((item) => item.sessionId)).toEqual(['room-claude-1']));
+    expect(room.terminalBacklog('room-claude-1')).toEqual({ data: 'dialog', end: 6 });
+    expect(room.terminalWrite('room-claude-1', '\r')).toBe(true);
+    expect(room.terminalResize('room-claude-1', 100, 30)).toBe(true);
+    expect(room.terminalWrite('room-other-1', 'x')).toBe(false);
+    expect(room.terminalResize('room-other-1', 10, 10)).toBe(false);
+    expect(writes).toEqual([['room-claude-1', '\r']]);
+    expect(sizes).toEqual([['room-claude-1', 100, 30]]);
+    room.resume();
+    await finished(seen);
+    expect(room.state().paused).toEqual([]);
+    expect(room.state().entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(room.terminalWrite('room-claude-1', 'x')).toBe(false);
   });
 });

@@ -98,10 +98,13 @@ async function start(): Promise<void> {
   await active.restore();
   const roomsDir = path.join(sharedDir, 'rooms');
   const drivers = createRoomDrivers({
-    cwd: path.join(roomsDir, 'sessions'),
+    cwd: roomsDir,
     sharedDir,
     platform: process.platform,
     envFor: (participant) => roomChildEnv(process.env, participant.kind),
+    onOutput: (id, data, end) => {
+      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.roomTerminalData, { id, data, end });
+    },
     timing: roomTimingOverride(process.env),
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,
@@ -113,6 +116,7 @@ async function start(): Promise<void> {
   const roomService = new RoomService({
     roomsDir,
     driverFor: drivers.factory,
+    terminal: drivers.terminal,
     emit: (event) => {
       if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.roomEvent, event);
     },

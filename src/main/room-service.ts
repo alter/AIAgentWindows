@@ -1,12 +1,15 @@
 // room-service.ts
 import { Room, type DriverFactory } from './room';
+import type { OutputSnapshot } from '../shared/output-buffer';
 import type { RoomConfig, RoomEvent } from '../shared/room-model';
+import type { RoomTerminals } from './room-drivers';
 import { applyRoomEvent, carryText, emptyRoomSnapshot, type CarryWhat, type RoomSnapshot, type RoomStartResult } from '../shared/room-view';
 
 export interface RoomServiceDeps {
   roomsDir: string;
   driverFor: DriverFactory;
   emit(event: RoomEvent): void;
+  terminal: RoomTerminals;
   paste(agentId: string, text: string): boolean;
   now?(): number;
   newId?(): string;
@@ -45,6 +48,26 @@ export class RoomService {
 
   stop(): void {
     this.room.stop();
+  }
+
+  resume(): void {
+    this.room.resume();
+  }
+
+  terminalBacklog(sessionId: string): OutputSnapshot {
+    return this.isPaused(sessionId) ? this.deps.terminal.backlog(sessionId) : { data: '', end: 0 };
+  }
+
+  terminalWrite(sessionId: string, data: string): boolean {
+    return this.isPaused(sessionId) && this.deps.terminal.write(sessionId, data);
+  }
+
+  terminalResize(sessionId: string, cols: number, rows: number): boolean {
+    return this.isPaused(sessionId) && this.deps.terminal.resize(sessionId, cols, rows);
+  }
+
+  private isPaused(sessionId: string): boolean {
+    return this.snapshot.paused.some((item) => item.sessionId === sessionId);
   }
 
   carry(agentId: string, what: CarryWhat): boolean {

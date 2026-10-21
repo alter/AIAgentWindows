@@ -1,10 +1,34 @@
 // terminal-pane.ts
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
-import type { PtyDataEvent } from '../shared/ipc';
+import type { PtyBacklog, PtyDataEvent } from '../shared/ipc';
 import { dropPastePayload, rawKeySequence, sanitizePaste } from '../shared/terminal-input';
 import { api } from './api';
 import { el } from './dom';
+
+export interface TerminalIo {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  backlog(): Promise<PtyBacklog>;
+  restart?(): Promise<boolean>;
+}
+
+export function agentIo(id: string): TerminalIo {
+  return {
+    write: (data) => void api.ptyWrite(id, data),
+    resize: (cols, rows) => void api.ptyResize(id, cols, rows),
+    backlog: () => api.ptyBacklog(id),
+    restart: () => api.restartAgent(id),
+  };
+}
+
+export function roomSessionIo(id: string): TerminalIo {
+  return {
+    write: (data) => void api.roomTerminalWrite(id, data),
+    resize: (cols, rows) => void api.roomTerminalResize(id, cols, rows),
+    backlog: () => api.roomTerminalBacklog(id),
+  };
+}
 
 export class TerminalPane {
   readonly element = el('div', 'terminal-pane');
@@ -24,7 +48,7 @@ export class TerminalPane {
   private hydratedEnd = 0;
   private pending: PtyDataEvent[] = [];
 
-  constructor(private readonly id: string) {
+  constructor(private readonly io: TerminalIo) {
     this.element.hidden = true;
     this.restartButton.type = 'button';
     this.restartButton.hidden = true;
@@ -32,8 +56,8 @@ export class TerminalPane {
     this.element.append(this.host, this.restartButton);
     this.terminal.loadAddon(this.fit);
     this.terminal.attachCustomKeyEventHandler((event) => this.handleKey(event));
-    this.terminal.onData((data) => void api.ptyWrite(this.id, data));
-    this.terminal.onResize(({ cols, rows }) => void api.ptyResize(this.id, cols, rows));
+    this.terminal.onData((data) => this.io.write(data));
+    this.terminal.onResize(({ cols, rows }) => this.io.resize(cols, rows));
     this.element.addEventListener('paste', (event) => this.handlePaste(event), true);
     this.element.addEventListener('dragover', (event) => event.preventDefault());
     this.element.addEventListener('drop', (event) => this.handleDrop(event));
@@ -50,12 +74,12 @@ export class TerminalPane {
 
   exited(exitCode: number): void {
     this.terminal.write(`\r\n\x1b[2m[process exited with code ${exitCode}]\x1b[0m\r\n`);
-    this.restartButton.hidden = false;
+    this.restartButton.hidden = this.io.restart === undefined;
   }
 
   private async restart(): Promise<void> {
     this.restartButton.disabled = true;
-    const started = await api.restartAgent(this.id);
+    const started = (await this.io.restart?.()) ?? false;
     this.restartButton.disabled = false;
     if (started) this.restartButton.hidden = true;
     this.terminal.focus();
@@ -86,7 +110,7 @@ export class TerminalPane {
   }
 
   private async hydrate(): Promise<void> {
-    const backlog = await api.ptyBacklog(this.id);
+    const backlog = await this.io.backlog();
     if (backlog.data.length > 0) this.terminal.write(backlog.data);
     this.hydratedEnd = backlog.end;
     this.hydrated = true;
@@ -106,7 +130,7 @@ export class TerminalPane {
     if (sequence === null) return true;
     if (event.type === 'keydown') {
       event.preventDefault();
-      void api.ptyWrite(this.id, sequence);
+      this.io.write(sequence);
     }
     return false;
   }

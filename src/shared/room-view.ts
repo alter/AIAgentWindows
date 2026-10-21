@@ -6,6 +6,7 @@ import {
   type RoomConfigResult,
   type RoomEntry,
   type RoomEvent,
+  type PausedSession,
   type RoomMode,
   type RoomStatus,
 } from './room-model';
@@ -20,6 +21,7 @@ export interface RoomSnapshot {
   historyPath: string | null;
   entries: RoomEntry[];
   running: string[];
+  paused: PausedSession[];
   completed: number;
   total: number;
 }
@@ -37,16 +39,21 @@ export interface RoomFormValues {
 const MS_PER_MINUTE = 60_000;
 
 export function emptyRoomSnapshot(): RoomSnapshot {
-  return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], completed: 0, total: 0 };
+  return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0 };
 }
 
 export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSnapshot {
   if (event.type === 'started') {
-    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: [], running: [], completed: 0, total: event.total };
+    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: [], running: [], paused: [], completed: 0, total: event.total };
   }
   if (event.roomId !== snapshot.roomId) return snapshot;
   if (event.type === 'entry') return { ...snapshot, entries: [...snapshot.entries, event.entry] };
-  if (event.type === 'finished') return { ...snapshot, phase: event.status, running: [] };
+  if (event.type === 'finished') return { ...snapshot, phase: event.status, running: [], paused: [] };
+  if (event.type === 'paused') {
+    const { participantId, sessionId, note } = event;
+    return { ...snapshot, paused: [...snapshot.paused.filter((item) => item.participantId !== participantId), { participantId, sessionId, note }] };
+  }
+  if (event.type === 'resumed') return { ...snapshot, paused: snapshot.paused.filter((item) => item.participantId !== event.participantId) };
   const others = snapshot.running.filter((id) => id !== event.participantId);
   const running = event.state === 'running' ? [...others, event.participantId] : others;
   return { ...snapshot, running, completed: event.completed, total: event.total };

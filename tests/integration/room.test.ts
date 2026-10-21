@@ -1,5 +1,5 @@
 // room.test.ts
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -424,44 +424,112 @@ describe('room with stub CLIs', () => {
   });
 });
 
-describe('room CLI start-up screens', () => {
-  const screens: Array<[string, string, 'claude' | 'codex']> = [
-    ['update', 'a codex update dialog with "Update now" preselected', 'codex'],
-    ['trust', 'a claude folder trust dialog', 'claude'],
-  ];
+function dialogDrivers(dialog: string, log: string, kind: 'claude' | 'codex') {
+  return createRoomDrivers({
+    cwd: roomsDir,
+    sharedDir: dir,
+    platform: 'win32',
+    envFor: () => ({
+      PATH: process.env.PATH,
+      AIAW_CLAUDE_BIN: STUB,
+      AIAW_CODEX_BIN: STUB,
+      AIAW_USER_DATA: path.join(dir, 'user-data'),
+      CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
+      CODEX_HOME: path.join(dir, 'codex-home'),
+      AIAW_STUB_TRANSCRIPT: kind,
+      AIAW_STUB_DIALOG: dialog,
+      AIAW_STUB_STDIN_LOG: log,
+      AIAW_STUB_REPLY_DELAY_MS: '40',
+    }),
+    siteFor: () => null,
+    timing: { quietMs: 150, startMaxMs: 10000, pollMs: 25, settleMs: 50, submitDelayMs: 40, killWaitMs: 5000 },
+  });
+}
 
-  for (const [dialog, title, kind] of screens) {
-    it(`types nothing into ${title} and fails the turn`, async () => {
-      const log = path.join(dir, `stdin-${dialog}.log`);
-      const drivers = createRoomDrivers({
-        cwd: roomsDir,
-        sharedDir: dir,
-        platform: 'win32',
-        envFor: () => ({
-          PATH: process.env.PATH,
-          AIAW_CLAUDE_BIN: STUB,
-          AIAW_CODEX_BIN: STUB,
-          AIAW_USER_DATA: path.join(dir, 'user-data'),
-          CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
-          CODEX_HOME: path.join(dir, 'codex-home'),
-          AIAW_STUB_TRANSCRIPT: kind,
-          AIAW_STUB_DIALOG: dialog,
-          AIAW_STUB_STDIN_LOG: log,
-        }),
-        siteFor: () => null,
-        timing: { quietMs: 150, startMaxMs: 10000, pollMs: 25, settleMs: 50, submitDelayMs: 40, killWaitMs: 5000 },
-      });
-      const room = new Room({ roomsDir, driverFor: drivers.factory });
-      rooms.push(room);
-      const participant = kind === 'codex' ? B : A;
-      const result = await room.start(config([participant], { turnTimeoutMs: 3000 })).done;
-      await room.shutdown();
-      drivers.shutdown();
-      expect(result.entries.map((entry) => `${entry.kind}`)).toEqual(['prompt', 'error']);
-      const typed = await readFile(log, 'utf8').catch(() => '');
-      expect(typed).toBe('');
-    });
+async function until(check: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 10000;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+describe('room CLI start-up screens', () => {
+  it('types nothing into a codex update dialog and fails the turn', async () => {
+    const log = path.join(dir, 'stdin-update.log');
+    const drivers = dialogDrivers('update', log, 'codex');
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const result = await room.start(config([B], { turnTimeoutMs: 3000 })).done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(result.entries.map((entry) => `${entry.kind}`)).toEqual(['prompt', 'error']);
+    const typed = await readFile(log, 'utf8').catch(() => '');
+    expect(typed).toBe('');
+  });
+});
+
+describe('room folder trust pause', () => {
+  const trustMarker = () => path.join(roomsDir, 'claude-1', '.aiaw-stub-trusted');
+
+  function pausedEvents(events: RoomEvent[]): Array<Extract<RoomEvent, { type: 'paused' }>> {
+    return events.filter((event): event is Extract<RoomEvent, { type: 'paused' }> => event.type === 'paused');
+  }
+
+  it('pauses the run on the trust dialog, types nothing, and finishes the same step after Resume', async () => {
+    const log = path.join(dir, 'stdin-trust.log');
+    const drivers = dialogDrivers('trust', log, 'claude');
+    const events: RoomEvent[] = [];
+    const room = new Room({ roomsDir, driverFor: drivers.factory, emit: (event) => events.push(event) });
+    rooms.push(room);
+    const run = room.start(config([A], { turnTimeoutMs: 10000 }));
+    await until(() => pausedEvents(events).length === 1, 'the pause');
+    const paused = pausedEvents(events)[0];
+    expect(paused).toMatchObject({ participantId: 'a', roomId: run.roomId });
+    expect(paused?.sessionId.startsWith('room-a-')).toBe(true);
+    expect(paused?.note).toContain('Resume');
+    expect(drivers.terminal.backlog(paused?.sessionId ?? '').data).toContain('I trust this folder');
+    expect(await readFile(log, 'utf8').catch(() => '')).toBe('');
+    expect(events.filter((event) => event.type === 'entry')).toHaveLength(1);
+    await mkdir(path.dirname(trustMarker()), { recursive: true });
+    await writeFile(trustMarker(), '');
+    room.resume();
+    const result = await run.done;
+    expect(result.status).toBe('done');
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(events.some((event) => event.type === 'resumed')).toBe(true);
+    expect(await readFile(log, 'utf8')).not.toBe('');
+    const again = await room.start(config([A], { turnTimeoutMs: 10000 })).done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(again.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply']);
+    expect(pausedEvents(events)).toHaveLength(1);
+  });
+
+  it('pauses again when the folder is still not trusted at Resume, and Stop ends a paused run', async () => {
+    const log = path.join(dir, 'stdin-trust-again.log');
+    const drivers = dialogDrivers('trust', log, 'claude');
+    const events: RoomEvent[] = [];
+    const room = new Room({ roomsDir, driverFor: drivers.factory, emit: (event) => events.push(event) });
+    rooms.push(room);
+    const run = room.start(config([A], { turnTimeoutMs: 10000 }));
+    await until(() => pausedEvents(events).length === 1, 'the first pause');
+    room.resume();
+    await until(() => pausedEvents(events).length === 2, 'the second pause');
+    room.stop();
+    const result = await run.done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(result.status).toBe('stopped');
+    expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'error']);
+    expect(await readFile(log, 'utf8').catch(() => '')).toBe('');
+  });
+
+  it('resume does nothing when no run is paused', async () => {
+    const t = rig();
+    t.room.resume();
+    expect(t.room.isRunning()).toBe(false);
+  });
 });
 
 describe('room with a web participant', () => {
