@@ -82,6 +82,15 @@ export function renderHistory(
   return renderHistoryHeader(roomId, nonce) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
 }
 
+function carryEntryBlock(entry: RoomEntry): string {
+  const when = new Date(entry.time).toISOString();
+  return `\n### ${plainLabel(entry.label)} (${entry.kind}, ${when})\n${entry.text}\n`;
+}
+
+export function renderCarryHistory(roomId: string, entries: readonly RoomEntry[]): string {
+  return `# Room ${roomId}\n${entries.map(carryEntryBlock).join('')}`;
+}
+
 function introFor(participant: RoomParticipant): string {
   return [
     `You are ${participant.label} in a room where several AI agents and the owner take turns.`,

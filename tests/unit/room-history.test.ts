@@ -5,6 +5,7 @@ import {
   buildParticipantPrompt,
   escapeBody,
   historyNonce,
+  renderCarryHistory,
   renderHistory,
 } from '../../src/shared/room-history';
 import type { RoomEntry, RoomParticipant } from '../../src/shared/room-model';
@@ -220,5 +221,29 @@ describe('entry fencing', () => {
   it('the CLI prompt says that only nonce-marked headers in the file are entries', () => {
     const prompt = buildParticipantPrompt(A, 'r1', forged);
     expect(prompt.text.toLowerCase()).toContain('nonce');
+  });
+});
+
+describe('renderCarryHistory', () => {
+  const entries = [
+    entry({ text: 'ask' }),
+    entry({ kind: 'reply', authorId: 'a', label: 'Claude Code', text: '- item one\n* item two\n# head\n> quote\n```\ncode' }),
+  ];
+
+  it('keeps every body line exactly as written, with no escape prefix', () => {
+    const text = renderCarryHistory('r1', entries);
+    expect(text).toContain('\n- item one\n* item two\n# head\n> quote\n```\ncode\n');
+    expect(text).not.toContain('\\');
+  });
+
+  it('keeps order, author labels and the room id', () => {
+    const text = renderCarryHistory('r1', entries);
+    expect(text.startsWith('# Room r1')).toBe(true);
+    expect(text.indexOf('ask')).toBeLessThan(text.indexOf('- item one'));
+    expect(text).toContain('Claude Code');
+  });
+
+  it('the history sent to participants still escapes the same lines', () => {
+    expect(renderHistory('r1', entries)).toContain('\\- item one\n\\* item two');
   });
 });

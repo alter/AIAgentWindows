@@ -144,6 +144,17 @@ describe('carryText', () => {
     expect(text.indexOf('\nq\n')).toBeLessThan(text.indexOf('\na\n'));
   });
 
+  it('the history carries body lines without the escape prefix', () => {
+    const snapshot = run([
+      STARTED,
+      { type: 'entry', roomId: 'r1', entry: entry('reply', '- one\n# two') },
+      { type: 'finished', roomId: 'r1', status: 'done' },
+    ]);
+    const text = carryText(snapshot, 'history') ?? '';
+    expect(text).toContain('\n- one\n# two\n');
+    expect(text).not.toContain('\\');
+  });
+
   it('is null while running, with no replies, or with no room', () => {
     expect(carryText(emptyRoomSnapshot(), 'final')).toBeNull();
     expect(carryText(emptyRoomSnapshot(), 'history')).toBeNull();

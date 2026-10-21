@@ -1,6 +1,6 @@
 // room-view.ts
 import { SITE_KINDS_WITH_ADAPTER, isSiteKind } from './agents';
-import { renderHistory } from './room-history';
+import { renderCarryHistory } from './room-history';
 import {
   ROOM_PARTICIPANTS,
   parseRoomConfig,
@@ -78,7 +78,7 @@ export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSn
 
 export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | null {
   if (snapshot.phase === 'running' || snapshot.roomId === null) return null;
-  if (what === 'history') return renderHistory(snapshot.roomId, snapshot.entries);
+  if (what === 'history') return renderCarryHistory(snapshot.roomId, snapshot.entries);
   const last = [...snapshot.entries].reverse().find((entry) => entry.kind === 'reply');
   return last === undefined || last.text.length === 0 ? null : last.text;
 }
