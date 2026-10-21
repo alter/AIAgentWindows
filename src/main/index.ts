@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
 import { codexHome, listRollouts } from './codex-rollouts';
@@ -33,6 +34,7 @@ function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     title: windowTitle(),
+    show: windowsVisible(process.env),
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,

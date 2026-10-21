@@ -3,6 +3,7 @@ import { session, WebContentsView, type BrowserWindow } from 'electron';
 import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
 import { siteBounds } from '../shared/site-layout';
+import { windowsVisible } from '../shared/window-visibility';
 import {
   originOf,
   permissionAllowed,
@@ -39,7 +40,7 @@ export class SiteViews {
     if (site === null || entry === null) return;
     this.layout();
     this.publish(site.id, entry.view);
-    entry.view.webContents.focus();
+    if (windowsVisible(this.env)) entry.view.webContents.focus();
   }
 
   navigate(id: string, action: SiteAction): void {
@@ -87,6 +88,7 @@ export class SiteViews {
         action: 'allow',
         overrideBrowserWindowOptions: {
           parent: this.window,
+          show: windowsVisible(this.env),
           webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true },
         },
       };

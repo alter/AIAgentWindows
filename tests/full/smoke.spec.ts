@@ -73,6 +73,19 @@ test('a Claude Code agent shows the stub banner and is listed again after a rela
   await second.close();
 });
 
+test('in test mode the main window stays hidden', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const visible = (app: ElectronApplication): Promise<boolean[]> =>
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map((window) => window.isVisible()));
+
+  const hidden = await launch(userData, folder);
+  const hiddenPage = await hidden.firstWindow();
+  await expect(hiddenPage.locator('button[aria-haspopup="menu"]')).toBeAttached();
+  expect(await visible(hidden)).toEqual([false]);
+  await hidden.close();
+});
+
 test('switching between two terminal agents keeps the visible pane filling the whole content height', async () => {
   const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
   const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
