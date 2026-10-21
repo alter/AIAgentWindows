@@ -1,0 +1,13 @@
+Owner's second run of signin.js from a normal terminal, 2026-10-21, after Cmd+Q and restart. Owner's report: all three sites answered a prompt.
+Output pasted by the owner (no sandbox line, no STUN errors this time):
+[chatgpt] permission geolocation from https://chatgpt.com/ -> denied
+[chatgpt] permission persistent-storage from https://chatgpt.com/ -> denied
+[chatgpt] permission persistent-storage from https://chatgpt.com/ -> denied
+[chatgpt] permission persistent-storage from https://chatgpt.com/c/<local id> -> denied
+[chatgpt] permission persistent-storage from https://chatgpt.com/c/<conversation id> -> denied
+
+Session cookie NAMES on disk in the persist: partitions (values never read; sqlite3 immutable read-only):
+chatgpt: 38 cookies; __Secure-next-auth.session-token.0 __Secure-next-auth.session-token.1 
+grok: 65 cookies; sso 
+deepseek: 9 cookies; aws-waf-token 
+deepseek keeps its user token in Local Storage, not in a cookie; it requires sign-in to chat (W5), so answering after the restart shows the session survived.

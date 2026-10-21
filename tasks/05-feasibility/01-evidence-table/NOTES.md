@@ -62,3 +62,9 @@ The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
 - Signed in to ChatGPT, Grok and DeepSeek by hand (non-Google). Log in `spikes/owner-signin-log.txt`. Persistence after a restart is still to be reported (W17).
 - `errorcode: -105` is `ERR_NAME_NOT_RESOLVED` for STUN hosts. The same run also printed the harness-sandbox line, so it most likely ran through `!` inside the Claude Code session, whose network allowlist does not resolve those hosts. Sign-in worked anyway; WebRTC (STUN) matters for the sites' voice modes and some bot checks, so V6 must be checked from a normal terminal.
 - The handler denied `geolocation` and `persistent-storage` to chatgpt.com. Product consequence: grant `persistent-storage` to the configured site origins (it only protects their storage from eviction), keep `geolocation` denied.
+
+# NOTES — owner's restart check (2026-10-21)
+
+- VERIFY item 6 is done by the owner: signed in to all three sites by hand, restarted with Cmd+Q, and all three answered a prompt (`spikes/owner-restart-check.txt`). The session cookies (`__Secure-next-auth.session-token.*` for ChatGPT, `sso` for Grok) are on disk in the `persist:` partitions; only their names were read.
+- Run from a normal terminal, the harness-sandbox line and the STUN `-105` errors are gone, which confirms they came from running inside the Claude Code sandbox.
+- Prompts were sent to the three sites by the owner, not by the session.
