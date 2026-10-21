@@ -1,0 +1,9 @@
+phase:feasibility
+role:ARCH
+type:research
+priority:P0
+status:in_progress
+verify:pending
+milestone:M1
+gate:yes
+format:2

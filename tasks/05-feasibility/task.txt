@@ -1,0 +1,26 @@
+TASK: feasibility evidence
+
+GOAL
+  Evidence that the product in docs/PROJECT.md can be built as described,
+  before product code. Serves Gate 1 (tasks/GOAL.md).
+
+CONTEXT
+  docs/PROJECT.md
+  tasks/GOAL.md
+
+SCOPE
+  + 01-evidence-table — claims table with evidence, spikes, docs/tech studies
+  − T00 scaffold of the application — the first /plan after this phase
+
+OUTCOME
+  tasks/05-feasibility/01-evidence-table closed with verify:passed.
+
+VERIFY (QA)
+  1. python3 tasks/check.py — zero problems
+  2. reverse control: blank one evidence cell of docs/EVIDENCE.md → scripts/evidence_check.py exits 1
+
+ROLE
+  ARCH
+
+DEPENDS
+  (none)

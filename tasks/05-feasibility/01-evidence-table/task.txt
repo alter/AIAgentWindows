@@ -1,0 +1,56 @@
+TASK: evidence table for the ledger
+
+GOAL
+  docs/EVIDENCE.md: every claim that docs/PROJECT.md §3, §5 and §6 make about
+  how the product works, each with evidence. Replaces review-by-rereading
+  (eight passes, git log 2393fe1..3fd948f) with checks. Serves Gate 1.
+
+CONTEXT
+  docs/PROJECT.md
+  tasks/GOAL.md
+  scripts/lint_changed.py
+  ~/.claude/projects/-Users-user-workflow-git-AIAgentWindows/ (real Claude Code transcripts)
+  ~/.codex/sessions/ (real Codex transcripts)
+
+SCOPE
+  + S1 docs/EVIDENCE.md: one row per claim — claim, evidence kind (run | doc | assumption), evidence (command and its output in the task directory, or a URL of the pinned version's documentation, or the place where the assumption is checked), status (confirmed | refuted | open)
+  + S2 scripts/evidence_check.py: exits 1 when a row has no evidence, an unknown kind, a doc row without a URL, a run row without an artefact path that exists, or an assumption row without a place; with its own tests
+  + S3 spikes in .claude/scratch/spike/ with outputs kept in this directory under spikes/: Electron webviews of chatgpt.com, grok.com, chat.deepseek.com with a temporary partition (logged out); claude and codex in node-pty inside Electron; bracketed paste and Ctrl+V of a clipboard image into claude; parsing real transcripts of both CLIs; codex reading a file outside its cwd under its default sandbox
+  + S4 docs/tech/<name>@<version>.md for every technology the claims rest on, versions pinned at least two weeks old (npm publish dates, 2026-10-21)
+  + S5 docs/PROJECT.md §3 keeps scope only; mechanics move to docs/tech/ and are linked; refuted claims change the ledger
+  − signing in to any account — HUMAN item 6 below; credentials are entered only by the owner
+  − sending prompts to the real sites — never in this task
+  − product code under src/ — T00
+  indivisible: the table, its checker and the studies share one claim list; splitting would make two sources of it
+
+WRITE-SET
+  docs/EVIDENCE.md
+  docs/tech/
+  docs/PROJECT.md
+  scripts/evidence_check.py
+  tests/scripts/test_evidence_check.py
+  tasks/05-feasibility/01-evidence-table/
+
+DATA
+  transcript.record: dir=in; type=JSON line written by claude 2.1.306 or codex 0.159.2; size=one line up to 10 MB; null=no; interpretable=yes; source=https://code.claude.com/docs/en/cli-reference/2.1.306
+  site.page: dir=in; type=HTML of chatgpt.com, grok.com, chat.deepseek.com loaded in Electron 44.6.0; size=whole document; null=no; interpretable=yes; source=https://www.electronjs.org/docs/v44.6.0/api/web-contents
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  docs/EVIDENCE.md with zero rows lacking evidence; python3 scripts/evidence_check.py exit 0; spike outputs under tasks/05-feasibility/01-evidence-table/spikes/.
+
+VERIFY (QA)
+  1. [fast] python3 scripts/evidence_check.py exits 0
+  2. [fast] python3 -m unittest discover -s tests/scripts exits 0
+  3. [fast] reverse control: empty the evidence cell of one row → tests/scripts/test_evidence_check.py::test_row_without_evidence_fails
+  4. [fast] every run row points at an artefact under spikes/ that a fresh reader can open and that shows the claimed result
+  5. [fast] every refuted claim has changed docs/PROJECT.md (git diff of §3)
+  6. [fast] HUMAN: the owner opens the spike window, signs in to ChatGPT, Grok and DeepSeek by hand, and records in NOTES.md whether each accepted the sign-in
+
+ROLE
+  ARCH, HUMAN
+
+DEPENDS
+  (none)

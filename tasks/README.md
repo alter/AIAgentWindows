@@ -1,4 +1,4 @@
-# Task tree — <project>
+# Task tree — AIAgentWindows
 
 One task is one directory with two required files and a validator. The tree is a
 ledger of work, not a journal: it holds what must exist, split into executable
@@ -18,7 +18,9 @@ pieces.
 `task.txt` and `labels.txt`; the phase's SCOPE lists its child tasks, one line
 each.
 
-<filled in by /task init>
+| Phase | What it holds |
+|---|---|
+| `05-feasibility` | evidence that the product can be built as `docs/PROJECT.md` describes, before any product code |
 
 ## Task format
 
@@ -66,8 +68,8 @@ a boundary somebody will cross.
 ## Labels
 
 ```
-phase:      <from the phase list above>
-role:       <from ROLES.md>
+phase:      feasibility
+role:       ARCH | APP | QA | HUMAN
 type:       feature | fix | research | decision | chore
 priority:   P0 | P1 | P2 | P3
 status:     todo | in_progress | review | done | blocked (with BLOCKED.md next to it)

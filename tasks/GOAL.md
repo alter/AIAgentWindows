@@ -2,28 +2,29 @@
 
 ## The goal
 
-<One promise the project makes. Everything else is a way of keeping it.>
+One desktop window in which the owner runs several Claude Code and Codex
+sessions on their subscriptions and ChatGPT, Grok and DeepSeek on their free
+accounts, and moves context between them by "Forward" and a shared directory
+(`docs/PROJECT.md` §2).
 
 ## What hurts right now
 
-<The measured state, with sources: path:line, a command, a log line.>
+Nothing is built (`git log`: only intake commits up to `3fd948f`). Every
+mechanism in `docs/PROJECT.md` §3 is a claim from reasoning, not from a run.
 
 ## The gates — and only they measure the goal
 
-**Gate 1 — `<phase>/<task>` (milestone M1).** <What must become true, and why it
-is only visible this way.>
-
-**Gate 2 — `<phase>/<task>` (milestone M1).** <…>
-
-**Gate 3 — `<phase>/<task>` (milestone M2).** <…>
+**Gate 1 — `05-feasibility/01-evidence-table` (milestone M1).** Every claim the
+ledger makes about how the product works has evidence: a command with its
+output, the documentation of the pinned version, or an assumption that names
+where it will be checked. Only this shows whether the product is buildable as
+described before code is written against it.
 
 ## Milestones
 
 | Milestone | What it means | Entry condition |
 |---|---|---|
-| **M1** | <…> | now |
-| **M2** | <…> | gates 1 and 2 passed |
-| **M3** | <…> | <…> |
+| **M1** | the design rests on evidence, not reasoning | now |
 
 ## Signs that we are getting closer
 
@@ -35,13 +36,14 @@ is only visible this way.>
 ## Signs that we are NOT getting closer
 
 - "N tasks closed" reported as progress.
+- Another review pass that rewords the ledger without adding evidence.
 - A report ahead of its check: something declared done that does not reproduce
   from a clean state.
 - A run that has never been red.
-- A check that is green by construction: the data is chosen so the defect cannot
-  appear.
 - Work on a later milestone before an earlier one.
 
 ## Stop condition
 
-<At which measured result the goal is revised rather than "fixed some more".>
+If the spike shows that the sites refuse an embedded browser (sign-in or bot
+challenge that the owner cannot pass by hand), the web-agent half of the goal is
+revised with the owner instead of worked around.

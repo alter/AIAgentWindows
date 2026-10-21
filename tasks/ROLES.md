@@ -6,16 +6,16 @@ source of half the breakage.
 
 | Role | Owns | Writes to | Language |
 |---|---|---|---|
-| **ARCH** | layer boundaries, review of others' work | nothing, review only | — |
-| **BACK** | <…> | <paths> | Python |
-| **QA** | acceptance against criteria recorded BEFORE the work | <paths to the checks> | Python |
+| **ARCH** | layer boundaries, evidence about technologies, review of others' work | `docs/tech/`, `docs/EVIDENCE.md`, `docs/PROJECT.md` | — |
+| **APP** | the Electron application: main, preload, renderer, adapters, pty | `src/`, `tests/`, build config | TypeScript |
+| **QA** | acceptance against criteria recorded BEFORE the work | `tests/full/`, `scripts/` checks | TypeScript, Python |
 | **HUMAN** | everything a machine cannot check | — | — |
 
 ## ARCH
 
-Writes no code. After every closed task it answers: has a new split source of
-truth appeared; has the cost of adding <the unit of extension> gone up; by which
-route does a change reach <the running systems>.
+Writes no product code. After every closed task it answers: has a new split
+source of truth appeared; has the cost of adding a new agent type (a site, a
+CLI, an API) gone up; can a remote page reach the pty, the file system or a key.
 
 ## QA
 
@@ -30,6 +30,8 @@ that the result looks good.
 
 Where a person must judge:
 
-- <a decision that is a promise to a customer rather than a setting>;
-- <consent to an action touching live systems or money>;
-- <the first acceptance of an end-to-end run by eye>.
+- signing in to ChatGPT, Grok, DeepSeek, Claude and Codex accounts — credentials
+  are entered only by the owner;
+- the first acceptance of an end-to-end run by eye on each OS;
+- verification on Windows 11 and Ubuntu 26.04, which the session cannot reach;
+- accepting the terms-of-service risk of reading replies from the sites.
