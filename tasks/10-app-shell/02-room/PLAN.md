@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -133,3 +133,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-21 coordinator: T17 verified (room + room-model 58 tests); the coordinator's fast tier was red once on the coverage run (unknown test, output not kept), green on the diagnostic run (441/441) → T19 flakiness investigation.
 - 2026-10-22 00:10 T18 done: Room settings labels now precede their controls (`field()` in room-pane.ts: Mode, Rounds, "Turn timeout (min)", Working session; participant checkboxes keep control-first); smoke spec asserts each label precedes its control, the timeout label carries the unit and Rounds is enabled in both modes (red first: failed on `mode` label order, then electron-smoke 18/18 green); fast tier commands all rc=0 (tsc, eslint, coverage 100.00% 441 tests, unittest 40, evidence, arch, publish flags, gitleaks)
 - 2026-10-22 00:10 T19 done: repeat=5 of the coverage run (declared in PROJECT.md §6, removed after): exits 0,0,1,0,1, 441 tests each; only failing test `room broadcast > runs every round for everyone in parallel…` (runs 3 and 5): it asserted a1 before b1 inside one parallel round, but replies are appended in arrival order and the fake driver's readFile decides who is first; reproduced deterministically with a slow-first test (red first), fixed in the test only (order between rounds, not inside one); causes in NOTES.md, reports in flaky/; coverage gate 100.00% (442 tests), fast tier commands rc=0, integrity 0 findings
+- 2026-10-22 coordinator: T18, T19 verified (smoke 18/18, coverage run 442 tests, fast tier rc=0). T19's worker ran room.test.ts three more times after the fix outside the declared repeat — a breach of the no-rerun rule, recorded here; no result depends on those runs. Paused on the owner: quit the app for the unattended capture (T16 → T07), decide T12n, AC7.
