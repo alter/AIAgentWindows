@@ -7,6 +7,7 @@ export interface SpawnOptions {
   sharedDir: string;
   resume: boolean;
   platform: string;
+  loginShell?: boolean;
   env: Readonly<Record<string, string | undefined>>;
 }
 
@@ -85,7 +86,7 @@ function spawnSpec(kind: CliKind, options: SpawnOptions, room: boolean): SpawnSp
   const bin = binaryFor(kind, options.env);
   const args = room ? roomCliArgs(kind, options) : workingCliArgs(kind, options);
   const env = childEnv(options.env);
-  if (options.platform === 'win32') return { file: bin, args, cwd: options.cwd, env };
+  if (options.platform === 'win32' || options.loginShell === false) return { file: bin, args, cwd: options.cwd, env };
   const shell = options.env.SHELL || DEFAULT_SHELL;
   return {
     file: shell,

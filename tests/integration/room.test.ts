@@ -714,6 +714,20 @@ describe('room with stub CLIs', () => {
     await until(() => !alive(pid), 'the process to end');
   });
 
+  it('runs a turn without the login shell when told to, and through it otherwise', async () => {
+    const env = { PATH: process.env.PATH, SHELL: path.join(dir, 'no-such-shell'), AIAW_CLAUDE_BIN: STUB, AIAW_STUB_REPLY_DELAY_MS: '10' };
+    const run = async (loginShell: boolean): Promise<string[]> => {
+      const drivers = createRoomDrivers({ cwd: roomsDir, sharedDir: dir, platform: 'darwin', envFor: () => env, siteFor: () => null, loginShell, timing: { killGraceMs: 200 } });
+      const room = new Room({ roomsDir, driverFor: drivers.factory });
+      rooms.push(room);
+      const result = await room.start(config([A], { turnTimeoutMs: 10000 })).done;
+      await room.shutdown();
+      return result.entries.map((entry) => `${entry.authorId}:${entry.kind}`);
+    };
+    expect(await run(false)).toEqual(['owner:prompt', 'a:reply', 'a:final']);
+    expect(await run(true)).toEqual(['owner:prompt', 'a:error', 'a:error']);
+  });
+
   it('a CLI whose binary is missing fails the turn and the run goes on', async () => {
     const drivers = createRoomDrivers({
       cwd: roomsDir,

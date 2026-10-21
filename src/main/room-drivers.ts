@@ -39,6 +39,7 @@ export interface RoomDriverDeps {
   cwd: string;
   sharedDir: string;
   platform: string;
+  loginShell?: boolean;
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
   siteFor(participant: RoomParticipant): SiteSeat | null;
   timing?: Partial<RoomTiming>;
@@ -90,6 +91,7 @@ class CliDriver implements ParticipantDriver {
         sharedDir: this.deps.sharedDir,
         resume: session.started,
         platform: this.deps.platform,
+        loginShell: this.deps.loginShell,
         env: this.deps.envFor(this.participant),
       });
       const result = await runCliTurn({

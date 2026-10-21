@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
-import { roomTimingOverride } from '../shared/room-test-mode';
+import { roomLoginShell, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
@@ -104,6 +104,7 @@ async function start(): Promise<void> {
     sharedDir,
     platform: process.platform,
     envFor: () => process.env,
+    loginShell: roomLoginShell(process.env),
     timing: roomTimingOverride(process.env),
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,

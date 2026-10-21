@@ -119,6 +119,15 @@ describe('room sessions start read-only', () => {
     expect(spawn.args[0]).toBe('-p');
   });
 
+  it('goes through the login shell by default and runs the binary directly when asked not to', () => {
+    const viaShell = buildRoomTurnSpawn('claude', options());
+    expect(viaShell.file).toBe('/bin/bash');
+    expect(viaShell.args.slice(0, 3)).toEqual(['-l', '-i', '-c']);
+    const direct = buildRoomTurnSpawn('claude', options({ loginShell: false, env: { PATH: '/usr/bin', AIAW_CLAUDE_BIN: '/stub/claude' } }));
+    expect(direct.file).toBe('/stub/claude');
+    expect(direct.args).toEqual(viaShell.args.slice(SCRIPT_END + 1));
+  });
+
   it('leaves working sessions without room flags', () => {
     const args = buildSpawn('claude', options()).args.join(' ');
     expect(args).not.toContain('--permission-mode');

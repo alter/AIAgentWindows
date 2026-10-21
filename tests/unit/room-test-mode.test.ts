@@ -1,6 +1,6 @@
 // room-test-mode.test.ts
 import { describe, expect, it } from 'vitest';
-import { roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
+import { roomLoginShell, roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
 
 const TEST_MODE = { AIAW_USER_DATA: '/tmp/profile', AIAW_ROOM_FAST: '1' };
 
@@ -22,6 +22,13 @@ describe('room test-mode override', () => {
     const timing = roomTimingOverride(TEST_MODE);
     expect(timing?.killGraceMs).toBeLessThan(3000);
     expect(timing).not.toHaveProperty('pollMs');
+  });
+
+  it('starts room CLI turns without the login shell only in test mode', () => {
+    expect(roomLoginShell({})).toBe(true);
+    expect(roomLoginShell({ AIAW_ROOM_FAST: '1' })).toBe(true);
+    expect(roomLoginShell({ AIAW_USER_DATA: '/tmp/profile' })).toBe(true);
+    expect(roomLoginShell(TEST_MODE)).toBe(false);
   });
 
   it('treats an empty AIAW_USER_DATA as normal mode', () => {

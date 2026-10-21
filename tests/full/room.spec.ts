@@ -8,6 +8,9 @@ import path from 'node:path';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
+const TURN_BUDGET_MS = 5000;
+const RUN_BASE_MS = 5000;
+const PARTICIPANTS = ['claude', 'codex'];
 const MARKUP = '<img src=x onerror="window.__pwned=1"><b>bold</b>';
 
 interface Session {
@@ -42,9 +45,13 @@ function field(page: Page, name: string): Locator {
   return page.locator(`[data-room="${name}"]`);
 }
 
+function finishedWithin(participants: number, rounds: number): { timeout: number } {
+  return { timeout: (participants * rounds + 1) * TURN_BUDGET_MS + RUN_BASE_MS };
+}
+
 async function fill(page: Page, mode: 'broadcast' | 'relay', rounds: number, prompt: string): Promise<void> {
   await field(page, 'prompt').fill(prompt);
-  for (const id of ['claude', 'codex']) await page.locator(`input[data-participant="${id}"]`).check();
+  for (const id of PARTICIPANTS) await page.locator(`input[data-participant="${id}"]`).check();
   await field(page, 'mode').selectOption(mode);
   await field(page, 'rounds').fill(String(rounds));
 }
@@ -52,7 +59,7 @@ async function fill(page: Page, mode: 'broadcast' | 'relay', rounds: number, pro
 async function run(page: Page, mode: 'broadcast' | 'relay', rounds: number, prompt: string): Promise<void> {
   await fill(page, mode, rounds, prompt);
   await field(page, 'start').click();
-  await expect(field(page, 'status')).toContainText('done');
+  await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, rounds));
 }
 
 async function historyHeadings(page: Page): Promise<string[]> {
@@ -100,7 +107,7 @@ test('a 2-round relay shows each round, the final turn, per-participant chips an
       new MutationObserver(note).observe(node as Node, { childList: true, characterData: true, subtree: true });
     });
     await field(page, 'start').click();
-    await expect(field(page, 'banner')).toHaveText('Done \u2014 final answer from Claude Code');
+    await expect(field(page, 'banner')).toHaveText('Done \u2014 final answer from Claude Code', finishedWithin(PARTICIPANTS.length, 2));
     const rounds = await page.evaluate(() => (window as unknown as { __rounds: string[] }).__rounds);
     expect(rounds).toEqual(['Round 1 of 2', 'Round 2 of 2', 'Final: Claude Code']);
     await expect(field(page, 'remaining')).toHaveText('0 turns left');
@@ -125,7 +132,7 @@ test('the finalizer lists the ticked participants, defaults to Claude Code and w
     await page.locator('input[data-participant="claude"]').check();
     await field(page, 'finalizer').selectOption('codex');
     await field(page, 'start').click();
-    await expect(field(page, 'status')).toContainText('done');
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
     expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'Claude Code | reply', 'Codex | reply', 'Codex | final']);
     await expect(page.locator('.room-entry.kind-final')).toHaveCount(1);
   } finally {
@@ -311,7 +318,7 @@ test('a web participant whose view was never opened answers on its first turn', 
     await field(page, 'mode').selectOption('broadcast');
     await field(page, 'rounds').fill('1');
     await field(page, 'start').click();
-    await expect(field(page, 'status')).toContainText('done');
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(1, 1));
     expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'DeepSeek | reply', 'DeepSeek | final']);
     await expect(page.locator('.room-entry.kind-reply .room-entry-text').first()).toContainText('LATE-REPLY');
   } finally {
