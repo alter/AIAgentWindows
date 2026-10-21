@@ -1,0 +1,20 @@
+process.env.SPIKE_USERDATA = require('path').join(__dirname, 'ud-navsmoke');
+const { app, BrowserWindow, Menu } = require('electron');
+require('./signin.js');
+app.on('browser-window-created', () => {});
+setTimeout(async () => {
+  const w = BrowserWindow.getAllWindows().find((x) => x.title.startsWith('chatgpt') || x.webContents.getURL().includes('chatgpt'));
+  const wc = w.webContents;
+  await wc.loadURL('https://example.com/');
+  const before = wc.getURL();
+  w.focus();
+  const go = Menu.getApplicationMenu().items.find((i) => i.label === 'Go').submenu.items;
+  go.find((i) => i.label === 'Back').click(null, w);
+  await new Promise((r) => setTimeout(r, 4000));
+  const afterBack = wc.getURL();
+  await wc.loadURL('https://example.com/');
+  go.find((i) => i.label.startsWith('Home')).click(null, w);
+  await new Promise((r) => setTimeout(r, 4000));
+  console.log(JSON.stringify({ before, afterBack, afterHome: wc.getURL() }));
+  app.quit();
+}, 8000);
