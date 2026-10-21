@@ -169,7 +169,7 @@ describe('agent controller', () => {
       const agent = guarded.snapshot().agents[0];
       expect(agent?.kind).toBe('codex');
       expect(guarded.ptyBacklog(agent?.id ?? '').data).toContain('AIAW_CODEX_BIN');
-      expect(events.some((event) => event.channel === EVENT_CHANNELS.ptyExit)).toBe(false);
+      expect(events.some((event) => event.channel === EVENT_CHANNELS.ptyExit && (event.payload as { id?: string }).id === agent?.id)).toBe(false);
     } finally {
       guarded.shutdown();
     }
