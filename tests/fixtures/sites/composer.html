@@ -23,7 +23,16 @@
       const ce = document.getElementById('ce');
       const send = document.getElementById('send');
       const stop = document.getElementById('stop');
-      const log = document.getElementById('log');
+      let log = document.getElementById('log');
+      if (query.has('labels')) {
+        const thread = document.createElement('div');
+        thread.id = 'thread';
+        thread.innerHTML = '<div class="msg assistant">Earlier answer.<p>AI-generated, for reference only</p></div>';
+        const tools = document.createElement('div');
+        tools.innerHTML = '<span>Deep thinking</span> <span>Smart Search</span><p>AI-generated, for reference only</p>';
+        log.replaceChildren(thread, tools);
+        log = thread;
+      }
       const history = document.querySelector('#history ul');
       window.attachClicks = 0;
       window.micClicks = 0;
@@ -71,7 +80,7 @@
         ta.value = '';
         ce.replaceChildren(document.createElement('p'));
         refresh();
-        add('user', text.split('\n'));
+        add('user', query.has('oneline') ? [text.replace(/\s+/g, ' ')] : text.split('\n'));
         const item = document.createElement('li');
         item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
         history.appendChild(item);
@@ -81,10 +90,12 @@
         const reply = add('assistant', []);
         const row = document.createElement('p');
         reply.appendChild(row);
-        const chunks = ['ECHO: ' + text, ' part-2', ' part-3'];
+        const fixed = query.get('reply');
+        const chunks = fixed === null ? ['ECHO: ' + text, ' part-2', ' part-3'] : fixed.split('|');
         let index = 0;
         const timer = setInterval(() => {
-          row.textContent += chunks[index];
+          if (fixed === null) row.textContent += chunks[index];
+          else reply.appendChild(Object.assign(document.createElement('p'), { textContent: chunks[index] }));
           index += 1;
           if (index < chunks.length) return;
           if (query.has('stall')) { row.textContent += ' ' + Date.now(); return; }

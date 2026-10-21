@@ -164,6 +164,28 @@ describe('generic adapter: turn', () => {
     expect(await runAdapterTurn(adapter, page.runner, 'same', FAST)).toBe('ECHO: same part-2 part-3');
   });
 
+  it('keeps the site\'s fixed labels, the echoed prompt and entry markers out of the reply', async () => {
+    const prompt = [
+      'You are DeepSeek in a room where several AI agents take turns.',
+      '<<<entry-abc123 author="Owner" time=2026-10-22T02:49:00.000Z kind=prompt>>>',
+      'Compare the two designs.',
+      '<<<end-abc123>>>',
+    ].join('\n');
+    const reply = encodeURIComponent('First answer line|Second answer line');
+    for (const variant of ['', '&oneline=1']) {
+      const page = openPage(`?labels=1&reply=${reply}${variant}`);
+      const adapter = createGenericAdapter('fixture', OPTIONS);
+      expect(await runAdapterTurn(adapter, page.runner, prompt, FAST)).toBe('First answer line\nSecond answer line');
+    }
+  });
+
+  it('answers a second turn with the same fixed labels on the page', async () => {
+    const page = openPage(`?labels=1&reply=${encodeURIComponent('Only this')}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'one', FAST)).toBe('Only this');
+    expect(await runAdapterTurn(adapter, page.runner, 'two', FAST)).toBe('Only this');
+  });
+
   it('returns reply markup as text', async () => {
     const page = openPage();
     const adapter = createGenericAdapter('fixture', OPTIONS);

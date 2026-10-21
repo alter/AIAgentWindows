@@ -4,7 +4,6 @@ const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA'
 const STOP_NAME = /(^|[^a-z])(stop|cancel)([^a-z]|$)|останов|отмен/i;
 const SEND_NAME = /send|submit|отправ/i;
 const OTHER_NAME = /attach|upload|file|photo|image|mic|voice|dictat|record|search|think|reason|tool|model|menu|more|copy|share|прикреп|добав|голос|поиск/i;
-const TAIL_CHARS = 200;
 
 function collapse(value) {
   return value.replace(/\s+/g, ' ');
@@ -132,29 +131,6 @@ function chooseSendButton(composer) {
   }
   return null;
 }
-
-function normalized(text) {
-  const chars = [];
-  const starts = [];
-  let space = true;
-  for (let index = 0; index < text.length; index += 1) {
-    if (/\s/.test(text[index])) {
-      if (space) continue;
-      chars.push(' ');
-      starts.push(index);
-      space = true;
-    } else {
-      chars.push(text[index]);
-      starts.push(index);
-      space = false;
-    }
-  }
-  while (chars.length > 0 && chars[chars.length - 1] === ' ') {
-    chars.pop();
-    starts.pop();
-  }
-  return { text: chars.join(''), starts };
-}
 `;
 
 function wrap(body: string): string {
@@ -213,12 +189,12 @@ export function genericEnterScript(): string {
   return wrap(`
     const composer = findComposer();
     if (!composer) return JSON.stringify({ ok: false, error: 'input-missing' });
-    const baseline = conversationText(composer).length;
+    const before = conversationText(composer);
     composer.focus();
     const init = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
     composer.dispatchEvent(new KeyboardEvent('keydown', init));
     composer.dispatchEvent(new KeyboardEvent('keyup', init));
-    return JSON.stringify({ ok: true, value: baseline });`);
+    return JSON.stringify({ ok: true, value: before });`);
 }
 
 export function genericSendButtonScript(): string {
@@ -231,22 +207,8 @@ export function genericSendButtonScript(): string {
     return JSON.stringify({ ok: true, value: 'clicked' });`);
 }
 
-export function genericStateScript(prompt: string, baseline: number): string {
+export function genericStateScript(): string {
   return wrap(`
     const composer = findComposer();
-    const text = conversationText(composer);
-    const wanted = normalized(${JSON.stringify(prompt)}).text;
-    const key = wanted.slice(-TAIL_CHARS);
-    const seen = normalized(text);
-    let reply = null;
-    if (key !== '') {
-      let at = seen.text.indexOf(key);
-      while (at !== -1 && seen.starts[at] < ${Math.max(0, Math.floor(baseline))}) at = seen.text.indexOf(key, at + 1);
-      if (at !== -1) {
-        const end = seen.starts[at + key.length - 1] + 1;
-        const after = text.slice(end).trim();
-        reply = after === '' ? null : after;
-      }
-    }
-    return JSON.stringify({ ok: true, value: { stop: stopShown(), reply } });`);
+    return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer) } });`);
 }

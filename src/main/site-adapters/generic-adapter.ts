@@ -8,6 +8,7 @@ import {
   genericStateScript,
 } from './generic-scripts';
 import { callPage } from './page-call';
+import { extractReply } from './reply-lines';
 import { SiteAdapterError, type PageRunner, type SiteAdapter } from './types';
 
 export interface GenericOptions {
@@ -29,22 +30,28 @@ interface PageState {
   reply: string | null;
 }
 
+interface PageSnapshot {
+  stop: boolean;
+  text: string;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function createGenericAdapter(site: string, options: GenericOptions = DEFAULT_GENERIC_OPTIONS): SiteAdapter {
   let prompt: string | null = null;
-  let baseline = 0;
+  let before = '';
   let submitted = false;
   let lastSeen: string | null = null;
   let changedAt = 0;
 
   async function readState(runner: PageRunner): Promise<PageState> {
     if (!submitted || prompt === null) return { stop: false, reply: null };
-    const reply = await callPage(runner, genericStateScript(prompt, baseline));
-    const value = reply.value as PageState;
-    const text = value.reply === null ? null : value.reply.slice(0, options.maxReplyChars);
+    const reply = await callPage(runner, genericStateScript());
+    const value = reply.value as PageSnapshot;
+    const found = extractReply(value.text, before, prompt);
+    const text = found === null ? null : found.slice(0, options.maxReplyChars);
     if (text !== lastSeen) {
       lastSeen = text;
       changedAt = Date.now();
@@ -63,7 +70,7 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     },
     async submit(runner) {
       const entered = await callPage(runner, genericEnterScript());
-      baseline = typeof entered.value === 'number' ? entered.value : 0;
+      before = typeof entered.value === 'string' ? entered.value : '';
       submitted = true;
       await sleep(options.submitCheckMs);
       await callPage(runner, genericSendButtonScript());

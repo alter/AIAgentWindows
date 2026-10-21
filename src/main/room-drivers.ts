@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomTurnSpawn } from '../shared/cli-args';
-import { PARTICIPANT_HISTORY_FILE } from '../shared/room-history';
+import { PARTICIPANT_HISTORY_FILE, stripEntryMarkerLines } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
@@ -134,13 +134,15 @@ class SiteDriver implements ParticipantDriver {
       signal: request.signal,
     });
     if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
-    return runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
+    const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
       ...DEFAULT_TURN_OPTIONS,
       pollMs: this.timing.pollMs,
       settleMs: this.timing.settleMs,
       timeoutMs: request.timeoutMs,
       signal: request.signal,
     });
+    const shown = stripEntryMarkerLines(reply).trim();
+    return shown === '' ? null : shown;
   }
 
   async reset(): Promise<void> {

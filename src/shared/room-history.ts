@@ -42,6 +42,16 @@ export function escapeBody(text: string): string {
     .join('');
 }
 
+const ANY_LINE_BREAK = /\r\n|[\n\r\v\f\u0085\u2028\u2029]/;
+const ENTRY_MARKER_LINE = /<<<(?:entry|end)-/;
+
+export function stripEntryMarkerLines(text: string): string {
+  return text
+    .split(ANY_LINE_BREAK)
+    .filter((line) => !ENTRY_MARKER_LINE.test(line))
+    .join('\n');
+}
+
 function plainLabel(label: string): string {
   return label.replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}"|<>=]/gu, ' ');
 }
