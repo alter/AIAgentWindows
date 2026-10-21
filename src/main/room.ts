@@ -7,6 +7,7 @@ import {
   newNonce,
   renderEntryBlock,
   renderHistory,
+  renderHistoryHeader,
 } from '../shared/room-history';
 import {
   MAX_ERROR_CHARS,
@@ -28,6 +29,7 @@ export type { RoomEvent, RoomStatus, StepState } from '../shared/room-model';
 export interface TurnRequest {
   text: string;
   attachPath: string | null;
+  historyText: string | null;
   timeoutMs: number;
   signal: AbortSignal;
 }
@@ -135,6 +137,12 @@ class RunState {
     this.nonce = fresh;
     const text = renderHistory(this.id, this.entries, () => fresh);
     this.enqueue(() => writeAtomic(this.historyPath, text));
+  }
+
+  render(entries: readonly RoomEntry[]): string {
+    const nonce = this.nonce;
+    if (nonce === null) return renderHistory(this.id, entries);
+    return renderHistoryHeader(this.id, nonce) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
   }
 
   flushed(): Promise<void> {
@@ -264,10 +272,11 @@ export class Room {
     let driver: ParticipantDriver | null = null;
     try {
       driver = await this.driver(participant);
-      const prompt = buildParticipantPrompt(participant, run.id, seen, run.historyPath);
+      const prompt = buildParticipantPrompt(participant, run.id, seen);
       const request: TurnRequest = {
         text: prompt.text,
         attachPath: prompt.attachHistory ? run.historyPath : null,
+        historyText: prompt.placeHistory ? run.render(seen) : null,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,
       };

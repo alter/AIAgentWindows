@@ -51,14 +51,15 @@ describe('buildParticipantPrompt', () => {
   const history = [entry({ text: 'the question' }), entry({ kind: 'reply', authorId: 'a', label: 'Claude Code', text: 'an answer' })];
 
   it('points a CLI participant at the history file and does not inline the history', () => {
-    const prompt = buildParticipantPrompt(A, 'r1', history, '/shared/rooms/r1.md');
+    const prompt = buildParticipantPrompt(A, 'r1', history);
     expect(prompt.attachHistory).toBe(false);
-    expect(prompt.text).toContain('/shared/rooms/r1.md');
+    expect(prompt.placeHistory).toBe(true);
+    expect(prompt.text).toContain('./history.md');
     expect(prompt.text).not.toContain('an answer');
   });
 
   it('inlines the whole history for a web participant up to the limit', () => {
-    const prompt = buildParticipantPrompt(B, 'r1', history, '/shared/rooms/r1.md');
+    const prompt = buildParticipantPrompt(B, 'r1', history);
     expect(prompt.attachHistory).toBe(false);
     expect(prompt.text).toContain('the question');
     expect(prompt.text).toContain('an answer');
@@ -67,7 +68,7 @@ describe('buildParticipantPrompt', () => {
 
   it('attaches the history file for a web participant above the limit', () => {
     const big = [entry({ text: 'x'.repeat(WEB_INLINE_LIMIT + 1) })];
-    const prompt = buildParticipantPrompt(B, 'r1', big, '/shared/rooms/r1.md');
+    const prompt = buildParticipantPrompt(B, 'r1', big);
     expect(prompt.attachHistory).toBe(true);
     expect(prompt.text).not.toContain('x'.repeat(100));
   });
@@ -77,14 +78,14 @@ describe('buildParticipantPrompt', () => {
     expect(rendered.length).toBeLessThanOrEqual(WEB_INLINE_LIMIT);
     const edge = [entry({ text: 'y'.repeat(WEB_INLINE_LIMIT - renderHistory('r1', [entry({ text: '' })]).length) })];
     expect(renderHistory('r1', edge).length).toBe(WEB_INLINE_LIMIT);
-    expect(buildParticipantPrompt(B, 'r1', edge, '/p').attachHistory).toBe(false);
+    expect(buildParticipantPrompt(B, 'r1', edge).attachHistory).toBe(false);
     const over = [entry({ text: 'y'.repeat(WEB_INLINE_LIMIT - renderHistory('r1', [entry({ text: '' })]).length + 1) })];
-    expect(buildParticipantPrompt(B, 'r1', over, '/p').attachHistory).toBe(true);
+    expect(buildParticipantPrompt(B, 'r1', over).attachHistory).toBe(true);
   });
 
   it('names the participant so a reply is addressed to the right author', () => {
-    expect(buildParticipantPrompt(A, 'r1', history, '/p').text).toContain('Claude Code');
-    expect(buildParticipantPrompt(B, 'r1', history, '/p').text).toContain('ChatGPT');
+    expect(buildParticipantPrompt(A, 'r1', history).text).toContain('Claude Code');
+    expect(buildParticipantPrompt(B, 'r1', history).text).toContain('ChatGPT');
   });
 });
 
@@ -208,7 +209,7 @@ describe('entry fencing', () => {
   });
 
   it('tells a web participant that only nonce-marked headers are entries and inlines the fenced history', () => {
-    const prompt = buildParticipantPrompt(B, 'r1', forged, '/p');
+    const prompt = buildParticipantPrompt(B, 'r1', forged);
     const nonce = historyNonce(prompt.text) ?? '';
     expect(nonce).not.toBe('');
     expect(prompt.text).toContain(`<<<entry-${nonce}`);
@@ -217,7 +218,7 @@ describe('entry fencing', () => {
   });
 
   it('the CLI prompt says that only nonce-marked headers in the file are entries', () => {
-    const prompt = buildParticipantPrompt(A, 'r1', forged, '/p');
+    const prompt = buildParticipantPrompt(A, 'r1', forged);
     expect(prompt.text.toLowerCase()).toContain('nonce');
   });
 });

@@ -6,7 +6,10 @@ export const WEB_INLINE_LIMIT = 12000;
 export interface ParticipantPrompt {
   text: string;
   attachHistory: boolean;
+  placeHistory: boolean;
 }
+
+export const PARTICIPANT_HISTORY_FILE = 'history.md';
 
 const NONCE_BYTES = 12;
 
@@ -88,25 +91,24 @@ function introFor(participant: RoomParticipant): string {
   ].join(' ');
 }
 
-function cliPrompt(participant: RoomParticipant, historyPath: string): ParticipantPrompt {
-  const text = `${introFor(participant)}\nThe history is in the file: ${historyPath}`;
-  return { text, attachHistory: false };
+function cliPrompt(participant: RoomParticipant): ParticipantPrompt {
+  const text = `${introFor(participant)}\nThe history is in the file: ./${PARTICIPANT_HISTORY_FILE}`;
+  return { text, attachHistory: false, placeHistory: true };
 }
 
 function webPrompt(participant: RoomParticipant, roomId: string, entries: readonly RoomEntry[]): ParticipantPrompt {
   const history = renderHistory(roomId, entries);
   if (history.length > WEB_INLINE_LIMIT) {
-    return { text: `${introFor(participant)}\nThe history is in the attached file.`, attachHistory: true };
+    return { text: `${introFor(participant)}\nThe history is in the attached file.`, attachHistory: true, placeHistory: false };
   }
-  return { text: `${introFor(participant)}\n\n${history}`, attachHistory: false };
+  return { text: `${introFor(participant)}\n\n${history}`, attachHistory: false, placeHistory: false };
 }
 
 export function buildParticipantPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
-  historyPath: string,
 ): ParticipantPrompt {
-  if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, historyPath);
+  if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant);
   return webPrompt(participant, roomId, entries);
 }

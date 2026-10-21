@@ -1,10 +1,11 @@
 // room-drivers.ts
 import { randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomSpawn } from '../shared/cli-args';
 import { rolloutId } from '../shared/codex-claim';
+import { PARTICIPANT_HISTORY_FILE } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
 import { OutputBuffer, type OutputSnapshot } from '../shared/output-buffer';
 import { ScreenReader } from '../shared/screen-reader';
@@ -170,6 +171,9 @@ class CliDriver implements ParticipantDriver {
     const ptyId = await this.session(request.signal);
     const locate = this.locate;
     if (locate === null) throw new CliTurnError('unavailable', 'the session is not running');
+    if (request.historyText !== null) {
+      await writeFile(path.join(this.deps.cwd, this.folder, PARTICIPANT_HISTORY_FILE), request.historyText, 'utf8');
+    }
     return runCliTurn({
       kind: this.kind,
       prompt: request.text,
