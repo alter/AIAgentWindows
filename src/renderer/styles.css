@@ -129,5 +129,40 @@ body {
 .content-empty[hidden], .site-area[hidden], .terminal-pane[hidden] { display: none; }
 .site-area { flex: 1; }
 
+.nav-bar {
+  display: flex;
+  flex: 0 0 var(--nav-bar-height);
+  height: var(--nav-bar-height);
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  background: #222529;
+  border-bottom: 1px solid #35383c;
+}
+.nav-bar[hidden] { display: none; }
+.nav-button {
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--content-text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nav-button:hover:not([disabled]) { background: rgba(255, 255, 255, 0.12); }
+.nav-button[disabled] { opacity: 0.35; cursor: default; }
+.nav-address {
+  flex: 1;
+  min-width: 0;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 .terminal-pane { flex: 1; min-height: 0; padding: 8px 0 0 12px; background: var(--content-bg); }
 .terminal-pane .xterm { height: 100%; }

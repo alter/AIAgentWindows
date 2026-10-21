@@ -23,3 +23,13 @@ export function permissionAllowed(agentOrigin: string, permission: string, reque
   const requester = originOf(requestingUrl);
   return agent !== null && agent === requester;
 }
+
+export function popupAllowed(url: string): boolean {
+  if (url === 'about:blank') return true;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'https:' || protocol === 'http:';
+  } catch {
+    return false;
+  }
+}

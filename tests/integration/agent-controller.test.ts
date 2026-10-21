@@ -15,6 +15,7 @@ let folder: string | null;
 let events: { channel: string; payload: unknown }[];
 let controller: AgentController;
 let siteNav: Mock<NonNullable<ControllerDeps['siteNav']>>;
+let showSite: Mock<NonNullable<ControllerDeps['showSite']>>;
 
 function build(): AgentController {
   const deps: ControllerDeps = {
@@ -25,6 +26,7 @@ function build(): AgentController {
     pickFolder: async () => folder,
     emit: (channel, payload) => events.push({ channel, payload }),
     siteNav,
+    showSite,
   };
   return new AgentController(deps, emptyState());
 }
@@ -48,6 +50,7 @@ beforeEach(async () => {
   folder = dir;
   events = [];
   siteNav = vi.fn<NonNullable<ControllerDeps['siteNav']>>();
+  showSite = vi.fn<NonNullable<ControllerDeps['showSite']>>();
   controller = build();
 });
 
@@ -131,5 +134,18 @@ describe('agent controller', () => {
       .at(-1);
     expect(lastEvent?.end).toBe(backlog.end);
     expect(controller.ptyBacklog('missing')).toEqual({ data: '', end: 0 });
+  });
+
+  it('tells the site host which site agent is selected, or none for a CLI agent', async () => {
+    await controller.add('grok');
+    const site = controller.snapshot().agents[0];
+    expect(showSite).toHaveBeenLastCalledWith(site);
+    await controller.add('claude');
+    expect(showSite).toHaveBeenLastCalledWith(null);
+    await controller.select(site?.id ?? '');
+    expect(showSite).toHaveBeenLastCalledWith(site);
+    showSite.mockClear();
+    controller.syncSelection();
+    expect(showSite).toHaveBeenCalledWith(site);
   });
 });

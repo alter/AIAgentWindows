@@ -1,7 +1,7 @@
 // agent-controller.ts
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { isCliKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
+import { isCliKind, isSiteKind, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn } from '../shared/cli-args';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { OutputBuffer } from '../shared/output-buffer';
@@ -24,6 +24,7 @@ export interface ControllerDeps {
   pickFolder(): Promise<string | null>;
   emit(channel: EventChannel, payload: unknown): void;
   siteNav?(id: string, action: SiteAction): void;
+  showSite?(agent: Agent | null): void;
 }
 
 export class AgentController {
@@ -80,6 +81,10 @@ export class AgentController {
     return this.backlogs.get(id)?.snapshot() ?? { data: '', end: 0 };
   }
 
+  syncSelection(): void {
+    this.deps.showSite?.(this.selectedSiteAgent());
+  }
+
   siteNav(id: string, action: SiteAction): void {
     this.deps.siteNav?.(id, action);
   }
@@ -126,7 +131,13 @@ export class AgentController {
     return saveState(this.deps.stateFile, state);
   }
 
+  private selectedSiteAgent(): Agent | null {
+    const selected = this.selectedAgent();
+    return selected !== undefined && isSiteKind(selected.kind) ? selected : null;
+  }
+
   private emitChanged(): void {
+    this.syncSelection();
     this.deps.emit(EVENT_CHANNELS.agentsChanged, this.snapshot());
   }
 }

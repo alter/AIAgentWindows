@@ -1,7 +1,7 @@
 // site-policy.test.ts
 import { describe, expect, it } from 'vitest';
 import { SITE_URLS } from '../../src/shared/agents';
-import { originOf, permissionAllowed, userAgentFor } from '../../src/shared/site-policy';
+import { originOf, permissionAllowed, popupAllowed, userAgentFor } from '../../src/shared/site-policy';
 
 const DEFAULT_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) aiagentwindows/0.1.0 Chrome/150.0.0.0 Electron/44.6.0 Safari/537.36';
@@ -67,5 +67,19 @@ describe('permissionAllowed', () => {
     expect(permissionAllowed(chatgpt, 'media', 'garbage')).toBe(false);
     expect(permissionAllowed('', 'media', 'https://chatgpt.com/')).toBe(false);
     expect(permissionAllowed('null', 'media', 'null')).toBe(false);
+  });
+});
+
+describe('popupAllowed', () => {
+  it('allows http and https pages and about:blank', () => {
+    expect(popupAllowed('https://accounts.example/login')).toBe(true);
+    expect(popupAllowed('http://example.com/')).toBe(true);
+    expect(popupAllowed('about:blank')).toBe(true);
+  });
+
+  it('refuses other schemes and unparsable text', () => {
+    for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,hi', 'chrome://gpu', 'custom-app://x', '', 'garbage']) {
+      expect(popupAllowed(url)).toBe(false);
+    }
   });
 });

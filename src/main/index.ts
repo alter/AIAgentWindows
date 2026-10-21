@@ -3,9 +3,11 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
 import { registerIpc } from './ipc-handlers';
 import { installMenu } from './menu';
+import { SiteViews } from './site-views';
 import { loadState } from './state-file';
 
 const userDataOverride = process.env['AIAW_USER_DATA'];
@@ -14,6 +16,7 @@ if (userDataOverride) app.setPath('userData', userDataOverride);
 const smokeExit = process.argv.includes('--smoke-exit');
 let mainWindow: BrowserWindow | null = null;
 let controller: AgentController | null = null;
+let sites: SiteViews | null = null;
 
 async function pickFolder(): Promise<string | null> {
   const preset = process.env['AIAW_TEST_FOLDER'];
@@ -48,6 +51,10 @@ async function start(): Promise<void> {
   const state = await loadState(path.join(userData, 'agents.json'));
   const window = createWindow();
   mainWindow = window;
+  const siteViews = new SiteViews(window, (event) => {
+    if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
+  });
+  sites = siteViews;
   controller = new AgentController(
     {
       stateFile: path.join(userData, 'agents.json'),
@@ -58,6 +65,8 @@ async function start(): Promise<void> {
       emit: (channel, payload) => {
         if (!window.isDestroyed()) window.webContents.send(channel, payload);
       },
+      siteNav: (id, action) => siteViews.navigate(id, action),
+      showSite: (agent) => siteViews.show(agent),
     },
     state,
   );
@@ -69,8 +78,12 @@ async function start(): Promise<void> {
   });
   if (smokeExit) window.webContents.once('did-finish-load', () => app.quit());
   await window.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  active.syncSelection();
 }
 
 void app.whenReady().then(start);
-app.on('before-quit', () => controller?.shutdown());
+app.on('before-quit', () => {
+  controller?.shutdown();
+  sites?.closeAll();
+});
 app.on('window-all-closed', () => app.quit());
