@@ -39,6 +39,10 @@ function requireSessionId(sessionId: string | undefined): string {
 }
 
 const ROOM_CLAUDE_ARGS: readonly string[] = [
+  '-p',
+  '--output-format',
+  'stream-json',
+  '--verbose',
   '--permission-mode',
   'plan',
   '--tools',
@@ -49,24 +53,22 @@ const ROOM_CLAUDE_ARGS: readonly string[] = [
   '--disallowedTools',
   'mcp__*',
 ];
-const ROOM_CODEX_ARGS: readonly string[] = [
-  '--sandbox',
-  'read-only',
-  '--ask-for-approval',
-  'never',
-  '--no-daemon',
-  '-c',
-  'check_for_update_on_startup=false',
-];
+const ROOM_CODEX_ARGS: readonly string[] = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--json'];
+const PROMPT_FROM_STDIN = '-';
 
-function cliArgs(kind: CliKind, options: SpawnOptions, room: boolean): string[] {
-  if (kind === 'claude') {
-    const flag = options.resume ? '--resume' : '--session-id';
-    const base = [flag, requireSessionId(options.sessionId), '--add-dir', options.sharedDir];
-    return room ? [...ROOM_CLAUDE_ARGS, ...base] : base;
-  }
-  const base = options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
-  return room ? [...ROOM_CODEX_ARGS, ...base] : base;
+function sessionFlag(options: SpawnOptions): string[] {
+  return [options.resume ? '--resume' : '--session-id', requireSessionId(options.sessionId)];
+}
+
+function workingCliArgs(kind: CliKind, options: SpawnOptions): string[] {
+  if (kind === 'claude') return [...sessionFlag(options), '--add-dir', options.sharedDir];
+  return options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
+}
+
+function roomCliArgs(kind: CliKind, options: SpawnOptions): string[] {
+  if (kind === 'claude') return [...ROOM_CLAUDE_ARGS, '--add-dir', options.sharedDir, ...sessionFlag(options)];
+  const resume = options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
+  return [...ROOM_CODEX_ARGS, ...resume, PROMPT_FROM_STDIN];
 }
 
 function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
@@ -81,7 +83,7 @@ function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
 function spawnSpec(kind: CliKind, options: SpawnOptions, room: boolean): SpawnSpec {
   if (options.cwd.length === 0) throw new Error('cwd is required');
   const bin = binaryFor(kind, options.env);
-  const args = cliArgs(kind, options, room);
+  const args = room ? roomCliArgs(kind, options) : workingCliArgs(kind, options);
   const env = childEnv(options.env);
   if (options.platform === 'win32') return { file: bin, args, cwd: options.cwd, env };
   const shell = options.env.SHELL || DEFAULT_SHELL;
@@ -97,6 +99,6 @@ export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
   return spawnSpec(kind, options, false);
 }
 
-export function buildRoomSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
+export function buildRoomTurnSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
   return spawnSpec(kind, options, true);
 }

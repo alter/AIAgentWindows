@@ -3,6 +3,10 @@
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { printKindOf, runPrint } from './stub-print.mjs';
+
+const printKind = printKindOf(process.argv.slice(2));
+if (printKind !== null) process.exit(await runPrint(printKind, process.argv.slice(2)));
 
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';

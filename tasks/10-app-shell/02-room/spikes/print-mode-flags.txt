@@ -1,0 +1,75 @@
+# T20 probe: flags of claude -p and codex exec accepted by 2.1.306 / 0.163.0 (parse only: every command ends in --help, no prompt is sent, stdin is /dev/null)
+# date: 2026-10-22
+$ claude --version
+2.1.306 (Claude Code)
+$ codex --version
+codex-cli 0.163.0
+
+$ claude -p --output-format stream-json --verbose --permission-mode plan --tools Read,Grep,Glob --strict-mcp-config --mcp-config {"mcpServers":{}} --disallowedTools mcp__* --add-dir /tmp --session-id 3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b --help
+Usage: claude [options] [prompt]
+
+exit=0
+
+$ claude -p --output-format stream-json --verbose --permission-mode plan --tools Read,Grep,Glob --strict-mcp-config --mcp-config {"mcpServers":{}} --disallowedTools mcp__* --add-dir /tmp --resume 3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b --help
+Usage: claude [options] [prompt]
+
+exit=0
+
+$ claude -p --output-format xml --help
+error: option '--output-format <format>' argument 'xml' is invalid. Allowed choices are text, json, stream-json.
+exit=1
+
+$ claude -p --bogus-flag --help
+Usage: claude [options] [prompt]
+
+exit=0
+
+$ codex exec --sandbox read-only --skip-git-repo-check --json - --help
+Run Codex non-interactively
+
+exit=0
+
+$ codex exec --sandbox read-only --skip-git-repo-check --json resume 3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b - --help
+Resume a previous session by id or pick the most recent with --last
+
+exit=0
+
+$ codex exec resume --sandbox read-only --help
+error: unexpected argument '--sandbox' found
+
+exit=2
+
+$ codex exec -a never --help
+error: unexpected argument '-a' found
+
+exit=2
+
+$ codex exec --no-daemon --help
+error: unexpected argument '--no-daemon' found
+
+exit=2
+
+$ codex exec resume -c check_for_update_on_startup=false --json --help
+Resume a previous session by id or pick the most recent with --last
+
+exit=0
+
+# claude ignores an unknown option when --help follows (the --bogus-flag run above exits 0), so for claude the flag names are proved by its --help listing, not by the runs above:
+$ claude --help | grep -E "^\s+(-p, --print|--output-format|--verbose|--session-id|-r, --resume|--permission-mode|--tools|--add-dir|--strict-mcp-config|--mcp-config|--disallowed|--no-session-persistence|--input-format)"
+  --add-dir <directories...>            Additional directories to allow tool
+  --disallowedTools, --disallowed-tools <tools...>
+                                        --output-format=stream-json)
+                                        --output-format=stream-json)
+  --input-format <format>               Input format (only works with --print):
+  --mcp-config <configs...>             Load MCP servers from JSON files or
+  --no-session-persistence              Disable session persistence - sessions
+  --output-format <format>              Output format (only works with --print):
+  --permission-mode <mode>              Permission mode to use for the session
+  -p, --print                           Print response and exit (useful for
+                                        --output-format=stream-json)
+                                        --strict-mcp-config to skip MCP servers
+  -r, --resume [value]                  Resume a conversation by session ID or
+  --session-id <uuid>                   Use a specific session ID for the
+  --strict-mcp-config                   Only use MCP servers from --mcp-config,
+  --tools <tools...>                    Specify the list of available tools from
+  --verbose                             Override verbose mode setting from

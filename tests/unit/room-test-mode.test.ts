@@ -1,6 +1,6 @@
 // room-test-mode.test.ts
 import { describe, expect, it } from 'vitest';
-import { roomChildEnv, roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
+import { roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
 
 const TEST_MODE = { AIAW_USER_DATA: '/tmp/profile', AIAW_ROOM_FAST: '1' };
 
@@ -9,7 +9,6 @@ describe('room test-mode override', () => {
     const env = { AIAW_ROOM_FAST: '1' };
     expect(roomTestMode(env)).toBe(false);
     expect(roomTimingOverride(env)).toBeUndefined();
-    expect(roomChildEnv(env, 'claude')).toBe(env);
   });
 
   it('is off in test mode unless asked for', () => {
@@ -18,12 +17,11 @@ describe('room test-mode override', () => {
     expect(roomTimingOverride(env)).toBeUndefined();
   });
 
-  it('shortens the room timing and marks the stub transcript kind in test mode', () => {
+  it('shortens the grace before a stopped CLI process is killed outright in test mode', () => {
     expect(roomTestMode(TEST_MODE)).toBe(true);
     const timing = roomTimingOverride(TEST_MODE);
-    expect(timing?.pollMs).toBeLessThan(250);
-    expect(timing).not.toHaveProperty('quietMs');
-    expect(roomChildEnv(TEST_MODE, 'codex')).toMatchObject({ AIAW_STUB_TRANSCRIPT: 'codex', AIAW_USER_DATA: '/tmp/profile' });
+    expect(timing?.killGraceMs).toBeLessThan(3000);
+    expect(timing).not.toHaveProperty('pollMs');
   });
 
   it('treats an empty AIAW_USER_DATA as normal mode', () => {

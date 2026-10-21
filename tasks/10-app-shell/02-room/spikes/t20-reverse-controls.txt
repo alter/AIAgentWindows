@@ -1,0 +1,20 @@
+# T20 reverse controls: code broken in place, red output kept, code restored byte for byte (cmp)
+
+## 1. --sandbox read-only dropped from ROOM_CODEX_ARGS (cli-args.ts)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |unit| tests/unit/room-sessions.test.ts > room sessions start read-only > starts codex with a read-only sandbox, as exec, with its JSON events and the prompt on stdin
+ FAIL  |unit| tests/unit/room-sessions.test.ts > room sessions start read-only > keeps the read-only sandbox before resume, where exec accepts it, when a codex room session is resumed
+ FAIL  |integration| tests/integration/room.test.ts > room with stub CLIs > runs every turn as one read-only process in its own folder, with the prompt on stdin and no terminal
+      Tests  3 failed | 47 passed (50)
+
+## 2. driver never resumes: resume: false (room-drivers.ts)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |integration| tests/integration/room.test.ts > room with stub CLIs > keeps one session per participant: the first turn creates it, the later turns resume it
+      Tests  1 failed | 36 passed (37)
+
+## 3. child never signalled: kill calls removed (cli-turn.ts)
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  |integration| tests/integration/room.test.ts > room with stub CLIs > marks a CLI turn that never ends, kills it, starts a new session and answers the next run
+ FAIL  |integration| tests/integration/room.test.ts > room with stub CLIs > Stop kills the CLI process of the turn in flight
+ FAIL  |integration| tests/integration/room.test.ts > room with stub CLIs > shutting the drivers down kills a process that is still running
+      Tests  3 failed | 53 passed (56)

@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
-import { roomChildEnv, roomTimingOverride } from '../shared/room-test-mode';
+import { roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
@@ -103,10 +103,7 @@ async function start(): Promise<void> {
     cwd: roomsDir,
     sharedDir,
     platform: process.platform,
-    envFor: (participant) => roomChildEnv(process.env, participant.kind),
-    onOutput: (id, data, end) => {
-      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.roomTerminalData, { id, data, end });
-    },
+    envFor: () => process.env,
     timing: roomTimingOverride(process.env),
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,

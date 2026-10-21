@@ -3,37 +3,21 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
-import { buildRoomSpawn } from '../shared/cli-args';
-import { rolloutId } from '../shared/codex-claim';
+import { buildRoomTurnSpawn } from '../shared/cli-args';
 import { PARTICIPANT_HISTORY_FILE } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
-import { OutputBuffer, type OutputSnapshot } from '../shared/output-buffer';
-import { ScreenReader } from '../shared/screen-reader';
-import { startScreenIssue } from '../shared/start-screen';
-import { claudeTranscriptPath } from './claude-transcripts';
-import { runCliTurn, CliTurnError } from './cli-turn';
-import { codexRolloutLocator } from './codex-rollouts';
-import { PtyManager } from './pty-manager';
-import { OwnerPause, type DriverFactory, type ParticipantDriver, type TurnRequest } from './room';
+import type { OutputSnapshot } from '../shared/output-buffer';
+import { runCliTurn } from './cli-turn';
+import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
 import type { PageRunner, SiteAdapter } from './site-adapters/types';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
 export interface RoomTiming {
-  quietMs: number;
-  startMaxMs: number;
-  pollMs: number;
-  settleMs: number;
-  submitDelayMs: number;
-  killWaitMs: number;
+  killGraceMs: number;
 }
 
 export const DEFAULT_ROOM_TIMING: RoomTiming = {
-  quietMs: 2000,
-  startMaxMs: 30000,
-  pollMs: 250,
-  settleMs: 1500,
-  submitDelayMs: 150,
-  killWaitMs: 5000,
+  killGraceMs: 3000,
 };
 
 export interface SiteSeat {
@@ -47,11 +31,8 @@ export interface RoomDriverDeps {
   platform: string;
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
   siteFor(participant: RoomParticipant): SiteSeat | null;
-  onOutput?(sessionId: string, data: string, end: number): void;
   timing?: Partial<RoomTiming>;
 }
-
-const TRUST_NOTE = 'accept the folder once in the terminal below, then press Resume';
 
 class FolderNames {
   private readonly names = new Map<string, string>();
@@ -68,200 +49,64 @@ class FolderNames {
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const SCREEN_COLS = 120;
-const SCREEN_ROWS = 40;
-
-class SessionHost {
-  private readonly lastData = new Map<string, number>();
-  private readonly screens = new Map<string, ScreenReader>();
-  private readonly buffers = new Map<string, OutputBuffer>();
-  private readonly pty: PtyManager;
-
-  constructor(onOutput: RoomDriverDeps['onOutput']) {
-    this.pty = new PtyManager({
-      onData: (id, data) => {
-        this.lastData.set(id, Date.now());
-        this.screens.get(id)?.write(data);
-        const end = this.bufferOf(id).append(data);
-        onOutput?.(id, data, end);
-      },
-      onExit: (id) => {
-        this.lastData.delete(id);
-      },
-    });
-  }
-
-  private bufferOf(id: string): OutputBuffer {
-    let buffer = this.buffers.get(id);
-    if (buffer === undefined) {
-      buffer = new OutputBuffer();
-      this.buffers.set(id, buffer);
-    }
-    return buffer;
-  }
-
-  backlog(id: string): OutputSnapshot {
-    return this.bufferOf(id).snapshot();
-  }
-
-  forget(id: string): void {
-    this.buffers.delete(id);
-    this.screens.get(id)?.dispose();
-    this.screens.delete(id);
-  }
-
-  resize(id: string, cols: number, rows: number): boolean {
-    const resized = this.pty.resize(id, { cols, rows });
-    if (resized) this.screens.get(id)?.resize(cols, rows);
-    return resized;
-  }
-
-  async screen(id: string): Promise<string> {
-    return (await this.screens.get(id)?.text()) ?? '';
-  }
-
-  spawn(id: string, spec: Parameters<PtyManager['spawn']>[1]): void {
-    this.screens.get(id)?.dispose();
-    this.screens.set(id, new ScreenReader(SCREEN_COLS, SCREEN_ROWS));
-    this.pty.spawn(id, spec, { cols: SCREEN_COLS, rows: SCREEN_ROWS });
-  }
-
-  has(id: string): boolean {
-    return this.pty.has(id);
-  }
-
-  write(id: string, data: string): boolean {
-    return this.pty.write(id, data);
-  }
-
-  kill(id: string): void {
-    this.pty.kill(id);
-  }
-
-  killAll(): void {
-    this.pty.killAll();
-  }
-
-  quietFor(id: string): number | null {
-    const last = this.lastData.get(id);
-    return last === undefined ? null : Date.now() - last;
-  }
+interface CliSession {
+  id: string | null;
+  started: boolean;
 }
 
 class CliDriver implements ParticipantDriver {
-  private ptyId: string | null = null;
-  private locate: (() => Promise<string | null>) | null = null;
-  private counter = 0;
+  private session: CliSession | null = null;
 
   constructor(
     private readonly participant: RoomParticipant,
     private readonly kind: CliKind,
-    private readonly host: SessionHost,
     private readonly deps: RoomDriverDeps,
     private readonly timing: RoomTiming,
-    private readonly claimed: Set<string>,
+    private readonly running: Set<AbortController>,
     private readonly folder: string,
   ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
-    const ptyId = await this.session(request.signal);
-    const locate = this.locate;
-    if (locate === null) throw new CliTurnError('unavailable', 'the session is not running');
-    if (request.historyText !== null) {
-      await writeFile(path.join(this.deps.cwd, this.folder, PARTICIPANT_HISTORY_FILE), request.historyText, 'utf8');
+    const cwd = path.join(this.deps.cwd, this.folder);
+    await mkdir(cwd, { recursive: true });
+    if (request.historyText !== null) await writeFile(path.join(cwd, PARTICIPANT_HISTORY_FILE), request.historyText, 'utf8');
+    const session = this.session ?? { id: this.kind === 'claude' ? randomUUID() : null, started: false };
+    const own = new AbortController();
+    this.running.add(own);
+    try {
+      const spec = buildRoomTurnSpawn(this.kind, {
+        cwd,
+        sessionId: session.id ?? undefined,
+        sharedDir: this.deps.sharedDir,
+        resume: session.started,
+        platform: this.deps.platform,
+        env: this.deps.envFor(this.participant),
+      });
+      const result = await runCliTurn({
+        kind: this.kind,
+        spec,
+        prompt: request.text,
+        timeoutMs: request.timeoutMs,
+        killGraceMs: this.timing.killGraceMs,
+        signal: AbortSignal.any([request.signal, own.signal]),
+      });
+      const id = session.id ?? result.sessionId;
+      this.session = id === null ? null : { id, started: true };
+      return result.reply;
+    } catch (error) {
+      this.session = null;
+      throw error;
+    } finally {
+      this.running.delete(own);
     }
-    return runCliTurn({
-      kind: this.kind,
-      prompt: request.text,
-      write: (data) => this.host.write(ptyId, data),
-      locate,
-      timeoutMs: request.timeoutMs,
-      pollMs: this.timing.pollMs,
-      settleMs: this.timing.settleMs,
-      submitDelayMs: this.timing.submitDelayMs,
-      signal: request.signal,
-      guard: () => this.checkScreen(ptyId),
-    });
   }
 
   async reset(): Promise<void> {
-    const ptyId = this.ptyId;
-    this.ptyId = null;
-    this.locate = null;
-    if (ptyId === null) return;
-    this.host.kill(ptyId);
-    const deadline = Date.now() + this.timing.killWaitMs;
-    while (this.host.has(ptyId) && Date.now() < deadline) await sleep(20);
-    this.host.forget(ptyId);
+    this.session = null;
   }
 
   dispose(): void {
-    if (this.ptyId !== null) this.host.kill(this.ptyId);
-    this.ptyId = null;
-  }
-
-  private async session(signal: AbortSignal): Promise<string> {
-    if (this.ptyId !== null && this.host.has(this.ptyId)) return this.ptyId;
-    await this.reset();
-    const env = this.deps.envFor(this.participant);
-    this.counter += 1;
-    const ptyId = `room-${this.participant.id}-${this.counter}`;
-    const sessionId = randomUUID();
-    const cwd = path.join(this.deps.cwd, this.folder);
-    await mkdir(cwd, { recursive: true });
-    const spawnedAtMs = Date.now();
-    const spec = buildRoomSpawn(this.kind, {
-      cwd,
-      sessionId: this.kind === 'claude' ? sessionId : undefined,
-      sharedDir: this.deps.sharedDir,
-      resume: false,
-      platform: this.deps.platform,
-      env,
-    });
-    this.host.spawn(ptyId, spec);
-    this.ptyId = ptyId;
-    this.locate =
-      this.kind === 'claude'
-        ? async () => claudeTranscriptPath(env, sessionId)
-        : this.claiming(codexRolloutLocator(env, { cwd, spawnedAtMs, claimed: this.claimed }));
-    await this.untilReady(ptyId, signal);
-    await this.checkScreen(ptyId);
-    return ptyId;
-  }
-
-  private async checkScreen(ptyId: string): Promise<void> {
-    const issue = startScreenIssue(await this.host.screen(ptyId));
-    if (issue === null) return;
-    if (issue.kind === 'trust') throw new OwnerPause(ptyId, `${this.participant.label}: ${TRUST_NOTE}`);
-    throw new CliTurnError('unavailable', `${this.participant.label} did not reach its prompt: ${issue.reason}`);
-  }
-
-  private claiming(locate: () => Promise<string | null>): () => Promise<string | null> {
-    return async () => {
-      const file = await locate();
-      const id = file === null ? null : rolloutId(path.basename(file));
-      if (id !== null) this.claimed.add(id);
-      return file;
-    };
-  }
-
-  private async untilReady(ptyId: string, signal: AbortSignal): Promise<void> {
-    const deadline = Date.now() + this.timing.startMaxMs;
-    for (;;) {
-      if (signal.aborted) throw new CliTurnError('aborted', 'the turn was stopped');
-      if (!this.host.has(ptyId)) throw new CliTurnError('unavailable', 'the session ended while starting');
-      const quiet = this.host.quietFor(ptyId);
-      if (quiet !== null && quiet >= this.timing.quietMs) return;
-      if (Date.now() >= deadline) {
-        if (quiet === null) throw new CliTurnError('unavailable', 'the session printed nothing while starting');
-        return;
-      }
-      await sleep(Math.min(50, this.timing.quietMs));
-    }
+    this.session = null;
   }
 }
 
@@ -286,6 +131,12 @@ class SiteDriver implements ParticipantDriver {
   }
 }
 
+const NO_TERMINAL: RoomTerminals = {
+  backlog: () => ({ data: '', end: 0 }),
+  write: () => false,
+  resize: () => false,
+};
+
 export interface RoomTerminals {
   backlog(sessionId: string): OutputSnapshot;
   write(sessionId: string, data: string): boolean;
@@ -300,19 +151,19 @@ export interface RoomDrivers {
 
 export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const timing: RoomTiming = { ...DEFAULT_ROOM_TIMING, ...deps.timing };
-  const host = new SessionHost(deps.onOutput);
-  const claimed = new Set<string>();
+  const running = new Set<AbortController>();
   const folders = new FolderNames();
   const factory: DriverFactory = async (participant) => {
-    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, host, deps, timing, claimed, folders.of(participant));
+    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
     return new SiteDriver(seat);
   };
-  const terminal: RoomTerminals = {
-    backlog: (id) => host.backlog(id),
-    write: (id, data) => host.write(id, data),
-    resize: (id, cols, rows) => host.resize(id, cols, rows),
+  return {
+    factory,
+    terminal: NO_TERMINAL,
+    shutdown: () => {
+      for (const turn of running) turn.abort();
+    },
   };
-  return { factory, terminal, shutdown: () => host.killAll() };
 }
