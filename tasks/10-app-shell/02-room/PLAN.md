@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -146,3 +146,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 01:05 T21 done: `--auto` writes `<site>.diagnostic.json` (metadata only), keeps class tokens that are selectors of the page's own stylesheets (mirrored in `findLeaks(html, classes)`), uses a 1600x1000 hidden window and waits for a settled message list (text-length plus element-count quiet) with the timeout in the diagnostic; 45 capture-auto + 61 sanitize + 11 diagnostic/layout tests; 4 reverse controls red then restored; electron spec capture-auto 2/2 on temp profile and local fixtures (viewport >= 1280 in a hidden window); coverage 100.00%, fast tier 11/11 (FASTRUN-2026-10-22-010311812469); real run not done (coordinator)
 - 2026-10-22 coordinator: T20, T21 verified. Capture run 3: DeepSeek conversation reached, classes unrecoverable (cross-origin CSS) → T07 superseded by T22 generic adapter.
 - 2026-10-22 01:15 T22 done: one generic site adapter registered for chatgpt, grok, deepseek (composer nearest the bottom, literal-text insert, Enter then nearest send button, end by stop button or reply text quiet 3 s, reply = text after the prompt past the pre-submit baseline, capped); `SITE_KINDS_WITH_ADAPTER` lifts T14's gate (`participantAvailability`/`formToConfig` take the list as a parameter, note is now `<label> has no site adapter`); 24 jsdom tests (textarea, contenteditable with and without execCommand, Enter and button submit, stop button, no-stop growth, silent, stall, repeated prompt, sidebar/footer excluded) red first (module missing), 5 reverse controls red then restored; fast tier 11/11 (FASTRUN-2026-10-22-011056094046), electron-smoke 17/17, integrity 0 findings; real pages unchecked (AC7)
+- 2026-10-22 coordinator: T22 verified (site-adapters + room-view 34, generic-adapter 24, electron-smoke 17/17 hidden, fast tier rc=0). Capture outputs removed from tests/fixtures/sites (kept as capture-auto-run-3* in the task dir). Only AC7 remains — the owner's live Room run with all five participants. Paused.
