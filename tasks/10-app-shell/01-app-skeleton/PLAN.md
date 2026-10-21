@@ -38,8 +38,10 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 - Site agents: one `WebContentsView` per agent attached to the main window's `contentView`, bounds = content area minus a 36 px navigation bar drawn by the renderer; only the selected view is visible. `setWindowOpenHandler` opens popups in a child window with the same partition, no preload.
 - Tests set `AIAW_USER_DATA` to a temporary directory; the app reads it before `ready` and calls `app.setPath('userData', …)`.
 - If a worker finds a pinned API that behaves unlike its `docs/tech/` note, it stops and reports (`open:` line); the main session runs `/diagnose`.
+- `vitest.config.ts` (T02) adds no new check: it configures the vitest commands already declared in docs/PROJECT.md §6 (the coverage command of `.coverage-gate.json` in the fast tier, `npx vitest run tests/full` in the full tier). Same for `eslint.config.mjs` (`npx eslint .`) and `playwright.config.ts` (`electron-smoke`, T14).
 - T02: npm 10.9.4 fails `npm install` with `Cannot read properties of null (reading 'edgesOut')` (arborist `#loadPeerSet`) on vitest 5.0.3's peer set, reproduced with vitest alone on both registry.npmmirror.com and registry.npmjs.org and absent with `--legacy-peer-deps`; `.npmrc` with `legacy-peer-deps=true` is committed (added to WRITE-SET). Peers are then not auto-installed, so required peer `vite` 8.3.3 (vitest peer `^6.4 || ^7 || ^8`, published 2026-10-06) and `@types/node` 22.20.5 (matches Node 22, published 2026-10-01) are explicit devDependencies.
 - T02: `eslint.config.mjs` also ignores `tasks/` (the 05-feasibility spike scripts are CommonJS evidence artefacts, 24 errors under the recommended rules); `src/shared/app-info.ts` + `tests/unit/app-info.test.ts` is the placeholder pair that gives the coverage ratchet a real file until T03 (floor set to 100.00 on it).
+- T02 integrity: `vitest.config.ts` is new and is the config of the coverage command already declared in docs/PROJECT.md §6 (Coverage table); no suppression, no skipped test.
 
 ## Out of scope
 - Forward, shared directory content, last-reply adapters — next tasks of 10-app-shell
