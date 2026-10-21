@@ -1,0 +1,6 @@
+claude 2.1.306, session 68513e95 (three background subagents ran in it)
+isSidechain values in the main transcript:
+{None: 632, False: 609}
+files under <session>/subagents/:
+      3 agent-<id>.jsonl
+      3 agent-<id>.meta.json

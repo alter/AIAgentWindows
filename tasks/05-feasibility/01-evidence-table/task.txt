@@ -25,6 +25,8 @@ SCOPE
 
 WRITE-SET
   docs/EVIDENCE.md
+  tasks/DECISIONS.md
+  .gitignore
   docs/tech/
   docs/PROJECT.md
   scripts/evidence_check.py
@@ -32,7 +34,8 @@ WRITE-SET
   tasks/05-feasibility/01-evidence-table/
 
 DATA
-  transcript.record: dir=in; type=JSON line written by claude 2.1.306 or codex 0.159.2; size=one line up to 10 MB; null=no; interpretable=yes; source=https://code.claude.com/docs/en/cli-reference/2.1.306
+  transcript.claude: dir=in; type=JSON line of a Claude Code 2.1.306 session transcript; size=one line up to 10 MB; null=no; interpretable=yes; source=https://github.com/anthropics/claude-code/blob/v2.1.306/CHANGELOG.md
+  transcript.codex: dir=in; type=JSON line of a Codex 0.159.2 rollout; size=one line up to 10 MB; null=no; interpretable=yes; source=https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/rollout/src/recorder.rs
   site.page: dir=in; type=HTML of chatgpt.com, grok.com, chat.deepseek.com loaded in Electron 44.6.0; size=whole document; null=no; interpretable=yes; source=https://www.electronjs.org/docs/v44.6.0/api/web-contents
 
 SECURITY

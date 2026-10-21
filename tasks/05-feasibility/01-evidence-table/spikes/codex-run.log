@@ -1,0 +1,15 @@
+[0.0s] electron 44.6.0, node 24.21.0, node-pty loaded, shell /bin/zsh
+[0.0s] PATH seen by the GUI process: /usr/bin:/bin:/usr/sbin:/sbin
+[0.0s] cwd /tmp/spike-cwd-V4YFiE; shared /tmp/spike-shared-UxMMhl; session-id a3ea8dfb-9b25-48e7-a4e9-9c95c71f0057; cmd: /bin/zsh -l -i -c "codex"
+[6.1s] snapshot 01-start; bracketedPasteMode=true
+[6.1s] codex update dialog → Esc (skip)
+[8.6s] snapshot 02-dialog-0; bracketedPasteMode=true
+[8.6s] codex trust dialog → Enter (Trust and continue)
+[11.6s] snapshot 02-dialog-1; bracketedPasteMode=true
+[11.6s] codex update dialog → Esc (skip)
+[14.1s] snapshot 02-dialog-2; bracketedPasteMode=true
+[14.1s] prompt visible: true
+[15.6s] snapshot 03-after-bracketed-paste; bracketedPasteMode=true
+[15.7s] clipboard.has(image/png)=true has(text/plain)=false
+[18.2s] snapshot 04-after-ctrl-v-image; bracketedPasteMode=true
+[19.2s] pty exit 0

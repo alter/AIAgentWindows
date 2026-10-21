@@ -1,0 +1,12 @@
+codex-cli 0.159.2; cwd=/tmp/spike-codex-cwd-Iic5; shared=/tmp/spike-shared-tJ5P
+--- sandbox_mode=read-only: read outside cwd
+shared-content-42
+exit=0
+--- sandbox_mode=read-only: write outside cwd
+sh: /tmp/spike-shared-tJ5P/written.md: Operation not permitted
+exit=1
+--- sandbox_mode=workspace-write: read outside cwd
+shared-content-42
+exit=0
+--- sandbox_mode=workspace-write: write outside cwd
+exit=0

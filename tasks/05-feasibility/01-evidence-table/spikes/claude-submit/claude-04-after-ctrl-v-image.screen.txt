@@ -1,0 +1,12 @@
+
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/spike-cwd-2uJCQ6
+
+                                                                                             ctrl+g to edit in VS Code
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ line one of a forwarded text
+  line two[Image #1] 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  spike-cwd-2uJCQ6  Haiku 5.5/medium  5h 5%/264m  7d 41%
+  ⏵⏵ auto mode on (shift+tab to cycle)

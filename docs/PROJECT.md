@@ -12,7 +12,7 @@ Single source of truth for what this project is, what it contains, and what the 
 | Name / slug | AIAgentWindows |
 | Repository | local git, /Users/user/workflow/git/AIAgentWindows (no remote) |
 | Other agents or people working in this repo | owner (Roman Dolgov) and Claude Code sessions; no other people |
-| Stack (from the machine, with versions) | Electron + TypeScript, Node v22.22.0, npm 10.9.4, Python 3.14.8 (repo scripts only); targets macOS, Windows 11, Ubuntu 26.04; `claude` CLI at ~/.local/bin/claude. Exact library versions pinned in `docs/tech/<name>@<version>.md` before the first design against them |
+| Stack (from the machine, with versions) | Electron 44.6.0, node-pty 1.1.0, xterm 6.0.0, TypeScript 6.0.3 (not 7: typescript-eslint supports `<6.1.0`), vitest 5.0.3, Playwright 1.63.0, electron-builder 26.17.0; Node v22.22.0, npm 10.9.4, Python 3.14.8 (repo scripts only); targets macOS, Windows 11, Ubuntu 26.04; `claude` 2.1.306, `codex` 0.159.2. Each pinned version is studied in `docs/tech/<name>@<version>.md`; every claim below has its evidence in `docs/EVIDENCE.md` |
 
 ## 2. Goal
 
@@ -28,16 +28,16 @@ One state per row: `included` (present, expected to work) · `available` (partly
 | Capability | State | Note |
 |---|---|---|
 | Slack-like shell (agent sidebar, tabs, multiple windows) | included | |
-| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. On macOS/Linux the pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder does not inherit it); on Windows `claude` is resolved from the user's environment at spawn time. Each window has a working directory the user picks when creating it; `claude` is launched there with a fresh `--session-id <uuid>` and `--add-dir <shared dir>`. Text goes in by bracketed paste into the pty; the transcript is found by its session id, `<CLAUDE_CONFIG_DIR or ~/.claude>/projects/*/<session-id>.jsonl` (the directory slug is internal and not recomputed), a reopened window resumes with `--resume <session-id>`; the last reply is read from that transcript (`type: assistant` records with `isSidechain` false — subagent turns live in the same file), never by scraping the terminal. That format is internal and unversioned: the parser skips unknown records, and when it finds no reply the user's terminal selection is the fallback |
-| Codex CLI windows, ChatGPT subscription, interactive CLI in pty | included | owner's request 2026-10-21; same pty model as Claude Code (`codex` 0.159.2 installed, user's own ChatGPT login). Codex takes no session id at launch: the app finds its transcript as the `~/.codex/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl` that appears after this window's spawn, whose `session_meta` cwd is the window's directory and that no other window has claimed (the id is then stored in the window state), then reopens with `codex resume <id>`; the sessions root is `$CODEX_HOME` when set, else `~/.codex` (`%USERPROFILE%\.codex` on Windows); last reply = `response_item` / `message` / role `assistant`. Same rules: internal format, tolerant parser, never auto-submit. Whether Codex reads the shared directory outside its cwd (its sandbox limits writes, reads to be confirmed) is settled in `docs/tech/codex@0.159.2.md` before the Codex task |
-| Files and images into an agent window | included | owner's request 2026-10-21. CLI windows: a file dropped on the terminal is pasted as its quoted path (both CLIs attach image paths as images); when the clipboard holds an image, the CLI's clipboard key (`Ctrl+V`, on Windows also `Alt+V`) is passed through to the pty untouched, because the CLI reads the OS clipboard itself; when it holds text, the same key pastes the text (bracketed paste) — the terminal checks the clipboard type before deciding. Web windows: native drag-and-drop and paste of the webview. Forwarding a file or image: it is saved to the shared directory, a CLI receives its path, a web chat receives it through its file input, set from the main process |
-| Voice input | included | owner's request 2026-10-21, pass-through only: Claude Code's own dictation (`/voice`, hold `Space`; documented for 2.1.306, availability may depend on plan and platform) and the sites' own voice buttons. The app grants the microphone to its CLI children (macOS `NSMicrophoneUsageDescription`; the system asks the user once) and to webviews only for the origins of the configured sites, refusing every other origin. OS dictation (macOS Dictation, Windows `Win+H`) types into any input; Ubuntu has none built in. Codex CLI documents no voice input |
+| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | the unmodified `claude` under the user's own login, no API key (CC14). Started through the login shell on macOS/Linux (CC2, CC3), with a fresh `--session-id` and `--add-dir <shared dir>` in a directory the user picks; reopened with `--resume`. The last reply comes from the transcript, never from the screen (CC6–CC10). The app never answers the trust dialog for the user: its default choice exits (CC13). Mechanics: `docs/tech/claude-code@2.1.306.md` |
+| Codex CLI windows, ChatGPT subscription, interactive CLI in pty | included | owner's request 2026-10-21; same model as Claude Code under the user's ChatGPT sign-in (CX1, CX14). No session id at launch: the window claims its rollout file (CX3–CX6), reopens with `codex resume`. Startup dialogs (update, whose default runs `curl … \| sh`; folder trust) are the user's to answer (CX2). Mechanics: `docs/tech/codex@0.159.2.md` |
+| Files and images into an agent window | included | owner's request 2026-10-21. CLI windows: a dropped file is pasted as its quoted path (F1); `Ctrl+V` (`Alt+V` on Windows) always goes to the pty untouched, the CLI reads text or image from the OS clipboard itself (F2, F3). Clipboard-image paste into Codex failed in the app's pty (CX10) — open until CX11 says whether an ordinary terminal does better. Web windows: native drag-and-drop and paste. Forwarding a file: saved to the shared directory; a CLI gets its path, a web chat gets it through its file input set from the main process (F5, F6) |
+| Voice input | included | owner's request 2026-10-21, pass-through only: Claude Code `/voice` (V1), Codex `/voice` (CX12), the sites' own voice buttons (V6). Microphone granted to CLI children through the app (V2, V3) and to webviews only for the configured sites' origins (V4). OS dictation (macOS Dictation, Windows `Win+H`) types into any input; Ubuntu has none built in |
 | App-level speech-to-text (own recognizer for any window) | absent | build only on request |
-| ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window. Feasibility unproven: Google sign-in may refuse embedded user agents, sites may show bot challenges to Electron — first task after `T00` is a spike on all three |
-| DOM adapters: read last reply, insert text into input | included | remote pages get no preload bridge and no IPC: adapters run from the main process in an isolated world, so a hostile or compromised chat page cannot reach the pty, the file system or keys (an `/attack` target once adapters exist); one isolated adapter per site; breakage must not touch other adapters; only on a user action, never in a loop. Owner's risk: OpenAI and xAI terms restrict programmatic extraction of output |
-| Forward to another window (action + window picker) | included | forwarded text is pasted, never submitted: the user presses Enter. It is another model's output, and in a Claude Code window it reaches an agent with tools; the app never launches `claude` with `--dangerously-skip-permissions`, nor `codex` with `--dangerously-bypass-approvals-and-sandbox` or a looser sandbox/approval policy than the user's own config |
-| Shared directory + manifest readable by other agents | included | markdown/JSON files. CLI agents read the path themselves (Claude Code through `--add-dir`; Codex as settled in its tech doc); web agents cannot read files — the app inserts or attaches the content; API agents get it in the message or through a tool |
-| OpenAI API provider | included | secondary, after the subscription/free-account paths work; key stored through Electron `safeStorage`; on Linux the app refuses to save a key when the backend reports plaintext (`basic_text`) |
+| ChatGPT, Grok, DeepSeek as embedded views with per-agent persistent profile | included | `WebContentsView`, not the discouraged `<webview>` tag (W11); `persist:` partition per agent (W9). The user signs in by hand (W8). Logged out, ChatGPT and Grok load and chat without a challenge (W1, W2, W6); DeepSeek requires sign-in and refuses Electron's default user agent (W3–W5, decision D1 in `tasks/DECISIONS.md`). "Sign in with Google" is refused in an embedded view by Google's policy (W7): the user signs in by email, Apple or the site's own account. Facts: `docs/tech/chat-sites@2026-10-21.md` |
+| DOM adapters: read last reply, insert text into input | included | remote pages get no preload and no IPC; adapters run from the main process in an isolated world (W10), so a hostile page cannot reach the pty, files or keys (an `/attack` target once adapters exist); one isolated adapter per site; only on a user action, never in a loop. Owner's risk, confirmed in the current terms: OpenAI forbids programmatic extraction of Output (W12), xAI forbids bot access (W13), DeepSeek forbids automatic capture (W14) |
+| Forward to another window (action + window picker) | included | forwarded text is pasted, never submitted (CC11, CX9): the user presses Enter. It is another model's output reaching an agent with tools; the app never launches `claude` with `--dangerously-skip-permissions` (CC15), nor `codex` with `--dangerously-bypass-approvals-and-sandbox` (CX13) or a looser sandbox/approval policy than the user's own |
+| Shared directory + manifest readable by other agents | included | markdown/JSON files. CLI agents read the path themselves: Claude Code through `--add-dir` (CC4, CC5), Codex through its whole-disk read access (CX8); web agents get the content inserted or attached; API agents get it in the message or through a tool |
+| OpenAI API provider | included | secondary, after the subscription/free-account paths work; key stored through Electron `safeStorage`; on Linux the app refuses to save a key when the backend reports `basic_text` (K1) |
 | Other API providers (Anthropic API, Gemini, etc.) | absent | |
 | Credential or captcha automation | absent | never |
 | Release builds, signing, notarization, auto-update | absent | build packages locally only |
@@ -58,6 +58,7 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 - Electron process split (main/preload/renderer), IPC contract, module layout, UI styling that resembles Slack (own assets, no Slack branding), xterm.js and node-pty choice, shared-directory file format and manifest schema, OS-specific paths.
 - Adapter selectors/fixtures for each site and how breakage is isolated.
 - Where API keys are stored (OS keychain via Electron safeStorage).
+- Pinned versions: newest release at least two weeks old, unless a study in `docs/tech/` shows an incompatibility (TypeScript 6.0.3 instead of 7.0.2).
 
 ## 5. Unattended policy
 
@@ -71,7 +72,7 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 
 | Question | Answer |
 |---|---|
-| Platform reach | only macOS is verifiable by the session (no remote, no CI). Windows 11 and Ubuntu 26.04 are checked by the owner's manual smoke; `/plan` therefore never puts another OS into a code task's acceptance: the code task closes on macOS plus its tests, and per-OS verification is its own task, closed by the owner after the manual smoke (`[!] BLOCKED: needs <OS>` until then). Known per-OS pitfalls go to `docs/tech/` at `T00`: node-pty native rebuild for the Electron ABI and Windows ConPTY; Ubuntu's AppArmor restriction on unprivileged user namespaces breaking the Chromium sandbox of unpacked/AppImage builds; `File.path` gone in current Electron (dropped files resolve through `webUtils.getPathForFile` in the shell's own preload); macOS microphone permission re-prompting after every rebuild of an unsigned app, since its code identity changes |
+| Platform reach | only macOS is verifiable by the session (no remote, no CI). `/plan` never puts another OS into a code task's acceptance: the code task closes on macOS plus its tests, and per-OS verification is its own task, closed by the owner after the manual smoke (`[!] BLOCKED: needs <OS>` until then). Per-OS facts: node-pty needs `chmod +x` on its prebuilt `spawn-helper` (P2) and builds from source on Linux (P1); Windows uses ConPTY (P3); Ubuntu's AppArmor userns restriction needs the electron-builder `.deb` profile (P5). Open per-OS claims: CC16, P4, P6 in `docs/EVIDENCE.md` |
 | A non-production target is recognised by (database name, kube context, workspace, profile, host group) | n/a: no live backend. Tests never talk to the real chatgpt.com, grok.com, chat.deepseek.com or claude accounts unless the owner runs a named live-smoke command themselves |
 
 Commands that need the owner, as prefixes; `git-guard` refuses them in every session:
@@ -101,13 +102,15 @@ Commands that must exit 0 before any task is marked `[x]`. `/plan` copies them i
 npx tsc --noEmit
 npx eslint .
 python3 scripts/coverage_gate.py --run
+python3 -m unittest discover -s tests/scripts
+python3 scripts/evidence_check.py
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*.sh' -- shellcheck -S warning
 python3 scripts/lint_changed.py --base 2393fe1 --glob '.github/workflows/*.yml' --glob '.github/workflows/*.yaml' -- actionlint
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*' -- sh -c 'for f do gitleaks dir --no-banner --log-level error "$f" || exit 1; done' sh
 gitleaks git --no-banner --log-level error --log-opts="2393fe1..HEAD"
 ```
 
-`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project (eslint ignores `out/`, `dist/`, `coverage/`, `reports/`; with several tsconfigs for main/preload/renderer `T00` replaces `npx tsc --noEmit` by the equivalent `tsc -b` form, since a solution tsconfig checks nothing on its own); the coverage gate runs the unit and integration tests once, with coverage, and ratchets the floor — the tests are not run a second time without coverage. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
+`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The shellcheck and actionlint lines have had no input yet and so have never been red (G3). The first three lines exist after `T00` scaffolds the TypeScript project (eslint ignores `out/`, `dist/`, `coverage/`, `reports/`; with several tsconfigs for main/preload/renderer `T00` replaces `npx tsc --noEmit` by the equivalent `tsc -b` form, since a solution tsconfig checks nothing on its own); the coverage gate runs the unit and integration tests once, with coverage, and ratchets the floor — the tests are not run a second time without coverage. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
 
 ### Full tier
 
@@ -119,10 +122,10 @@ npx vitest run tests/unit tests/integration --reporter=junit --outputFile=report
 #: budget=6m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
 npx vitest run tests/full --reporter=junit --outputFile=reports/junit-vitest-full.xml
 #: budget=6m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
-PLAYWRIGHT_JUNIT_OUTPUT_NAME=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit
+PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit
 ```
 
-Budgets are provisional until `T00` measures a run; the whole-run budget below is the cap. Reporter and list flags (`vitest list`, `--sequence.shuffle`, the pool options) are confirmed against the versions `T00` pins (`docs/tech/`); a `--reporter` on the Playwright command line replaces the reporters of the config, so the JUnit path is given by `PLAYWRIGHT_JUNIT_OUTPUT_NAME` on the same line, not by the config. The full tier is the whole suite, unit and integration included; within one run each test runs once (the three directories are disjoint), so this is not a repetition.
+Budgets are provisional until `T00` measures a run; the whole-run budget below is the cap. Reporter, list and order flags are confirmed for the pinned versions (G5, G8 in `docs/EVIDENCE.md`); a `--reporter` on the Playwright command line replaces the reporters of the config, so the JUnit path is given by `PLAYWRIGHT_JUNIT_OUTPUT_FILE` on the same line (`…_OUTPUT_NAME` would be relative to the output directory, G7), not by the config. The full tier is the whole suite, unit and integration included; within one run each test runs once (the three directories are disjoint), so this is not a repetition.
 
 A command may carry attributes on a `#:` line directly above it. Keys: `budget` (`40m`; over it the command is stopped with its children and reported `timeout`; without it, twice the last passing time), `expect` (a postcondition on the result; exit 0 with a failed `expect` is `empty`), `report` (JUnit XML the command writes), `list` (a command that lists the tests without running them — `pytest --collect-only -q`, `go test -list .`, `cargo nextest list`, `jest --listTests`), `shards` and `parallel` (the command uses `{shard}`/`{shards}`; shard 1 runs alone first and the rest start only after it passed its budget, its `expect` and its census), `repeat` with `reason` (a declared repetition; anything else that runs a test twice is a duplicate), `mem` (`512M`, `2G`; the peak of the command's process group is sampled every half second, over it the command is stopped and reported `mem`, which holds a milestone; without it, 75% of the machine's RAM), `leftover` (a command printing one number — databases, temp dirs, containers named by tests — counted before and after; growth is a finding). With `report` and `list` the run is censused: each test ran exactly once, every listed test ran, shards are disjoint. `{shard}` counts from 1, `{shard0}` from 0 — tools differ, check yours.
 
@@ -143,7 +146,7 @@ The first line uses pytest-split (`--splits N --group k`, groups from 1 — http
 | Fast tier wall time at `T00`, seconds, from the run | measured at `T00` once the project exists |
 | Full tier budget, minutes, whole run (over it: a finding, and `/test-audit` is due) | 15 |
 | Audit: run in another order (a command, for `/test-audit`; e.g. `pytest -p random_order`, `go test -shuffle=on`) | `npx vitest run tests/unit tests/integration --sequence.shuffle` |
-| Audit: run in parallel (a command, for `/test-audit`; e.g. `pytest -n 4`, `go test -p 4`, `cargo nextest run`) | `npx vitest run tests/unit tests/integration --pool=forks --poolOptions.forks.maxForks=4` |
+| Audit: run in parallel (a command, for `/test-audit`; e.g. `pytest -n 4`, `go test -p 4`, `cargo nextest run`) | `npx vitest run tests/unit tests/integration --pool=forks --maxWorkers=4` (`poolOptions` was removed in vitest 4, G6) |
 | Audit: isolation between parallel workers (a command that runs two workers and fails when one sees the other's data) | n/a: no shared external resource; tests use per-test temp directories |
 | Audit: calls to the external resource per test (a command printing `<test id> <count>` lines; PostgreSQL: `pg_stat_statements` deltas or driver tracing) | n/a |
 
@@ -186,12 +189,15 @@ Read before working in the area. Prefer `.claude/rules/<area>.md` with `paths:` 
 
 | Area | Document |
 |---|---|
-| Whole app | `AGENTS.md` Map; `docs/tech/` once created |
+| Whole app | `AGENTS.md` Map |
+| Any pinned technology | `docs/tech/<name>@<version>.md` |
+| Any claim about how the product works | `docs/EVIDENCE.md` (checked by `scripts/evidence_check.py`) |
 
 ## 10. Fingerprint
 
 The signal files of the repository when this file was last reconciled with it: manifests, lint/test/type configs, build and CI files, container files, test and migration directories. `scripts/project_check.py` compares it with the repository and reports what appeared or disappeared since; a new line inside a manifest is not a change of this kind. After reconciling (`/intake refresh`), run `python3 scripts/project_check.py --refresh-fingerprint`.
 
 ```fingerprint
-commit 6373980918e2
+commit 8440e1c47728
+tests/
 ```

@@ -1,0 +1,20 @@
+╭─────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ ✨_ Update available! 0.159.2 -> 0.163.0                                                             │
+│ Run sh -c 'curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh' to update. │
+│                                                                                                     │
+│ See full release notes:                                                                             │
+│ https://github.com/openai/codex/releases/latest                                                     │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+  >_ OpenAI Codex (v0.159.2)
+     /private/tmp/spike-cwd-ab5yF8
+
+  A new prompt awakens.
+
+■ Failed to paste image: no image on clipboard: The image or the text that was about the be transferred to/from the
+clipboard could not be converted to the appropriate format.
+
+› line one of a forwarded text
+  line two
+
+  gpt-6-astra high · /private/tmp/spike-cwd-ab5yF8

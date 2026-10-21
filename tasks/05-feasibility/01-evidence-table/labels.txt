@@ -2,7 +2,7 @@ phase:feasibility
 role:ARCH
 type:research
 priority:P0
-status:in_progress
+status:review
 verify:pending
 milestone:M1
 gate:yes

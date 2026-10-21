@@ -1,0 +1,8 @@
+$ ls -l node_modules/node-pty/prebuilds/darwin-arm64/  (node-pty 1.1.0 straight from npm install)
+total 136
+-rw-r--r-- 1 user 85496 окт.  21 10:32 pty.node
+-rw-r--r-- 1 user 50480 окт.  21 10:32 spawn-helper
+
+$ first spawn under Electron 44.6.0:
+(node:38468) UnhandledPromiseRejectionWarning: Error: posix_spawnp failed.
+    at new UnixTerminal (/Users/user/workflow/git/AIAgentWindows/.claude/scratch/spike/node_modules/node-pty/lib/unixTerminal.js:92:24)

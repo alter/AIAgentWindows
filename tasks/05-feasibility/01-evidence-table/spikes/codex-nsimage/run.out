@@ -1,0 +1,18 @@
+[0.0s] electron 44.6.0, node 24.21.0, node-pty loaded, shell /bin/zsh
+[0.0s] PATH seen by the GUI process: /usr/bin:/bin:/usr/sbin:/sbin
+[0.1s] cwd /tmp/spike-cwd-ab5yF8; shared /tmp/spike-shared-8AM6aK; session-id 84e2d7ac-37a5-45c1-8d38-6a1f1dee7187; cmd: /bin/zsh -l -i -c "codex"
+[6.1s] snapshot 01-start; bracketedPasteMode=true
+[6.1s] codex update dialog → Esc (skip)
+[8.6s] snapshot 02-dialog-0; bracketedPasteMode=true
+[8.6s] codex trust dialog → Enter (Trust and continue)
+[11.6s] snapshot 02-dialog-1; bracketedPasteMode=true
+[11.6s] codex update dialog → Esc (skip)
+[14.1s] snapshot 02-dialog-2; bracketedPasteMode=true
+[14.1s] prompt visible: true
+[15.6s] snapshot 03-after-bracketed-paste; bracketedPasteMode=true
+2026-10-21 10:44:20.885 osascript[48968:38214614] CGImageDestinationFinalize failed for output type 'public.tiff'
+[15.7s] pasteboard types: public.tiff,NeXT TIFF v4.0 pasteboard type
+[15.7s] clipboard image written as NSImage
+[15.8s] clipboard.has(image/png)=true has(text/plain)=false
+[18.3s] snapshot 04-after-ctrl-v-image; bracketedPasteMode=true
+[19.3s] pty exit 0

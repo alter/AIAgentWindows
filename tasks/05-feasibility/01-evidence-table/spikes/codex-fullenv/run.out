@@ -1,0 +1,17 @@
+[0.0s] electron 44.6.0, node 24.21.0, node-pty loaded, shell /bin/zsh
+[0.0s] PATH seen by the GUI process: /Users/user/bin:/Users/user/.unity/bin:/Users/user/.nvm/versions/node/v22.22.0/bin:/Users/user/.antigravity-ide/antigravity-ide/bin:/Users/user/Projects/cc-autopipe-source/src/helpers:/Users/user/.antigravity/antigravity/bin:/Users/user/.bun/bin:/Users/user/.codeium/windsurf/bin:/Users/user/.antigravity/antigravity/bin:/Users/user/yandex-cloud/bin:/Users/user/.local/bin:/opt/homebrew/opt/mysql-client/bin:/Users/user/.local/bin/:/usr/local/texlive/2025basic/bin/universal-darwin:/usr/local/texlive/2025basic/bin/universal-darwin:/Users/user/.krew/bin:/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/Users/user/.cargo/bin:/Users/user/workflow/apps:/usr/local/sbin/
+[0.0s] cwd /var/folders/n6/lh59htn97s32m6r1xszt0x0r0000gn/T/spike-cwd-LgTL2M; shared /var/folders/n6/lh59htn97s32m6r1xszt0x0r0000gn/T/spike-shared-mavDVr; session-id 81bfdd08-b81e-4930-a5dc-8fc2043ece78; cmd: /bin/zsh -l -i -c "codex"
+[6.1s] snapshot 01-start; bracketedPasteMode=true
+[6.1s] codex update dialog → Esc (skip)
+[8.6s] snapshot 02-dialog-0; bracketedPasteMode=true
+[8.6s] codex trust dialog → Enter (Trust and continue)
+[11.6s] snapshot 02-dialog-1; bracketedPasteMode=true
+[11.6s] codex update dialog → Esc (skip)
+[14.1s] snapshot 02-dialog-2; bracketedPasteMode=true
+[14.1s] prompt visible: true
+[15.6s] snapshot 03-after-bracketed-paste; bracketedPasteMode=true
+[15.7s] pasteboard types: public.png,Apple PNG pasteboard type,public.tiff,NeXT TIFF v4.0 pasteboard type
+[15.7s] clipboard image written as PNGf
+[15.8s] clipboard.has(image/png)=true has(text/plain)=false
+[18.3s] snapshot 04-after-ctrl-v-image; bracketedPasteMode=true
+[19.3s] pty exit 0

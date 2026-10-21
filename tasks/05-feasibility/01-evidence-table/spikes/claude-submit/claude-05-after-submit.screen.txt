@@ -1,0 +1,17 @@
+
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Haiku 5.5 · Claude Max
+ ▝▝   ▝▝   /private/tmp/spike-cwd-2uJCQ6
+
+❯ line one of a forwarded text                                                                                          
+  Reply with the single word OK and nothing else.                                                                       
+
+⏺
+
+✶ Discombobulating… (2s · ↓ 25 tokens · thinking)
+                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯  
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  spike-cwd-2uJCQ6  Haiku 5.5/medium  5h 5%/264m  7d 41%
+  ⏵⏵ auto mode on (shift+tab to cycle)

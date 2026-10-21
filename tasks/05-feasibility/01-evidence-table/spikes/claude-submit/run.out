@@ -1,0 +1,14 @@
+[0.0s] electron 44.6.0, node 24.21.0, node-pty loaded, shell /bin/zsh
+[0.0s] PATH seen by the GUI process: /usr/bin:/bin:/usr/sbin:/sbin
+[0.0s] cwd /tmp/spike-cwd-2uJCQ6; shared /tmp/spike-shared-ZYQ1v6; session-id 7d58de11-2632-437c-a2e1-2ed31d16c513; cmd: /bin/zsh -l -i -c "claude --session-id 7d58de11-2632-437c-a2e1-2ed31d16c513 --add-dir /tmp/spike-shared-ZYQ1v6 --model haiku"
+[6.0s] snapshot 01-start; bracketedPasteMode=true
+[6.0s] trust dialog present → "\u001b[B" + Enter
+[11.5s] snapshot 02-after-trust; bracketedPasteMode=true
+[11.5s] prompt visible: true
+[13.0s] snapshot 03-after-bracketed-paste; bracketedPasteMode=true
+[13.1s] pasteboard types: public.png,Apple PNG pasteboard type,public.tiff,NeXT TIFF v4.0 pasteboard type
+[13.1s] clipboard image written as PNGf
+[13.1s] clipboard.has(image/png)=true has(text/plain)=false
+[15.6s] snapshot 04-after-ctrl-v-image; bracketedPasteMode=true
+[19.7s] snapshot 05-after-submit; bracketedPasteMode=true
+[21.0s] pty exit 0

@@ -1,0 +1,46 @@
+{
+  "electron": "44.6.0",
+  "chrome": "152.0.7977.130",
+  "sites": {
+    "chatgpt": {
+      "title": "ChatGPT: Chat, Work, Create & Code with AI",
+      "url": "https://chatgpt.com/",
+      "input": false,
+      "challenge": false,
+      "loginWall": true,
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "mainFrameAndErrors": [
+        "200 mainFrame https://chatgpt.com/",
+        "401 xhr https://chatgpt.com/unauth-mweb/sentinel/chat-requirements/prepare",
+        "401 xhr https://chatgpt.com/unauth-mweb/conversation/prepare?lightweight_authenticated=0",
+        "401 xhr https://chatgpt.com/backend-anon/beacons/home?product=chatgpt"
+      ],
+      "permissionRequests": []
+    },
+    "deepseek": {
+      "title": "DeepSeek - Into the Unknown",
+      "url": "https://chat.deepseek.com/sign_in",
+      "input": false,
+      "challenge": true,
+      "loginWall": true,
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "mainFrameAndErrors": [
+        "202 mainFrame https://chat.deepseek.com/",
+        "200 mainFrame https://chat.deepseek.com/"
+      ],
+      "permissionRequests": []
+    },
+    "grok": {
+      "title": "Grok",
+      "url": "https://grok.com/",
+      "input": true,
+      "challenge": false,
+      "loginWall": true,
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "mainFrameAndErrors": [
+        "200 mainFrame https://grok.com/"
+      ],
+      "permissionRequests": []
+    }
+  }
+}

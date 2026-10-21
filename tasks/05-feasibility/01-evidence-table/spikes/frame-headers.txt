@@ -1,0 +1,11 @@
+curl -sSI with a Chrome user agent, 2026-10-21; framing headers only
+== https://chatgpt.com/
+HTTP/2 403 
+x-frame-options: SAMEORIGIN
+== https://grok.com/
+HTTP/2 103 
+HTTP/2 200 
+x-frame-options: DENY
+csp: frame-ancestors https://x.com https://starfleet.teachx.ai
+== https://chat.deepseek.com/
+HTTP/2 403 

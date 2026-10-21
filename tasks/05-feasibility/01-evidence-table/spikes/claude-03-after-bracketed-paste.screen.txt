@@ -1,0 +1,12 @@
+
+ ▐▛███▛█   Claude Code v2.1.306
+▝▜██████▀  Opus 5.5 with high effort · Claude Max
+ ▝▝   ▝▝   /private/tmp/spike-cwd-rL1JKn
+
+                                                                                             ctrl+g to edit in VS Code
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ line one of a forwarded text
+  line two 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  spike-cwd-rL1JKn  Opus 5.5/high
+  ⏵⏵ auto mode on (shift+tab to cycle)

@@ -1,0 +1,11 @@
+$ python3 last_reply.py claude <spike session>
+lookup /Users/user/.claude/projects/*/7d58de11-2632-437c-a2e1-2ed31d16c513.jsonl -> ['/Users/user/.claude/projects/-private-tmp-spike-cwd-2uJCQ6/7d58de11-2632-437c-a2e1-2ed31d16c513.jsonl']
+last reply: 'OK'; unparsable lines: 0
+
+$ python3 last_reply.py claude <this long session, with subagent sidechains>
+lookup /Users/user/.claude/projects/*/68513e95-887c-4a3d-aecf-fce34fa5f566.jsonl -> ['/Users/user/.claude/projects/-Users-user-workflow-git-AIAgentWindows/68513e95-887c-4a3d-aecf-fce34fa5f566.jsonl']
+last reply: <present, omitted>
+
+$ python3 last_reply.py codex <newest real rollout>
+rollout-2026-09-25T20-08-11-01a0d953-01ea-7461-b113-998a717f6753.jsonl cwd=/Users/user/workflow/ai-agent-lessons
+last reply: <present, omitted>

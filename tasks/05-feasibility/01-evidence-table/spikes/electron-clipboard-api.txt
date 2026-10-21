@@ -1,0 +1,48 @@
+electron 44.6.0 node_modules/electron/electron.d.ts — interface Clipboard:
+  interface Clipboard {
+
+    // Docs: https://electronjs.org/docs/api/clipboard
+
+    /**
+     * Clears the clipboard content.
+     */
+    clear(): void;
+    /**
+     * A promise that resolves with `true` if the clipboard contains data of the
+     * specified `mimetype`, otherwise `false`. To check for a raw format, eg
+     * `public/utf8-plain-text`, use the `electron application/osclipboard` custom
+     * format (`electron application/osclipboard;format="public/utf8-plain-text"`).
+     */
+    has(mimetype: string): Promise<boolean>;
+    /**
+     * A promise that resolves with an array of ClipboardItem objects containing the
+     * clipboard's contents.
+     */
+    read(): Promise<Electron.ClipboardItem[]>;
+    /**
+     * A promise that resolves with the content of the clipboard as plain text. Modeled
+     * after the W3C `navigator.clipboard.readText` API.
+     */
+    readText(): Promise<string>;
+    /**
+     * Resolves once the data has been written to the clipboard. All entries supplied
+     * in a single `write()` call are committed to the system clipboard atomically.
+     */
+    write(data: ClipboardItem[]): Promise<void>;
+    /**
+     * A promise that resolves once the text has been written to the clipboard. Modeled
+     * after the W3C `navigator.clipboard.writeText` API.
+     */
+    writeText(text: string): Promise<void>;
+    /**
+     * A `Clipboard` property — a `Clipboard` object on Linux that operates against the
+     * selection clipboard instead of the system clipboard, and `undefined` on all
+     * other platforms. It exposes the same `read`, `write`, `readText`, `writeText`,
+     * `has`, and `clear` methods as the top-level `clipboard` module.
+     *
+     * @platform linux
+     */
+    readonly selection: Clipboard;
+  }
+
+runtime probe: clipboard keys: clear,has,readText,writeText,read,write
