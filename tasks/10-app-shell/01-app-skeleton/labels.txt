@@ -4,6 +4,7 @@ type:feature
 priority:P0
 status:in_progress
 verify:pending
+attack:failed
 depends:05-feasibility/01-evidence-table
 milestone:M2
 format:2
