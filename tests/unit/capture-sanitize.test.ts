@@ -200,6 +200,34 @@ describe('capture sanitizer closed names', () => {
     for (const value of ['conversation-turn-3', '42', 'step-1']) expect(isClosedValue(value, words), value).toBe(true);
   });
 
+  it('closes digit groups split over class tokens and numeric attributes of one element', () => {
+    const page = '<body><div class="4111 1111 1111 1111 turn-3" data-state="4111 1111 1111 1111"><span tabindex="0142" aria-level="7788" aria-posinset="5512" aria-setsize="9031" aria-valuenow="42">x</span></div></body>';
+    const html = sanitizePage(new JSDOM(page).window.document, 'probe', SANITIZE_POLICY);
+    for (const leak of ['4111', '1111', '7788', '5512', '9031']) expect(html, leak).not.toContain(leak);
+    const out = new JSDOM(html).window.document;
+    for (const element of Array.from(out.querySelectorAll('*'))) {
+      const values = Array.from(element.attributes).filter((a) => !a.name.startsWith('data-aiaw')).map((a) => a.value);
+      const groups = values.join(' ').split(/[^A-Za-z0-9]+/).filter((part) => /^\d+$/.test(part));
+      expect(groups.length, element.localName).toBeLessThanOrEqual(1);
+    }
+    expect(out.querySelector('div')?.getAttribute('class')).toBe('turn-3');
+    expect(findLeaks(html)).toEqual([]);
+  });
+
+  it('drops class tokens without a closed word', () => {
+    const html = sanitizePage(new JSDOM('<body><div class="4111 zq9 text-sm">x</div></body>').window.document, 'probe', SANITIZE_POLICY);
+    expect(html).toContain('class="text-sm"');
+    expect(html).not.toContain('4111');
+  });
+
+  it.each([
+    ['digit-only class tokens in one element', '<html><body><div class="4111 1111 1111 1111">x</div></body></html>'],
+    ['numeric attributes of one element', '<html><body><span tabindex="0142" aria-level="7788" aria-posinset="5512" aria-setsize="9031">x</span></body></html>'],
+    ['a class number and an aria number', '<html><body><div class="turn-3" aria-level="7788">x</div></body></html>'],
+  ])('leak check flags %s', (_name, html) => {
+    expect(findLeaks(html).length).toBeGreaterThan(0);
+  });
+
   it.each([
     ['an attribute name outside the closed set', '<html><body><div data-private-token-value="x">x</div></body></html>'],
     ['a bare attribute name', '<html><body><div zq-probe7f3abc123>x</div></body></html>'],

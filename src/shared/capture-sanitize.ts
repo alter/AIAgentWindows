@@ -104,6 +104,14 @@ export function isClosedValue(value: string, words: ReadonlySet<string>): boolea
   return parts.length > 0 && numbers.length <= 1 && parts.every((part) => words.has(part) || /^\d{1,4}$/.test(part));
 }
 
+export function numberCount(value: string): number {
+  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => /^\d{1,4}$/.test(part)).length;
+}
+
+export function hasWord(value: string, words: ReadonlySet<string>): boolean {
+  return value.toLowerCase().split(/[^a-z0-9]+/).some((part) => words.has(part));
+}
+
 export interface NameSets {
   fixed: ReadonlySet<string>;
   words: ReadonlySet<string>;
@@ -145,7 +153,13 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   let nodes = 0;
   let truncated = false;
 
-  const closed = (value: string): string => (isClosedValue(value, words) ? value : TEXT);
+  const closed = (value: string, budget: { left: number }): string => {
+    if (!isClosedValue(value, words)) return TEXT;
+    const count = numberCount(value);
+    if (count > budget.left) return TEXT;
+    budget.left -= count;
+    return value;
+  };
 
   const placeholder = (value: string): string => {
     if (value === '') return TEXT;
@@ -157,10 +171,17 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
     return found;
   };
 
-  const attributeValue = (name: string, value: string): string | null => {
+  const attributeValue = (name: string, value: string, budget: { left: number }): string | null => {
     if (name.startsWith('on') || dropped.has(name)) return null;
     if (name === 'class') {
-      const kept = value.split(/\s+/).filter((part) => isClosedValue(part, words));
+      const kept: string[] = [];
+      for (const part of value.split(/\s+/)) {
+        if (!isClosedValue(part, words) || !hasWord(part, words)) continue;
+        const count = numberCount(part);
+        if (count > budget.left) continue;
+        budget.left -= count;
+        kept.push(part);
+      }
       return kept.length === 0 ? null : kept.join(' ');
     }
     if (textAttributes.has(name)) return labels.has(value.trim().toLowerCase()) ? value.trim() : TEXT;
@@ -169,9 +190,9 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
     }
     if (name.startsWith('data-')) {
       if (identifierData.test(name) && !/test-?id/.test(name)) return placeholder(value.trim());
-      return structuralData.test(name) ? closed(value) : TEXT;
+      return structuralData.test(name) ? closed(value, budget) : TEXT;
     }
-    if (name.startsWith('aria-') || enumerated.has(name)) return closed(value);
+    if (name.startsWith('aria-') || enumerated.has(name)) return closed(value, budget);
     return TEXT;
   };
 
@@ -184,10 +205,11 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
     const known = tags.has(from.localName.toLowerCase());
     const made = known ? out.createElementNS(from.namespaceURI, from.localName.toLowerCase()) : out.createElement('div');
     nodes += 1;
+    const budget = { left: 1 };
     for (const attribute of Array.from(from.attributes)) {
       const name = attribute.name.toLowerCase();
       if (!isKeptAttributeName(name, nameSets)) continue;
-      const value = attributeValue(name, attribute.value);
+      const value = attributeValue(name, attribute.value, budget);
       if (value === null) continue;
       made.setAttribute(name, value);
     }
@@ -215,6 +237,8 @@ export function sanitizeScript(site: string): string {
   return `(() => {
   try {
     const isClosedValue = ${isClosedValue.toString()};
+    const numberCount = ${numberCount.toString()};
+    const hasWord = ${hasWord.toString()};
     const buildNameSets = ${buildNameSets.toString()};
     const isKeptAttributeName = ${isKeptAttributeName.toString()};
     const html = (${sanitizePage.toString()})(document, ${JSON.stringify(site)}, ${JSON.stringify(SANITIZE_POLICY)});
@@ -235,22 +259,26 @@ const ATTRIBUTE = /\s([^\s=<>"']+)(?:="([^"]*)")?/g;
 const FORBIDDEN_TAG = /<\s*(script|style|noscript|template|link|meta|base|title)\b/i;
 const FORBIDDEN_ATTRIBUTE = /^(on.*|style|srcdoc|nonce|integrity)$/i;
 
-function attributeProblem(name: string, value: string): string | null {
+function attributeProblem(name: string, value: string, tally: { numbers: number }): string | null {
   const lower = name.toLowerCase();
   if (FORBIDDEN_ATTRIBUTE.test(lower)) return `attribute ${lower}`;
   if (!OWN_ATTRIBUTES.has(lower) && !isKeptAttributeName(lower, NAME_SETS)) return 'attribute name';
   if (value === 'x') return null;
   if (lower === 'data-aiaw-site') return SITE.test(value) ? null : `attribute ${lower} value`;
   if (lower === 'class') {
-    const bad = value.split(/\s+/).some((part) => part !== '' && !isClosedValue(part, WORDS));
-    return bad ? 'attribute class value' : null;
+    const parts = value.split(/\s+/).filter((part) => part !== '');
+    if (parts.some((part) => !isClosedValue(part, WORDS) || !hasWord(part, WORDS))) return 'attribute class value';
+    tally.numbers += parts.reduce((sum, part) => sum + numberCount(part), 0);
+    return null;
   }
   if (TEXT_ATTRIBUTES.includes(lower)) return CONTROL_LABELS.includes(value.toLowerCase()) ? null : `attribute ${lower} value`;
   if (ID_ATTRIBUTES.includes(lower) || (lower.startsWith('data-') && /(^|-)ids?$/.test(lower) && !/test-?id/.test(lower))) {
     const bad = value.split(/\s+/).some((part) => !ID_PLACEHOLDER.test(part));
     return bad ? `attribute ${lower} value` : null;
   }
-  return isClosedValue(value, WORDS) ? null : `attribute ${lower} value`;
+  if (!isClosedValue(value, WORDS)) return `attribute ${lower} value`;
+  tally.numbers += numberCount(value);
+  return null;
 }
 
 export function findLeaks(html: string): string[] {
@@ -262,11 +290,13 @@ export function findLeaks(html: string): string[] {
     const tagName = (/^<([^\s>/]+)/.exec(tag)?.[1] ?? '').toLowerCase();
     if (!TAG_NAMES.has(tagName) && tagName !== 'html') problems.add('element name');
     const attributes = tag.replace(/^<[^\s>/]+/, '').replace(/\/?>$/, '');
+    const tally = { numbers: 0 };
     for (const match of attributes.matchAll(ATTRIBUTE)) {
       const [, name = '', value = ''] = match;
-      const problem = attributeProblem(name, value);
+      const problem = attributeProblem(name, value, tally);
       if (problem !== null) problems.add(problem);
     }
+    if (tally.numbers > 1) problems.add('digit groups');
   }
   const text = body.replace(TAG, ' ').replace(/<\/[^>]*>/g, ' ');
   if (text.split(/\s+/).some((word) => word !== '' && word !== 'x')) problems.add('text outside placeholders');
