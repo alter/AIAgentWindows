@@ -53,6 +53,8 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 
 - T10 spawns the CLI when the agent is added, before the renderer has a pane. T11 must not lose that early output: main keeps a per-agent ring buffer of pty output (cap 256 KB) and the renderer, on creating a pane, asks for the backlog and then follows `pty:data`; the pane reports its size so main calls `pty.resize` (FitAddon never resizes the pty) (coordinator note, 2026-10-21).
 
+- Site views have no automated coverage after T12 (only a deleted scratch probe). T14's smoke also adds a DeepSeek agent whose start URL is replaced, in tests only, by a local page served from `tests/fixtures/` (`AIAW_SITE_URL_<KIND>` override read by main; never set in production) and asserts: the view is visible, its user agent has no `Electron/`, Home returns to the start URL after navigating away. Tests never load the real sites (docs/PROJECT.md §5) (coordinator note, 2026-10-21).
+
 ## Out of scope
 - Forward, shared directory content, last-reply adapters — next tasks of 10-app-shell
 - Import of existing local sessions with filters — its own task of 10-app-shell
