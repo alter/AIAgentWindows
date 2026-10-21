@@ -1,0 +1,28 @@
+
+> ai-agent-windows@0.1.0 capture-sites
+> node scripts/capture-sites.mjs --auto
+
+
+  dist/scripts/profile-lock.js      4.6kb
+  dist/scripts/profile-lock.js.map  5.1kb
+
+⚡ Done in 33ms
+
+  dist/preload/index.js       8.9kb
+  dist/preload/index.js.map  31.0kb
+
+⚡ Done in 43ms
+
+  dist/main/index.js      380.7kb
+  dist/main/index.js.map    1.0mb
+
+⚡ Done in 127ms
+
+  dist/renderer/index.js      473.8kb
+  dist/renderer/index.js.map    1.7mb
+
+⚡ Done in 154ms
+Unattended capture: hidden windows, no Dock icon, existing chats only. Nothing is typed, clicked or sent. Structure goes to /Users/user/workflow/git/AIAgentWindows/tests/fixtures/sites.
+chatgpt: no agent for this site in the profile (nothing saved)
+grok: no agent for this site in the profile (nothing saved)
+deepseek: saved, /Users/user/workflow/git/AIAgentWindows/tests/fixtures/sites/deepseek.html, the page settled but no reply markup was recognised
