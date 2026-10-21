@@ -4,6 +4,7 @@ const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 const childSession = process.env.CLAUDE_CODE_CHILD_SESSION === undefined ? 'unset' : 'set';
 
+if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdout.write('\x1b[?2004h');
 process.stdout.write(`STUB-CLI BANNER argv=${JSON.stringify(process.argv.slice(2))} CLAUDE_CODE_CHILD_SESSION=${childSession}\r\n`);
 
@@ -33,7 +34,6 @@ function feed(chunk) {
   }
 }
 
-if (process.stdin.isTTY) process.stdin.setRawMode(true);
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', feed);
 process.stdin.resume();

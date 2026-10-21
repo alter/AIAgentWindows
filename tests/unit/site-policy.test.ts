@@ -1,7 +1,7 @@
 // site-policy.test.ts
 import { describe, expect, it } from 'vitest';
 import { SITE_URLS } from '../../src/shared/agents';
-import { originOf, permissionAllowed, popupAllowed, userAgentFor } from '../../src/shared/site-policy';
+import { originOf, permissionAllowed, popupAllowed, siteStartUrl, userAgentFor } from '../../src/shared/site-policy';
 
 const DEFAULT_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) aiagentwindows/0.1.0 Chrome/150.0.0.0 Electron/44.6.0 Safari/537.36';
@@ -81,5 +81,24 @@ describe('popupAllowed', () => {
     for (const url of ['file:///etc/passwd', 'javascript:alert(1)', 'data:text/html,hi', 'chrome://gpu', 'custom-app://x', '', 'garbage']) {
       expect(popupAllowed(url)).toBe(false);
     }
+  });
+});
+
+describe('siteStartUrl', () => {
+  it('returns the production URL when no override is set', () => {
+    expect(siteStartUrl('deepseek', {})).toBe(SITE_URLS.deepseek);
+    expect(siteStartUrl('chatgpt', { AIAW_SITE_URL_GROK: 'http://127.0.0.1:1/' })).toBe(SITE_URLS.chatgpt);
+  });
+
+  it('returns the override of that kind when it is an http(s) URL', () => {
+    expect(siteStartUrl('deepseek', { AIAW_SITE_URL_DEEPSEEK: 'http://127.0.0.1:5000/start' })).toBe(
+      'http://127.0.0.1:5000/start',
+    );
+  });
+
+  it('ignores an override that is not an http(s) URL', () => {
+    expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: 'file:///etc/passwd' })).toBe(SITE_URLS.grok);
+    expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: 'not a url' })).toBe(SITE_URLS.grok);
+    expect(siteStartUrl('grok', { AIAW_SITE_URL_GROK: '' })).toBe(SITE_URLS.grok);
   });
 });

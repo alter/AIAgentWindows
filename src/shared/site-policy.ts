@@ -1,5 +1,5 @@
 // site-policy.ts
-import type { SiteKind } from './agents';
+import { SITE_URLS, type SiteKind } from './agents';
 
 const ELECTRON_TOKEN = /\s*Electron\/\S+/;
 const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set(['media', 'persistent-storage']);
@@ -32,4 +32,9 @@ export function popupAllowed(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function siteStartUrl(kind: SiteKind, env: Readonly<Record<string, string | undefined>>): string {
+  const override = env[`AIAW_SITE_URL_${kind.toUpperCase()}`];
+  return override !== undefined && popupAllowed(override) && override !== 'about:blank' ? override : SITE_URLS[kind];
 }

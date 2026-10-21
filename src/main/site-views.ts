@@ -1,9 +1,9 @@
 // site-views.ts
 import { session, WebContentsView, type BrowserWindow } from 'electron';
-import { isSiteKind, SITE_URLS, type Agent, type SiteKind } from '../shared/agents';
+import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
 import { siteBounds } from '../shared/site-layout';
-import { originOf, permissionAllowed, popupAllowed, userAgentFor } from '../shared/site-policy';
+import { originOf, permissionAllowed, popupAllowed, siteStartUrl, userAgentFor } from '../shared/site-policy';
 
 interface SiteEntry {
   kind: SiteKind;
@@ -17,6 +17,7 @@ export class SiteViews {
   constructor(
     private readonly window: BrowserWindow,
     private readonly emit: (event: SiteStateEvent) => void,
+    private readonly env: Readonly<Record<string, string | undefined>> = {},
   ) {
     window.on('resize', () => this.layout());
   }
@@ -38,7 +39,7 @@ export class SiteViews {
     const contents = entry.view.webContents;
     if (action === 'back' && contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
     else if (action === 'forward' && contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
-    else if (action === 'home') void contents.loadURL(SITE_URLS[entry.kind]);
+    else if (action === 'home') void contents.loadURL(siteStartUrl(entry.kind, this.env));
     else if (action === 'reload') contents.reload();
   }
 
@@ -79,14 +80,14 @@ export class SiteViews {
     this.window.contentView.addChildView(view);
     const entry = { kind, view };
     this.entries.set(id, entry);
-    void contents.loadURL(SITE_URLS[kind]);
+    void contents.loadURL(siteStartUrl(kind, this.env));
     return entry;
   }
 
   private configureSession(partition: string, kind: SiteKind): void {
     const ses = session.fromPartition(partition);
     ses.setUserAgent(userAgentFor(kind, ses.getUserAgent()));
-    const agentOrigin = originOf(SITE_URLS[kind]) ?? '';
+    const agentOrigin = originOf(siteStartUrl(kind, this.env)) ?? '';
     ses.setPermissionRequestHandler((_contents, permission, callback, details) => {
       callback(permissionAllowed(agentOrigin, permission, details.requestingUrl));
     });

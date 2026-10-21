@@ -54,7 +54,7 @@ async function start(): Promise<void> {
   mainWindow = window;
   const siteViews = new SiteViews(window, (event) => {
     if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
-  });
+  }, process.env);
   sites = siteViews;
   controller = new AgentController(
     {

@@ -6,3 +6,4 @@ out/
 reports/
 coverage/
 __pycache__/
+test-results/

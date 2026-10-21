@@ -14,3 +14,10 @@ T11 for T12: sidebar width is `--sidebar-width: 260px` and the nav bar `--nav-ba
 ## T13 reverse controls
 Restore: `restoreSpawn` with `resume: false` forced and `persist()` without the Codex claim step, run against the unchanged tests: tests/unit/restore.test.ts 2 failed, tests/integration/restore-controller.test.ts 3 failed. Restored; 9 + 5 passed.
 AC9: scratch package.json `{"scripts":{"dist":"electron-builder --mac"}}` -> `python3 scripts/check_publish_flags.py --package <scratch>` rc=1 (`[publish-flag]`); the repository package.json rc=0. Limit: the check reads package.json scripts only (not electron-builder.yml, not CI files).
+
+## T14 reverse controls
+Smoke (tests/full/smoke.spec.ts) against mutated source: `userAgentFor` returning the default UA -> the DeepSeek test fails (`Expected substring: not "Electron/"`, received a UA with Electron/44.6.0); `saveState` replaced by a no-op in AgentController.persist -> the Claude test fails after relaunch (`.agent-item` expected 1, received 0). Both restored from copies; real source green (2 passed).
+One earlier mutated run (persist off) failed with a pane showing real Codex and Claude screens in the test folder instead of the expected count error; two identical reruns gave the count error and I could not reproduce it or explain it. The smoke now also sets AIAW_CODEX_BIN to the stub. Open: the owner may want to look if a real CLI ever appears in a test pane.
+
+## T14 stub race (flaky pty-stub test)
+tests/integration/pty-stub.test.ts `typed Enter is submitted` timed out in 1 of 2 identical coverage runs under machine load (5000 ms). Root cause: stub-cli.mjs printed its banner before `setRawMode(true)`; the test writes `abc\r` right after the banner, and a write landing before raw mode goes through the tty line discipline (ICRNL turns `\r` into `\n`, which the stub does not treat as Enter). Evidence: with raw mode delayed 300 ms the same test fails deterministically with the same timeout; with raw mode set before the banner 3 consecutive full coverage runs passed 121/121.
