@@ -14,7 +14,12 @@ Read the owning guide before changing an area; read only the sections you need. 
 
 | Area | Path | Read first |
 |---|---|---|
-| App | `src/` (to be created in T00) | `docs/PROJECT.md`, `docs/tech/` |
+| Main process | `src/main/` (window, IPC handlers, agent controller, pty manager, site views, state file, Codex rollout and Claude transcript lookup) | `docs/tech/electron@44.6.0.md`, `docs/tech/node-pty@1.1.0.md` |
+| Preload | `src/preload/` (the app renderer's `contextBridge` only; remote views get no preload) | `docs/tech/electron@44.6.0.md` |
+| Renderer | `src/renderer/` (DOM UI, xterm panes; imports no Node or main-process module) | `docs/tech/xterm@6.0.0.md` |
+| Shared | `src/shared/` (pure types and rules: agent state schema, CLI argv builder, restore, Codex claim, site policy, IPC validation; the coverage target) | `docs/PROJECT.md` §6 |
+| Scripts | `scripts/` (build, postinstall, gate checks: arch_check, coverage_gate, evidence_check, check_publish_flags, project_check, lint_changed) | `docs/PROJECT.md` §6 |
+| Tests | `tests/unit/`, `tests/integration/` (fast tier), `tests/full/` (Playwright `electron-smoke`), `tests/scripts/` (Python), `tests/fixtures/` (stub CLI, local site page); tests never spawn a real CLI | `docs/PROJECT.md` §5, §6 |
 
 ## Engineering
 
