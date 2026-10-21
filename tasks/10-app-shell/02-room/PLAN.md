@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -8,13 +8,13 @@ created: 2026-10-21
 A "Room" item at the top of the sidebar opens a shared view above all agents. The owner types a prompt, ticks participants (Claude Code, Codex, ChatGPT, Grok, DeepSeek), picks "to all" or "relay" and a number of rounds, and presses Start. "To all" sends the prompt to every participant and shows each reply in the room feed. "Relay" sends the prompt to A, then the prompt with A's reply to B, then everything so far to C, and so on, back to A, for N rounds, with no confirmation between steps. CLI participants are room-owned sessions in read-only modes; web participants are driven by per-site adapters. The history lives in `<shared>/rooms/<id>.md`. Stop ends a run at the current step. "Carry result" pastes the final reply or the history into a chosen working session without submitting it.
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
-- [ ] AC2 Relay schedule and history: `npx vitest run tests/unit/room-model.test.ts tests/unit/room-history.test.ts` exit 0 — 3 participants × 2 rounds gives A,B,C,A,B,C; each prompt carries the whole history in order; replies are written verbatim
-- [ ] AC3 Room CLI sessions are read-only: `npx vitest run tests/unit/room-sessions.test.ts` exit 0 (claude gets `--permission-mode plan`, codex gets `--sandbox read-only`), and red when the flag is dropped (reverse control kept in NOTES.md)
-- [ ] AC4 CLI turn driver: `npx vitest run tests/integration/cli-turn.test.ts` exit 0 — with the stub CLI writing Claude-format and Codex-format transcripts, a sent prompt is submitted, the end of the turn is detected and the reply read; a turn that never ends times out with an error, not a hang
-- [ ] AC5 Web adapters on fixtures: `npx vitest run tests/unit/site-adapters.test.ts` exit 0 — for each site's fixture page: insert as literal text, submit, generating → done, last reply read; markup in the prompt stays text
-- [ ] AC6 Smoke: `PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit` exit 0, including a relay of two stub participants for 2 rounds (order checked in the history file), a broadcast, Stop in the middle, a carried result pasted but not submitted, and markup in a reply shown as text — windows hidden
-- [ ] AC7 HUMAN (excluded from /run): the owner runs a Room with Claude Code, Codex, ChatGPT, Grok and DeepSeek for 2 relay rounds and records in NOTES.md what worked
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [x] AC2 Relay schedule and history: `npx vitest run tests/unit/room-model.test.ts tests/unit/room-history.test.ts` exit 0 — 3 participants × 2 rounds gives A,B,C,A,B,C; each prompt carries the whole history in order; replies are written verbatim
+- [x] AC3 Room CLI sessions are read-only: `npx vitest run tests/unit/room-sessions.test.ts` exit 0 (claude gets `--permission-mode plan`, codex gets `--sandbox read-only`), and red when the flag is dropped (reverse control kept in NOTES.md)
+- [x] AC4 CLI turn driver: `npx vitest run tests/integration/cli-turn.test.ts` exit 0 — with the stub CLI writing Claude-format and Codex-format transcripts, a sent prompt is submitted, the end of the turn is detected and the reply read; a turn that never ends times out with an error, not a hang
+- [x] AC5 Web adapters on fixtures: `npx vitest run tests/unit/site-adapters.test.ts` exit 0 — for each site's fixture page: insert as literal text, submit, generating → done, last reply read; markup in the prompt stays text
+- [x] AC6 Smoke: `PLAYWRIGHT_JUNIT_OUTPUT_FILE=reports/junit-electron-smoke.xml npx playwright test --project=electron-smoke --reporter=junit` exit 0, including a relay of two stub participants for 2 rounds (order checked in the history file), a broadcast, Stop in the middle, a carried result pasted but not submitted, and markup in a reply shown as text — windows hidden
+- [!] AC7 HUMAN (excluded from /run): the owner runs a Room with Claude Code, Codex, ChatGPT, Grok and DeepSeek for 2 relay rounds and records in NOTES.md what worked
 
 ## Stack
 As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, xterm 6.0.0, TypeScript 6.0.3, vitest 5.0.3, Playwright 1.63.0). CLIs on the owner's machine: claude 2.1.306, codex 0.163.0 (updated by the owner on 2026-10-21; docs/tech holds 0.159.2 until T01).
@@ -110,3 +110,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-21 coordinator: T12h–T12k verified (targeted suites green, fast tier rc=0, full tier FULLRUN-2026-10-21-213636520705 2/2). Attack round 3: attack:failed, 4 CONFIRMED — dialog guard (findings 1, 2) survives two fixes → T12n BLOCKED for the owner; history escape (3) → T12l; sanitizer digits (4) → T12m.
 - 2026-10-21 21:50 T12l done: escapeBody inverted — a body line is escaped when, after NFKC and stripping Default_Ignorable_Code_Point/Cc/Cf/Mn/Me/whitespace, it is non-empty and does not start with a letter or digit; notice says so; table of 14 invisible leads + 7 non-alphanumeric leads + 7 untouched starts + Round 3 integration forgery red first (20 failed on HEAD sources, 86/86 green after); 'verbatim' tests now assert the escape prefix; fast tier 11/11 (FASTRUN-2026-10-21-214749257239)
 - 2026-10-21 21:50 T12m done: digit groups are counted per element (budget of one across class tokens, data-* and aria/enumerated values; the rest become "x"); a kept class token must contain a closed word (digit-only tokens dropped); findLeaks flags digit-only/non-word class tokens and more than one digit group per element (`digit groups`); numberCount/hasWord injected into sanitizeScript; 5 tests red first (5 failed) then green 51/51; fast tier 11/11 (FASTRUN-2026-10-21-214954912634)
+- 2026-10-21 coordinator: T12l, T12m verified (Round 3 reproductions F3/F4 no longer reproduce). AC1 fast tier rc=0; AC2–AC5 vitest rc=0; AC6 electron-smoke 15/15 hidden. Remaining for the owner: T07 (needs `npm run capture-sites`), T12n (decision on automatic Enter: options a–d), AC7 (live Room run). Plan paused.
