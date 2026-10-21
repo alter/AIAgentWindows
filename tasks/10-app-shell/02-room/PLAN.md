@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -119,3 +119,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-21 23:02 T13 done: CLI turns get `<participant folder>/history.md` (same nonce-fenced render of the entries the turn sees, written by CliDriver before the send) and the prompt says `./history.md`; TurnRequest.historyText, ParticipantPrompt.placeHistory; 4 tests red first (unit prompt, web/cli prompt, historyText == snapshot, stub-CLI folder file) then green 87/87; EVIDENCE CX8 marked refuted for 0.163.0; fast tier 11/11 (FASTRUN-2026-10-21-230151759416)
 - 2026-10-21 23:06 T14 done: the Room view model marks web participants without an adapter unavailable (`participantAvailability`, `SITE_KINDS_WITH_ADAPTER` in agents.ts, empty until T07): checkbox disabled with the note "needs `npm run capture-sites`", `formToConfig` refuses a ticked one with `<label> has no site adapter yet (needs `npm run capture-sites`)`, createSiteSeats throws the same text instead of the misleading "no open chat page"; 4 tests red first (4 failed) then green 21/21, a test pins the list to the adapter registry; fast tier 11/11 (FASTRUN-2026-10-21-230410843847)
 - 2026-10-21 23:10 T15 done: "Carry history" now uses `renderCarryHistory` (`# Room <id>`, one `### <author> (<kind>, <time>)` block per entry, bodies verbatim, no escape prefix, no nonce notice); the participant prompt and the history file keep `escapeBody`, the feed already showed `entry.text`; 3 + 1 tests red first (3 failed) then green 78/78; fast tier 11/11 (FASTRUN-2026-10-21-230542637096)
+- 2026-10-21 coordinator: T13–T15 verified (room 34, room-view 21, history+view 78, fast tier rc=0; electron-smoke run after T15). Paused again on the owner: T07 capture, T12n decision, AC7.
