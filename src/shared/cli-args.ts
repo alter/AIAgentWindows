@@ -38,12 +38,28 @@ function requireSessionId(sessionId: string | undefined): string {
   return sessionId;
 }
 
-function cliArgs(kind: CliKind, options: SpawnOptions): string[] {
+const ROOM_CLAUDE_ARGS: readonly string[] = [
+  '--permission-mode',
+  'plan',
+  '--disallowedTools',
+  'Bash Edit Write NotebookEdit ExitPlanMode',
+];
+const ROOM_CODEX_ARGS: readonly string[] = [
+  '--sandbox',
+  'read-only',
+  '--ask-for-approval',
+  'never',
+  '--no-daemon',
+];
+
+function cliArgs(kind: CliKind, options: SpawnOptions, room: boolean): string[] {
   if (kind === 'claude') {
     const flag = options.resume ? '--resume' : '--session-id';
-    return [flag, requireSessionId(options.sessionId), '--add-dir', options.sharedDir];
+    const base = [flag, requireSessionId(options.sessionId), '--add-dir', options.sharedDir];
+    return room ? [...ROOM_CLAUDE_ARGS, ...base] : base;
   }
-  return options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
+  const base = options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
+  return room ? [...ROOM_CODEX_ARGS, ...base] : base;
 }
 
 function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
@@ -55,10 +71,10 @@ function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
   return kind;
 }
 
-export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
+function spawnSpec(kind: CliKind, options: SpawnOptions, room: boolean): SpawnSpec {
   if (options.cwd.length === 0) throw new Error('cwd is required');
   const bin = binaryFor(kind, options.env);
-  const args = cliArgs(kind, options);
+  const args = cliArgs(kind, options, room);
   const env = childEnv(options.env);
   if (options.platform === 'win32') return { file: bin, args, cwd: options.cwd, env };
   const shell = options.env.SHELL || DEFAULT_SHELL;
@@ -68,4 +84,12 @@ export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
     cwd: options.cwd,
     env,
   };
+}
+
+export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
+  return spawnSpec(kind, options, false);
+}
+
+export function buildRoomSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
+  return spawnSpec(kind, options, true);
 }
