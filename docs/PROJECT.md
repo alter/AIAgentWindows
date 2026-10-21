@@ -29,10 +29,10 @@ One state per row: `included` (present, expected to work) · `available` (partly
 |---|---|---|
 | Slack-like shell (agent sidebar, tabs, multiple windows) | included | |
 | Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login |
-| ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window |
-| DOM adapters: read last reply, insert text into input | included | one isolated adapter per site; breakage must not touch other adapters |
+| ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window. Feasibility unproven: Google sign-in may refuse embedded user agents, sites may show bot challenges to Electron — first task after `T00` is a spike on all three |
+| DOM adapters: read last reply, insert text into input | included | one isolated adapter per site; breakage must not touch other adapters; only on a user action, never in a loop. Owner's risk: OpenAI and xAI terms restrict programmatic extraction of output |
 | Forward to another window (action + window picker) | included | |
-| Shared directory + manifest readable by other agents | included | markdown/JSON files; Claude Code receives the path |
+| Shared directory + manifest readable by other agents | included | markdown/JSON files. Claude Code reads the path itself; web agents cannot read files — the app inserts or attaches the content; API agents get it in the message or through a tool |
 | OpenAI API provider | included | secondary; key in OS keychain; after the subscription/free-account paths work |
 | Other API providers (Anthropic API, Gemini, etc.) | absent | |
 | Credential or captcha automation | absent | never |
@@ -60,16 +60,9 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 - Scope of validation for a change: the narrowest stable check that proves it, plus directly coupled risks.
 - Isolation of parallel copies: ports, Compose project names, test databases and temporary directories are derived from the checkout path, so two worktrees never collide; test databases end in `_test`.
 - Which docs to update when behavior, contracts, setup or operations change.
-
 - Electron process split (main/preload/renderer), IPC contract, module layout, UI styling that resembles Slack (own assets, no Slack branding), xterm.js and node-pty choice, shared-directory file format and manifest schema, OS-specific paths.
 - Adapter selectors/fixtures for each site and how breakage is isolated.
 - Where API keys are stored (OS keychain via Electron safeStorage).
-
-Further defaults by kind of repository — keep the lines that fit, delete the others:
-
-- *Service*: local services via Docker Compose, never native installs; one service unless a measured limit says otherwise; no CQRS or event bus without a measured need.
-- *Library*: no new runtime dependency without a decision here; public API changes follow the project's versioning policy.
-- *Infrastructure / host configuration*: every change is shown as a plan or dry run (`terraform plan`, `ansible --check --diff`, `nginx -t`) before it is applied; apply is in the "must become BLOCKED" column below.
 
 ## 5. Unattended policy
 
@@ -106,22 +99,27 @@ Commands that must exit 0 before any task is marked `[x]`. `/plan` copies them i
 ```
 npx tsc --noEmit
 npx eslint .
-npx vitest run
-python3 scripts/lint_changed.py --base HEAD~1 --glob '*.sh' -- shellcheck -S warning
-gitleaks git --log-opts="HEAD~1..HEAD"
-actionlint
+npx vitest run tests/unit tests/integration
+python3 scripts/lint_changed.py --base 2393fe1 --glob '*.sh' -- shellcheck -S warning
+python3 scripts/lint_changed.py --base 2393fe1 --glob '.github/workflows/*.yml' --glob '.github/workflows/*.yaml' -- actionlint
+python3 scripts/lint_changed.py --base 2393fe1 --glob '*' -- sh -c 'for f do gitleaks dir --no-banner --log-level error "$f" || exit 1; done' sh
+gitleaks git --no-banner --log-level error --log-opts="2393fe1..HEAD"
 ```
 
-The first three exist after `T00` scaffolds the TypeScript project; before that the fast tier is only the last three.
+`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
 
 ### Full tier
 
 Run by the night full run and at the end of a milestone, never before a single `[x]`: the whole suite, mutation testing, fuzzing, long integration. The runner does not stop at a failing command; it reports every one. A red full run holds the milestone; surviving mutants become tasks and do not hold it.
 
 ```
-npx vitest run --dir tests/full
-npx playwright test --project=electron-smoke
+#: budget=10m report=reports/junit-vitest-full.xml list="npx vitest list tests/full"
+npx vitest run tests/full --reporter=junit --outputFile=reports/junit-vitest-full.xml
+#: budget=10m report=reports/junit-electron-smoke.xml list="npx playwright test --list --project=electron-smoke"
+npx playwright test --project=electron-smoke --reporter=junit
 ```
+
+Reporter and list flags are confirmed against the versions `T00` pins (`docs/tech/`); the playwright JUnit output path is set in its config to match `report=`.
 
 A command may carry attributes on a `#:` line directly above it. Keys: `budget` (`40m`; over it the command is stopped with its children and reported `timeout`; without it, twice the last passing time), `expect` (a postcondition on the result; exit 0 with a failed `expect` is `empty`), `report` (JUnit XML the command writes), `list` (a command that lists the tests without running them — `pytest --collect-only -q`, `go test -list .`, `cargo nextest list`, `jest --listTests`), `shards` and `parallel` (the command uses `{shard}`/`{shards}`; shard 1 runs alone first and the rest start only after it passed its budget, its `expect` and its census), `repeat` with `reason` (a declared repetition; anything else that runs a test twice is a duplicate), `mem` (`512M`, `2G`; the peak of the command's process group is sampled every half second, over it the command is stopped and reported `mem`, which holds a milestone; without it, 75% of the machine's RAM), `leftover` (a command printing one number — databases, temp dirs, containers named by tests — counted before and after; growth is a finding). With `report` and `list` the run is censused: each test ran exactly once, every listed test ran, shards are disjoint. `{shard}` counts from 1, `{shard0}` from 0 — tools differ, check yours.
 
