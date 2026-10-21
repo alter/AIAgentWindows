@@ -18,7 +18,7 @@ Single source of truth for what this project is, what it contains, and what the 
 
 | Question | Answer |
 |---|---|
-| What must work end to end first | Slack-like window: sidebar of agents; two Claude Code windows (interactive `claude` in a pty under the user's own subscription login) plus ChatGPT, Grok, DeepSeek in persistent-profile webviews; "Forward" a message/selection to a chosen window; write context to the shared directory with a manifest that other agents read |
+| What must work end to end first | Slack-like window: sidebar of agents; any number of Claude Code windows, the first journey proving two (interactive `claude` in a pty under the user's own subscription login) plus ChatGPT, Grok, DeepSeek in persistent-profile webviews; "Forward" a message/selection to a chosen window; write context to the shared directory with a manifest that other agents read |
 | What the first version must NOT do | Automate login, passwords or captchas; use Anthropic API keys for Claude Code; scrape beyond the visible chat; auto-update; cloud sync; release signing/publishing |
 
 ## 3. Capability ledger
@@ -28,7 +28,7 @@ One state per row: `included` (present, expected to work) · `available` (partly
 | Capability | State | Note |
 |---|---|---|
 | Slack-like shell (agent sidebar, tabs, multiple windows) | included | |
-| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. The pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder/Explorer does not inherit it) |
+| Claude Code windows, subscription, interactive CLI in pty (xterm.js) | included | no API key; uses the installed `claude` and the user's own login. The pty starts through the user's login shell so `PATH` matches their terminal (an app launched from Dock/Finder/Explorer does not inherit it). Launched with `--session-id <uuid>` and `--add-dir <shared dir>`. Text goes in by bracketed paste into the pty; the last reply is read from the session transcript `~/.claude/projects/<cwd slug>/<session-id>.jsonl` (`type: assistant` records), never by scraping the terminal. That format is internal and unversioned: the parser skips unknown records, and when it finds no reply the user's terminal selection is the fallback |
 | ChatGPT, Grok, DeepSeek as webviews with per-agent persistent profile | included | user logs in by hand in the window. Feasibility unproven: Google sign-in may refuse embedded user agents, sites may show bot challenges to Electron — first task after `T00` is a spike on all three |
 | DOM adapters: read last reply, insert text into input | included | one isolated adapter per site; breakage must not touch other adapters; only on a user action, never in a loop. Owner's risk: OpenAI and xAI terms restrict programmatic extraction of output |
 | Forward to another window (action + window picker) | included | |
@@ -49,7 +49,7 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 - Test shape: unit for pure rules, integration through real boundaries for shared behavior, end-to-end only for the minimal happy path. Never test wording or layout.
 - No speculative layers, base classes or options; the existing structure of the repository is followed, not replaced by a preferred one.
 - Scope of validation for a change: the narrowest stable check that proves it, plus directly coupled risks.
-- Isolation of parallel copies: ports, Compose project names, test databases and temporary directories are derived from the checkout path, so two worktrees never collide; test databases end in `_test`.
+- Isolation of parallel copies: ports, Compose project names, test databases and temporary directories are derived from the checkout path, so two worktrees never collide. Tests and dev runs never open the owner's real `userData` or webview partitions (those hold the logged-in sessions); they get a temporary directory per run.
 - Which docs to update when behavior, contracts, setup or operations change.
 - Electron process split (main/preload/renderer), IPC contract, module layout, UI styling that resembles Slack (own assets, no Slack branding), xterm.js and node-pty choice, shared-directory file format and manifest schema, OS-specific paths.
 - Adapter selectors/fixtures for each site and how breakage is isolated.
@@ -60,13 +60,14 @@ Defaults; extend per project. The agent makes these calls, records them under a 
 | May run alone | Must become `[!] BLOCKED` |
 |---|---|
 | tests, lint, type check, local builds | production deploy |
-| migrations against local/dev databases | payments, money movement |
+| launching the app with a throwaway profile (temporary `userData` and webview partitions) | payments, money movement |
 | commits on the current branch | deleting user data, dropping tables |
 | reading docs and public web | sending email/messages to real users |
 | builds of unsigned packages for the host OS | new paid dependency or service account |
 
 | Question | Answer |
 |---|---|
+| Platform reach | only macOS is verifiable by the session (no remote, no CI). Windows 11 and Ubuntu 26.04 are checked by the owner's manual smoke; a task whose acceptance needs another OS keeps that check open as `[!] BLOCKED: needs <OS>` and the rest of the task proceeds. Known per-OS pitfalls go to `docs/tech/` at `T00`: node-pty native rebuild for the Electron ABI and Windows ConPTY; Ubuntu's AppArmor restriction on unprivileged user namespaces breaking the Chromium sandbox of unpacked/AppImage builds |
 | A non-production target is recognised by (database name, kube context, workspace, profile, host group) | n/a: no live backend. Tests never talk to the real chatgpt.com, grok.com, chat.deepseek.com or claude accounts unless the owner runs a named live-smoke command themselves |
 
 Commands that need the owner, as prefixes; `git-guard` refuses them in every session:
@@ -102,7 +103,7 @@ python3 scripts/lint_changed.py --base 2393fe1 --glob '*' -- sh -c 'for f do git
 gitleaks git --no-banner --log-level error --log-opts="2393fe1..HEAD"
 ```
 
-`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project; the coverage gate runs the unit and integration tests once, with coverage, and ratchets the floor — the tests are not run a second time without coverage. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
+`2393fe1` is the last commit before any code; linters see only what changed since it, committed or not. The first three lines exist after `T00` scaffolds the TypeScript project (eslint ignores `out/`, `dist/`, `coverage/`, `reports/`; with several tsconfigs for main/preload/renderer `T00` replaces `npx tsc --noEmit` by the equivalent `tsc -b` form, since a solution tsconfig checks nothing on its own); the coverage gate runs the unit and integration tests once, with coverage, and ratchets the floor — the tests are not run a second time without coverage. The gitleaks line through `lint_changed` covers uncommitted and untracked files (seen red on a planted GitHub token, green without it, gitleaks 8.25.1); the `git` line covers secrets added and removed inside history.
 
 ### Full tier
 
