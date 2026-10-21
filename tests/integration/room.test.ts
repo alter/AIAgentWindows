@@ -10,7 +10,7 @@ import { createRoomDrivers } from '../../src/main/room-drivers';
 import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
 import type { PageRunner } from '../../src/main/site-adapters/types';
 import { historyNonce } from '../../src/shared/room-history';
-import { MAX_HISTORY_CHARS, MAX_REPLY_CHARS, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
+import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const FIXTURE = readFileSync(path.resolve(__dirname, '..', 'fixtures', 'sites', 'generic.html'), 'utf8');
@@ -272,6 +272,43 @@ describe('room reply size and history file', () => {
     expect(file.length).toBeLessThan(MAX_HISTORY_CHARS + 20_000);
     expect(result.entries).toHaveLength(10);
     expect(result.entries[9]?.text).toMatch(/\[truncated \d+ chars\]$/);
+  });
+
+  function scripted(turns: Array<string | Error>): Room {
+    let call = 0;
+    const room = new Room({
+      roomsDir,
+      driverFor: () =>
+        Promise.resolve({
+          turn: () => {
+            const next = turns[call % turns.length] as string | Error;
+            call += 1;
+            return next instanceof Error ? Promise.reject(next) : Promise.resolve(next);
+          },
+          reset: () => Promise.resolve(),
+          dispose: () => undefined,
+        }),
+    });
+    rooms.push(room);
+    return room;
+  }
+
+  it('limits an oversize error on every turn to the error cap', async () => {
+    const room = scripted([new Error('E'.repeat(1_000_000))]);
+    const result = await room.start(config([A, B], { rounds: 3 })).done;
+    const errors = result.entries.filter((entry) => entry.kind === 'error');
+    expect(errors).toHaveLength(6);
+    for (const entry of errors) expect(entry.text.length).toBeLessThanOrEqual(MAX_ERROR_CHARS);
+    const file = await readFile(result.historyPath, 'utf8');
+    expect(file.length).toBeLessThan(100_000);
+  });
+
+  it('charges error entries against the history budget once replies have spent it', async () => {
+    const room = scripted(['r'.repeat(MAX_REPLY_CHARS), new Error('E'.repeat(400))]);
+    const result = await room.start(config([A, B], { rounds: 20 })).done;
+    const total = result.entries.reduce((sum, entry) => sum + entry.text.length, 0);
+    expect(total).toBeLessThanOrEqual(MAX_HISTORY_CHARS + 64 * result.entries.length);
+    expect(result.entries.some((entry) => entry.kind === 'error')).toBe(true);
   });
 
   it('appends entries to the same file instead of rewriting it', async () => {

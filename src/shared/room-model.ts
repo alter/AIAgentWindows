@@ -12,6 +12,7 @@ export const MAX_LABEL_CHARS = 80;
 export const MAX_ID_CHARS = 128;
 export const MAX_REPLY_CHARS = 1_000_000;
 export const MAX_HISTORY_CHARS = 4_000_000;
+export const MAX_ERROR_CHARS = 500;
 const TRUNCATION_RESERVE = 64;
 
 export type RoomMode = 'broadcast' | 'relay';

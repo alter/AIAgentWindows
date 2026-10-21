@@ -114,3 +114,7 @@ Checks done once in test mode only: `AIAW_USER_DATA=<tmp> AIAW_CAPTURE_SITES=<tm
 - Reverse control (2026-10-21): data-name rule inverted (`return true`), the digit-group count removed and every tag treated as known -> `npx vitest run tests/unit/capture-sanitize.test.ts` -> `Tests  11 failed | 35 passed (46)`. Restored.
 - Test strings avoid the shape `sk-live-...` (gitleaks generic-api-key / stripe rule fired on the first draft of the payload).
 
+## T12j (Round 2 finding 3)
+- `src/main/room.ts` Room.append: one limit for every entry kind; `errorText` and `src/shared/turn-signal.ts` `errorReason` cut at `MAX_ERROR_CHARS` (500, room-model.ts). A truncated entry past the budget is the bare `[truncated N chars]` marker (<= 64 chars), so the history bound is MAX_HISTORY_CHARS + 64 per entry.
+- Tests: `tests/integration/room.test.ts` "room reply size and history file" (error cap, budget boundary), `tests/unit/turn-signal.test.ts` (codex error message cap); red first (3 failed).
+- Reverse control (2026-10-21): error kind exempted from the budget again -> `npx vitest run tests/integration/room.test.ts` -> `expected 4007175 to be less than or equal to 4002624`, restored.

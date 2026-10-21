@@ -10,6 +10,7 @@ import {
   renderHistory,
 } from '../shared/room-history';
 import {
+  MAX_ERROR_CHARS,
   MAX_HISTORY_CHARS,
   MAX_REPLY_CHARS,
   relaySchedule,
@@ -85,7 +86,7 @@ function defaultRoomId(now: number): string {
 }
 
 function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return truncateText(error instanceof Error ? error.message : String(error), MAX_ERROR_CHARS);
 }
 
 async function writeAtomic(file: string, text: string): Promise<void> {
@@ -230,7 +231,7 @@ export class Room {
   }
 
   private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string): void {
-    const limit = kind === 'reply' ? Math.min(MAX_REPLY_CHARS, Math.max(0, MAX_HISTORY_CHARS - run.chars)) : MAX_REPLY_CHARS;
+    const limit = Math.min(MAX_REPLY_CHARS, Math.max(0, MAX_HISTORY_CHARS - run.chars));
     const entry: RoomEntry = { authorId, label, time: this.now(), kind, text: truncateText(text, limit) };
     run.add(entry);
     this.emit({ type: 'entry', roomId: run.id, entry });

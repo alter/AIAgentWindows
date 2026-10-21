@@ -1,5 +1,6 @@
 // turn-signal.test.ts
 import { describe, expect, it } from 'vitest';
+import { MAX_ERROR_CHARS } from '../../src/shared/room-model';
 import { readClaudeTurn, readCodexTurn } from '../../src/shared/turn-signal';
 
 const SENT = Date.parse('2026-10-21T10:00:00.000Z');
@@ -77,6 +78,10 @@ describe('codex turn signal', () => {
   it('reports error and turn_aborted as failures', () => {
     const failed = lines(event(AFTER, { type: 'task_complete', last_agent_message: null, error: { message: 'quota' } }));
     expect(readCodexTurn(failed, SENT)).toEqual({ state: 'failed', reason: 'quota' });
+    const huge = lines(event(AFTER, { type: 'task_complete', last_agent_message: null, error: { message: 'E'.repeat(2_000_000) } }));
+    const capped = readCodexTurn(huge, SENT);
+    expect(capped.state).toBe('failed');
+    expect(capped.state === 'failed' ? capped.reason.length : 0).toBeLessThanOrEqual(MAX_ERROR_CHARS);
     const aborted = lines(event(AFTER, { type: 'turn_aborted' }));
     expect(readCodexTurn(aborted, SENT)).toMatchObject({ state: 'failed' });
   });

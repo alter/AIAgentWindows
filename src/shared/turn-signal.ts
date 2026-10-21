@@ -1,4 +1,6 @@
 // turn-signal.ts
+import { MAX_ERROR_CHARS, truncateText } from './room-model';
+
 export type TurnSignal =
   | { state: 'running' }
   | { state: 'done'; reply: string | null; continued: boolean }
@@ -78,7 +80,7 @@ function finalAnswer(payload: JsonRecord): string | null {
 }
 
 function errorReason(error: unknown): string {
-  return isRecord(error) && typeof error.message === 'string' ? error.message : 'the turn ended with an error';
+  return isRecord(error) && typeof error.message === 'string' ? truncateText(error.message, MAX_ERROR_CHARS) : 'the turn ended with an error';
 }
 
 export function readCodexTurn(text: string, sentAtMs: number): TurnSignal {
