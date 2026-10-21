@@ -68,3 +68,9 @@ The first `/verify` (VERIFY.md) failed item 4 and named nine rows. What changed:
 - VERIFY item 6 is done by the owner: signed in to all three sites by hand, restarted with Cmd+Q, and all three answered a prompt (`spikes/owner-restart-check.txt`). The session cookies (`__Secure-next-auth.session-token.*` for ChatGPT, `sso` for Grok) are on disk in the `persist:` partitions; only their names were read.
 - Run from a normal terminal, the harness-sandbox line and the STUN `-105` errors are gone, which confirms they came from running inside the Claude Code sandbox.
 - Prompts were sent to the three sites by the owner, not by the session.
+
+# NOTES — after the third verify:failed (2026-10-21)
+
+- Provenance of the navigation requirement: after Google refused the sign-in, the owner reported (in the session, 2026-10-21) "I can't go back to the normal sign-in either". The spike windows had no menu or address bar; `signin.js` gained a Go menu (Back, Forward, Home, Reload) in dc13631, and `spikes/nav-smoke.out` shows Back and Home returning from example.com to chatgpt.com. Forward and Reload were not exercised.
+- W16 now says what the log shows: failed name lookups (attempts), not connections.
+- P2, W8, W17, G7 reworded or re-cited per the third VERIFY.md.
