@@ -1,6 +1,6 @@
 // site-layout.test.ts
 import { describe, expect, it } from 'vitest';
-import { NAV_BAR_HEIGHT, SIDEBAR_WIDTH, siteBounds } from '../../src/shared/site-layout';
+import { CAPTURE_WINDOW, DESKTOP_MIN_WIDTH, NAV_BAR_HEIGHT, SIDEBAR_WIDTH, siteBounds } from '../../src/shared/site-layout';
 
 describe('siteBounds', () => {
   it('places the view right of the sidebar and below the navigation bar', () => {
@@ -20,5 +20,13 @@ describe('siteBounds', () => {
     const bounds = siteBounds(1200.7, 800.9);
     expect(Number.isInteger(bounds.width)).toBe(true);
     expect(Number.isInteger(bounds.height)).toBe(true);
+  });
+});
+
+describe('capture window', () => {
+  it('gives the site view a desktop-sized area', () => {
+    const bounds = siteBounds(CAPTURE_WINDOW.width, CAPTURE_WINDOW.height);
+    expect(bounds.width).toBeGreaterThanOrEqual(DESKTOP_MIN_WIDTH);
+    expect(bounds.height).toBeGreaterThanOrEqual(800);
   });
 });

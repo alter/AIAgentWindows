@@ -83,7 +83,7 @@ test('unattended capture saves the first existing chat of each site and sends no
   const sites = {
     chatgpt: await serve('chatgpt-home.html', 'conversation-late.html'),
     grok: await serve('grok-home.html', 'conversation.html'),
-    deepseek: await serve('deepseek-home.html', 'conversation.html'),
+    deepseek: await serve('deepseek-home.html', 'conversation-styled.html'),
   };
   try {
     const result = await runAuto(sites);
@@ -98,6 +98,13 @@ test('unattended capture saves the first existing chat of each site and sends no
     expect(chatgpt).toContain('data-message-author-role="assistant"');
     for (const kind of ['chatgpt', 'grok', 'deepseek']) {
       expect(readFileSync(path.join(result.out, `${kind}.html`), 'utf8')).not.toContain('must not be saved');
+    }
+    expect(readFileSync(path.join(result.out, 'deepseek.html'), 'utf8')).toContain('ds-markdown-x');
+    for (const kind of ['chatgpt', 'grok', 'deepseek']) {
+      const diagnostic = JSON.parse(readFileSync(path.join(result.out, `${kind}.diagnostic.json`), 'utf8')) as { viewport: { width: number; height: number }; wait: { messageListSeen: boolean; timedOut: boolean } };
+      expect(diagnostic.viewport.width, kind).toBeGreaterThanOrEqual(1280);
+      expect(diagnostic.viewport.height, kind).toBeGreaterThanOrEqual(800);
+      expect(diagnostic.wait, kind).toMatchObject({ messageListSeen: true, timedOut: false });
     }
     expect(result.agentsAfter).toBe(result.agentsBefore);
   } finally {

@@ -1,5 +1,16 @@
 // capture-auto.ts
+import { mkdir, rename, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import type { SiteKind } from '../shared/agents';
+import {
+  buildDiagnostic,
+  diagnosticText,
+  redactPath,
+  type AutoStatus,
+  type DiagnosticInput,
+  type ViewportInfo,
+  type WaitInfo,
+} from '../shared/capture-diagnostic';
 import {
   discoverScript,
   parseDiscovery,
@@ -35,7 +46,7 @@ export function autoTiming(env: Readonly<Record<string, string | undefined>>): A
   return testMode ? { pollMs: 100, discoverMs: 3000, replyMs: 10_000, stablePolls: 3, loginPolls: 3 } : DEFAULT_AUTO_TIMING;
 }
 
-export type AutoStatus = 'saved' | 'no-chat' | 'not-signed-in' | 'leak-refused' | 'no-agent' | 'failed';
+export type { AutoStatus };
 
 export interface AutoReport {
   site: SiteKind;
@@ -66,63 +77,125 @@ async function ask<T>(runner: PageRunner, script: string, parse: (raw: unknown) 
   }
 }
 
-type Found = { link: string } | { outcome: 'not-signed-in' | 'no-chat' };
+interface Landing {
+  path: string | null;
+}
+
+type Found = ({ link: string } & Landing) | ({ outcome: 'not-signed-in' | 'no-chat' } & Landing);
+
+function pathOf(url: string): string | null {
+  try {
+    return redactPath(new URL(url).pathname);
+  } catch {
+    return null;
+  }
+}
 
 async function findLink(kind: SiteKind, page: AutoPage, timing: AutoTiming, clock: Clock): Promise<Found> {
   const deadline = clock.now() + timing.discoverMs;
   let loginSeen = 0;
+  let landing: string | null = null;
   while (clock.now() < deadline) {
     const found: Discovery | null = await ask(page.runner, discoverScript(), parseDiscovery);
     if (found !== null) {
+      landing = pathOf(found.url);
       const link = pickConversationLink(kind, found.origin, found.hrefs);
-      if (link !== null) return { link };
+      if (link !== null) return { link, path: landing };
       loginSeen = found.login ? loginSeen + 1 : 0;
-      if (loginSeen >= timing.loginPolls) return { outcome: 'not-signed-in' };
+      if (loginSeen >= timing.loginPolls) return { outcome: 'not-signed-in', path: landing };
     }
     await clock.sleep(timing.pollMs);
   }
-  return { outcome: loginSeen > 0 ? 'not-signed-in' : 'no-chat' };
+  return { outcome: loginSeen > 0 ? 'not-signed-in' : 'no-chat', path: landing };
 }
 
-type Rendered = { ok: true; note?: string } | { ok: false; detail: string };
+interface Rendered {
+  ok: boolean;
+  note?: string;
+  detail?: string;
+  wait: WaitInfo;
+  viewport: ViewportInfo | null;
+  mainRegion: boolean | null;
+}
 
 async function waitForReply(link: string, page: AutoPage, timing: AutoTiming, clock: Clock): Promise<Rendered> {
-  const wanted = new URL(link).pathname;
-  const deadline = clock.now() + timing.replyMs;
-  let last = -1;
+  const wanted = new URL(link).pathname.replace(/\/$/, '');
+  const started = clock.now();
+  const deadline = started + timing.replyMs;
+  const wait: WaitInfo = { polls: 0, waitedMs: 0, messageListSeen: false, replySeen: false, settled: false, timedOut: false };
+  let viewport: ViewportInfo | null = null;
+  let mainRegion: boolean | null = null;
+  let last = '';
   let stable = 0;
   let onPage = false;
+  const finish = (result: { ok: boolean; note?: string; detail?: string }): Rendered => {
+    wait.waitedMs = clock.now() - started;
+    return { ...result, wait, viewport, mainRegion };
+  };
   while (clock.now() < deadline) {
     const probe: Probe | null = await ask(page.runner, probeScript(), parseProbe);
-    if (probe !== null && new URL(probe.url).pathname.replace(/\/$/, '') === wanted.replace(/\/$/, '')) {
+    wait.polls += 1;
+    if (probe !== null && new URL(probe.url).pathname.replace(/\/$/, '') === wanted) {
       onPage = true;
-      stable = probe.nodes === last ? stable + 1 : 0;
-      last = probe.nodes;
-      if (probe.reply && stable >= timing.stablePolls) return { ok: true };
+      viewport = { width: probe.width, height: probe.height };
+      mainRegion = probe.mainRegion;
+      const signature = `${String(probe.nodes)}:${String(probe.textChars)}`;
+      stable = signature === last ? stable + 1 : 0;
+      last = signature;
+      wait.messageListSeen = wait.messageListSeen || probe.messageList;
+      wait.replySeen = wait.replySeen || probe.reply;
+      wait.settled = stable >= timing.stablePolls;
+      if (probe.messageList && wait.settled) {
+        return finish({ ok: true, ...(probe.reply ? {} : { note: 'the message list settled but no reply markup was recognised' }) });
+      }
     } else {
       onPage = false;
       stable = 0;
-      last = -1;
+      last = '';
+      wait.settled = false;
     }
     await clock.sleep(timing.pollMs);
   }
-  if (onPage && stable >= timing.stablePolls) return { ok: true, note: 'the page settled but no reply markup was recognised' };
-  return { ok: false, detail: onPage ? 'the conversation page did not settle' : 'the conversation did not open' };
+  wait.timedOut = true;
+  if (onPage && wait.settled) return finish({ ok: true, note: 'the page settled but no message list appeared' });
+  return finish({ ok: false, detail: onPage ? 'the conversation page did not settle' : 'the conversation did not open' });
 }
 
-async function captureSite(kind: SiteKind, page: AutoPage, options: AutoOptions, timing: AutoTiming, clock: Clock): Promise<AutoReport> {
+interface SiteOutcome {
+  report: AutoReport;
+  diagnostic: Omit<DiagnosticInput, 'site' | 'status'>;
+}
+
+const NO_DIAGNOSTIC: Omit<DiagnosticInput, 'site' | 'status'> = { landingPath: null, loadedPath: null, wait: null, viewport: null, mainRegion: null, stats: null };
+
+async function captureSite(kind: SiteKind, page: AutoPage, options: AutoOptions, timing: AutoTiming, clock: Clock): Promise<SiteOutcome> {
   const found = await findLink(kind, page, timing, clock);
-  if ('outcome' in found) return { site: kind, status: found.outcome };
+  const landingPath = found.path;
+  if ('outcome' in found) return { report: { site: kind, status: found.outcome }, diagnostic: { ...NO_DIAGNOSTIC, landingPath } };
+  const loadedPath = pathOf(found.link);
   try {
     await Promise.race([page.load(found.link), clock.sleep(timing.replyMs)]);
   } catch {
     // a redirect aborts the load; the probe below decides whether the conversation opened
   }
   const rendered = await waitForReply(found.link, page, timing, clock);
-  if (!rendered.ok) return { site: kind, status: 'failed', detail: rendered.detail };
+  const base = { landingPath, loadedPath, wait: rendered.wait, viewport: rendered.viewport, mainRegion: rendered.mainRegion };
+  if (!rendered.ok) return { report: { site: kind, status: 'failed', detail: rendered.detail ?? 'unknown' }, diagnostic: { ...base, stats: null } };
   const result = await captureOne({ kind, runner: page.runner }, options.outDir);
-  if (result.ok) return { site: kind, status: 'saved', path: result.path ?? '', ...(rendered.note === undefined ? {} : { detail: rendered.note }) };
-  return { site: kind, status: result.leak === true ? 'leak-refused' : 'failed', detail: result.error ?? 'unknown' };
+  const diagnostic = { ...base, stats: result.stats ?? null };
+  if (result.ok) {
+    return { report: { site: kind, status: 'saved', path: result.path ?? '', ...(rendered.note === undefined ? {} : { detail: rendered.note }) }, diagnostic };
+  }
+  return { report: { site: kind, status: result.leak === true ? 'leak-refused' : 'failed', detail: result.error ?? 'unknown' }, diagnostic };
+}
+
+export async function writeDiagnostic(outDir: string, input: DiagnosticInput): Promise<string> {
+  await mkdir(outDir, { recursive: true });
+  const file = path.join(outDir, `${input.site}.diagnostic.json`);
+  const temporary = `${file}.tmp`;
+  await writeFile(temporary, diagnosticText(buildDiagnostic(input)), 'utf8');
+  await rename(temporary, file);
+  return file;
 }
 
 export async function captureAuto(options: AutoOptions): Promise<AutoReport[]> {
@@ -139,7 +212,13 @@ export async function captureAuto(options: AutoOptions): Promise<AutoReport[]> {
       continue;
     }
     try {
-      reports.push(await captureSite(kind, page, options, timing, clock));
+      const outcome = await captureSite(kind, page, options, timing, clock);
+      const written = await writeDiagnostic(options.outDir, { site: kind, status: outcome.report.status, ...outcome.diagnostic }).then(
+        () => true,
+        () => false,
+      );
+      if (!written) outcome.report.detail = [outcome.report.detail, 'diagnostic not written'].filter((part) => part !== undefined).join('; ');
+      reports.push(outcome.report);
     } catch (error) {
       reports.push({ site: kind, status: 'failed', detail: error instanceof Error ? error.message : 'unknown' });
     }

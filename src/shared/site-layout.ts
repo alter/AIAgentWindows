@@ -1,6 +1,8 @@
 // site-layout.ts
 export const SIDEBAR_WIDTH = 260;
 export const NAV_BAR_HEIGHT = 36;
+export const CAPTURE_WINDOW = { width: 1600, height: 1000 } as const;
+export const DESKTOP_MIN_WIDTH = 1280;
 
 export interface Bounds {
   x: number;

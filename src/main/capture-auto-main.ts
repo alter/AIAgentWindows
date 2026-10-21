@@ -2,6 +2,7 @@
 import { app, BrowserWindow, session } from 'electron';
 import path from 'node:path';
 import { type Agent, type SiteKind } from '../shared/agents';
+import { CAPTURE_WINDOW } from '../shared/site-layout';
 import { AUTO_SITES, autoExitCode, autoTiming, captureAuto, formatAutoReport, type AutoPage } from './capture-auto';
 import { createIsolatedRunner } from './site-adapters/isolated-runner';
 import { SiteViews } from './site-views';
@@ -15,8 +16,9 @@ export async function runAutoCapture(outDir: string, env: Readonly<Record<string
   const userData = app.getPath('userData');
   const state = await loadState(path.join(userData, 'agents.json'));
   const window = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: CAPTURE_WINDOW.width,
+    height: CAPTURE_WINDOW.height,
+    useContentSize: true,
     show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },
   });

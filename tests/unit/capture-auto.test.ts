@@ -26,6 +26,7 @@ import {
   type ProfileLockDeps,
 } from '../../src/main/profile-lock';
 import { SITE_URLS, type SiteKind } from '../../src/shared/agents';
+import type { Diagnostic } from '../../src/shared/capture-diagnostic';
 import { sanitizeScript } from '../../src/shared/capture-sanitize';
 import {
   conversationPathOf,
@@ -114,8 +115,36 @@ describe('page answers', () => {
   it('probe sees the assistant markup of a conversation page and not an empty home', () => {
     const conversation = parseProbe(open(page('conversation.html'), 'https://chatgpt.com/c/first-chat-1').window.eval(probeScript()));
     expect(conversation?.reply).toBe(true);
+    expect(conversation?.messageList).toBe(true);
+    expect(conversation?.mainRegion).toBe(true);
     expect(conversation?.nodes).toBeGreaterThan(5);
-    expect(parseProbe(open(page('empty-home.html'), 'https://chatgpt.com/').window.eval(probeScript()))?.reply).toBe(false);
+    expect(conversation?.textChars).toBeGreaterThan(20);
+    const home = parseProbe(open(page('empty-home.html'), 'https://chatgpt.com/').window.eval(probeScript()));
+    expect(home?.reply).toBe(false);
+    expect(home?.messageList).toBe(false);
+  });
+
+  it('counts a message list only in the main region, outside navigation, from text-bearing non-control children', () => {
+    const probe = (html: string) => parseProbe(open(html, 'https://chat.deepseek.com/a/chat/s/ds-first-1').window.eval(probeScript()));
+    const chats = '<a href="/a/chat/s/1">one</a><a href="/a/chat/s/2">two</a><a href="/a/chat/s/3">three</a>';
+    expect(probe(`<body><nav><div>one</div><div>two</div><div>three</div></nav><main><p>hello</p></main></body>`)?.messageList).toBe(false);
+    expect(probe(`<body><aside><div>a</div><div>b</div></aside><div role="main"><p>hello</p></div></body>`)?.messageList).toBe(false);
+    expect(probe(`<body><main><div>${chats}</div></main></body>`)?.messageList).toBe(false);
+    expect(probe('<body><main><button>a</button><button>b</button><div></div><div>  </div></main></body>')?.messageList).toBe(false);
+    expect(probe('<body><main><div>question</div><div>answer</div></main></body>')).toMatchObject({ messageList: true, mainRegion: true });
+    expect(probe('<body><section><article>question</article><article>answer</article></section></body>')).toMatchObject({ messageList: true, mainRegion: false });
+    expect(probe('<body><div role="main"><div><div>x</div></div><div><div>question</div><div>answer</div></div></div></body>')?.messageList).toBe(true);
+  });
+
+  it('reports the viewport and a text length that changes when only text changes', () => {
+    const dom = open('<body><main><p>one</p></main></body>', 'https://chat.deepseek.com/');
+    const before = parseProbe(dom.window.eval(probeScript()));
+    dom.window.document.querySelector('p')!.textContent = 'one more word';
+    const after = parseProbe(dom.window.eval(probeScript()));
+    expect(after?.nodes).toBe(before?.nodes);
+    expect(after!.textChars).toBeGreaterThan(before!.textChars);
+    expect(before?.width).toBeGreaterThan(0);
+    expect(before?.height).toBeGreaterThan(0);
   });
 
   it('refuses answers of the wrong shape', () => {
@@ -125,7 +154,11 @@ describe('page answers', () => {
     }
     expect(parseDiscovery('{"origin":"o","url":"u","hrefs":[1],"login":false}')).toBeNull();
     expect(parseDiscovery('{"origin":"o","url":"u","hrefs":"x","login":false}')).toBeNull();
-    expect(parseProbe('{"url":"u","nodes":"3","reply":true}')).toBeNull();
+    const good = { url: 'u', nodes: 3, textChars: 4, reply: true, messageList: true, mainRegion: true, width: 5, height: 6 };
+    expect(parseProbe(JSON.stringify(good))).toEqual(good);
+    for (const [key, value] of [['nodes', '3'], ['textChars', null], ['reply', 1], ['messageList', 'yes'], ['mainRegion', null], ['width', '5'], ['height', undefined], ['url', 7]] as const) {
+      expect(parseProbe(JSON.stringify({ ...good, [key]: value })), key).toBeNull();
+    }
   });
 });
 
@@ -296,7 +329,7 @@ describe('unattended capture', () => {
     const site = fakeSite('chatgpt', { home: 'chatgpt-home.html', conversation: 'empty-home.html' });
     const reports = await run({ chatgpt: site }, out);
     expect(reports[0]?.status).toBe('saved');
-    expect(reports[0]?.detail).toContain('no reply markup was recognised');
+    expect(reports[0]?.detail).toContain('no message list appeared');
     expect(existsSync(path.join(out, 'chatgpt.html'))).toBe(true);
   });
 
@@ -306,14 +339,133 @@ describe('unattended capture', () => {
     let calls = 0;
     const original = site.page.runner.run;
     site.page.runner.run = async (code: string) => {
-      if (code === probeScript() && (calls += 1) === 6) {
-        return JSON.stringify({ url: 'https://chat.deepseek.com/a/chat/s/ds-first-1', nodes: 9, reply: true });
+      if (code === probeScript() && (calls += 1) >= 6) {
+        return JSON.stringify({ url: 'https://chat.deepseek.com/a/chat/s/ds-first-1', nodes: 9, textChars: 40, reply: true, messageList: true, mainRegion: true, width: 1340, height: 964 });
       }
       return original(code);
     };
     const reports = await run({ deepseek: site }, out);
     expect(reports[2]?.status).toBe('saved');
     expect(reports[2]?.detail).toBeUndefined();
+  });
+
+  it('writes a metadata-only diagnostic next to each capture', async () => {
+    const out = outDir();
+    const sites = {
+      chatgpt: fakeSite('chatgpt', { home: 'chatgpt-home.html' }),
+      grok: null,
+      deepseek: fakeSite('deepseek', { home: 'deepseek-home.html', conversation: 'conversation-styled.html' }),
+    };
+    const reports = await run(sites, out);
+    expect(reports.map((report) => report.status)).toEqual(['saved', 'no-agent', 'saved']);
+    expect(existsSync(path.join(out, 'grok.diagnostic.json'))).toBe(false);
+    const raw = readFileSync(path.join(out, 'deepseek.diagnostic.json'), 'utf8');
+    const diagnostic = JSON.parse(raw) as Diagnostic;
+    expect(diagnostic).toMatchObject({ site: 'deepseek', status: 'saved', landingPath: '/', conversationLinkFound: true, loadedPath: '/a/chat/s/:id', mainRegion: true });
+    expect(diagnostic.wait).toMatchObject({ messageListSeen: true, replySeen: true, settled: true, timedOut: false });
+    expect(diagnostic.viewport?.width).toBeGreaterThan(0);
+    expect(diagnostic.stylesheets).toMatchObject({ total: 1, readable: 1, unreadable: 0, classNames: 2 });
+    expect(diagnostic.classes).toMatchObject({ stylesheet: 3, dropped: 1 });
+    expect(diagnostic.elements?.before['div']).toBe(2);
+    for (const word of ['ds-first-1', 'must not be saved', 'never-styled-secret', 'deepseek.com', 'http']) expect(raw, word).not.toContain(word);
+    const saved = readFileSync(path.join(out, 'deepseek.html'), 'utf8');
+    expect(saved).toContain('ds-markdown-x');
+    expect(saved).toContain('_5f3a9c');
+    expect(saved).not.toContain('never-styled-secret');
+  });
+
+  it('writes the diagnostic of a site that had no chat, with no wait and no statistics', async () => {
+    const out = outDir();
+    await run({ grok: fakeSite('grok', { home: 'empty-home.html' }) }, out);
+    expect(JSON.parse(readFileSync(path.join(out, 'grok.diagnostic.json'), 'utf8'))).toMatchObject({
+      status: 'no-chat',
+      landingPath: '/',
+      conversationLinkFound: false,
+      loadedPath: null,
+      wait: null,
+      elements: null,
+    });
+  });
+
+  it('writes the diagnostic of a conversation that never opened, with the timeout reported', async () => {
+    const out = outDir();
+    await run({ chatgpt: fakeSite('chatgpt', { home: 'chatgpt-home.html', openConversation: false }) }, out);
+    const diagnostic = JSON.parse(readFileSync(path.join(out, 'chatgpt.diagnostic.json'), 'utf8')) as Diagnostic;
+    expect(diagnostic).toMatchObject({ status: 'failed', conversationLinkFound: true, viewport: null, mainRegion: null });
+    expect(diagnostic.wait).toMatchObject({ messageListSeen: false, settled: false, timedOut: true });
+    expect(diagnostic.wait?.polls).toBeGreaterThan(5);
+  });
+
+  it('reports a page that settles without a message list as a timeout in the diagnostic', async () => {
+    const out = outDir();
+    const reports = await run({ chatgpt: fakeSite('chatgpt', { home: 'chatgpt-home.html', conversation: 'empty-home.html' }) }, out);
+    expect(reports[0]?.detail).toContain('no message list appeared');
+    const diagnostic = JSON.parse(readFileSync(path.join(out, 'chatgpt.diagnostic.json'), 'utf8')) as Diagnostic;
+    expect(diagnostic.wait).toMatchObject({ messageListSeen: false, settled: true, timedOut: true });
+  });
+
+  it('says so when the diagnostic cannot be written and still reports the capture', async () => {
+    const out = outDir();
+    mkdirSync(path.join(out, 'chatgpt.diagnostic.json'), { recursive: true });
+    const reports = await run({ chatgpt: fakeSite('chatgpt', { home: 'chatgpt-home.html' }), grok: fakeSite('grok', { home: 'signed-out.html' }) }, out);
+    expect(reports[0]).toMatchObject({ status: 'saved', detail: 'diagnostic not written' });
+    expect(reports[1]).toEqual({ site: 'grok', status: 'not-signed-in' });
+    expect(readFileSync(path.join(out, 'grok.diagnostic.json'), 'utf8')).toContain('"not-signed-in"');
+  });
+
+  it('waits for the message list and for the page to go quiet, then saves', async () => {
+    const out = outDir();
+    const site = fakeSite('deepseek', { home: 'deepseek-home.html', conversation: 'empty-home.html' });
+    const url = 'https://chat.deepseek.com/a/chat/s/ds-first-1';
+    const answers = [
+      { messageList: false, nodes: 9, textChars: 10 },
+      { messageList: false, nodes: 9, textChars: 10 },
+      { messageList: false, nodes: 9, textChars: 10 },
+      { messageList: true, nodes: 30, textChars: 400 },
+      { messageList: true, nodes: 30, textChars: 450 },
+      { messageList: true, nodes: 30, textChars: 450 },
+      { messageList: true, nodes: 30, textChars: 450 },
+    ];
+    let calls = 0;
+    const original = site.page.runner.run;
+    site.page.runner.run = async (code: string) => {
+      if (code !== probeScript()) return original(code);
+      const answer = answers[Math.min(calls, answers.length - 1)]!;
+      calls += 1;
+      return JSON.stringify({ url, reply: true, mainRegion: true, width: 1340, height: 964, ...answer });
+    };
+    const reports = await run({ deepseek: site }, out);
+    expect(reports[2]).toMatchObject({ status: 'saved' });
+    expect(reports[2]?.detail).toBeUndefined();
+    const diagnostic = JSON.parse(readFileSync(path.join(out, 'deepseek.diagnostic.json'), 'utf8')) as Diagnostic;
+    expect(diagnostic.wait).toMatchObject({ polls: 7, settled: true, timedOut: false });
+  });
+
+  it('does not call a page quiet while only its text changes', async () => {
+    const site = fakeSite('deepseek', { home: 'deepseek-home.html', conversation: 'conversation.html' });
+    let chars = 100;
+    const original = site.page.runner.run;
+    site.page.runner.run = async (code: string) => {
+      if (code !== probeScript()) return original(code);
+      chars += 10;
+      return JSON.stringify({ url: 'https://chat.deepseek.com/a/chat/s/ds-first-1', nodes: 30, textChars: chars, reply: true, messageList: true, mainRegion: true, width: 1340, height: 964 });
+    };
+    const reports = await run({ deepseek: site }, outDir());
+    expect(reports[2]).toMatchObject({ status: 'failed', detail: 'the conversation page did not settle' });
+  });
+
+  it('notes a settled message list without recognised reply markup and a page that left the conversation', async () => {
+    const site = fakeSite('deepseek', { home: 'deepseek-home.html', conversation: 'conversation.html' });
+    let calls = 0;
+    const original = site.page.runner.run;
+    site.page.runner.run = async (code: string) => {
+      if (code !== probeScript()) return original(code);
+      calls += 1;
+      const url = calls === 2 ? 'https://chat.deepseek.com/a/chat/s/other-chat' : 'https://chat.deepseek.com/a/chat/s/ds-first-1';
+      return JSON.stringify({ url, nodes: 30, textChars: 400, reply: false, messageList: true, mainRegion: false, width: 1340, height: 964 });
+    };
+    const reports = await run({ deepseek: site }, outDir());
+    expect(reports[2]).toMatchObject({ status: 'saved', detail: 'the message list settled but no reply markup was recognised' });
   });
 
   it('turns a page error or an unreadable page into a failed site and goes on with the next', async () => {

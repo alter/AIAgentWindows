@@ -5,7 +5,7 @@ import path from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { captureSites, summarizeCapture } from '../../src/main/capture-sites';
-import { SANITIZE_POLICY, findLeaks, isClosedValue, sanitizePage, sanitizeScript } from '../../src/shared/capture-sanitize';
+import { SANITIZE_POLICY, findLeaks, isClosedValue, sanitizePage, sanitizePageDetailed, sanitizeScript, type SanitizeStats } from '../../src/shared/capture-sanitize';
 import type { PageRunner } from '../../src/main/site-adapters/types';
 
 const SECRETS = [
@@ -363,5 +363,114 @@ describe('capture command', () => {
       ['deepseek', true],
     ]);
     expect(readdirSync(dir)).toEqual(['deepseek.html']);
+  });
+});
+
+const STYLED_PAGE = `<!doctype html><html><head><title>t</title>
+<style>
+._5f3a9c, .hashed-c4f91a02 { color: red }
+@media (min-width: 600px) { .ds-markdown-x { margin: 0 } @supports (display: grid) { .deep-rule-q { margin: 1px } } }
+.md\\:flex { display: flex }
+.w-\\[10px\\] { width: 10px }
+a[href$=".pdf"] { color: blue }
+.has-attr[data-x=".attr-only"] { color: blue }
+</style></head><body>
+<main>
+<div class="_5f3a9c msg hashed-c4f91a02 acme-merger-notes">secret one</div>
+<div class="ds-markdown-x deep-rule-q md:flex w-[10px] pdf attr-only has-attr">secret two</div>
+<div class="unstyled-ʘ never-in-a-sheet">secret three</div>
+</main></body></html>`;
+
+function styledResult() {
+  const dom = new JSDOM(STYLED_PAGE, { runScripts: 'outside-only', url: 'https://chat.example.com/c/5f2c8e1a-1111-4222-8333-944455556666' });
+  return sanitizePageDetailed(dom.window.document, 'deepseek', SANITIZE_POLICY);
+}
+
+describe('capture sanitizer stylesheet classes', () => {
+  it('keeps class tokens that are class selectors of the page stylesheets and drops the rest', () => {
+    const { html, classes } = styledResult();
+    const out = new JSDOM(html).window.document;
+    const first = (out.querySelectorAll('main > div')[0] as Element).getAttribute('class');
+    const second = (out.querySelectorAll('main > div')[1] as Element).getAttribute('class');
+    expect(first).toBe('_5f3a9c msg hashed-c4f91a02');
+    expect(second).toBe('ds-markdown-x deep-rule-q md:flex w-[10px] has-attr');
+    expect(out.querySelectorAll('main > div')[2]?.hasAttribute('class')).toBe(false);
+    expect(html).not.toMatch(/acme-merger-notes|never-in-a-sheet|attr-only|pdf|ʘ/);
+    expect(html).not.toMatch(/secret|<style/);
+    expect(classes).toEqual(['_5f3a9c', 'deep-rule-q', 'ds-markdown-x', 'has-attr', 'hashed-c4f91a02', 'md:flex', 'w-[10px]']);
+  });
+
+  it('passes the leak check with the declared classes and fails it without them', () => {
+    const { html, classes } = styledResult();
+    expect(findLeaks(html, classes)).toEqual([]);
+    expect(findLeaks(html)).toEqual(['attribute class value']);
+    expect(findLeaks(html, classes.filter((name) => name !== 'md:flex'))).toEqual(['attribute class value']);
+  });
+
+  it('refuses a declared class of an unsafe shape and a token that is not declared', () => {
+    const html = '<!doctype html>\n<html data-aiaw-site="x"><body><div class="a<b"></div></body></html>\n';
+    expect(findLeaks(html, ['a<b'])).toEqual(['attribute class value']);
+    const long = 'a'.repeat(65);
+    expect(findLeaks(`<!doctype html>\n<html><body><div class="${long}"></div></body></html>\n`, [long])).toEqual(['attribute class value']);
+    expect(findLeaks('<!doctype html>\n<html><body><div class="9starts-with-digit"></div></body></html>\n', ['9starts-with-digit'])).toEqual(['attribute class value']);
+    expect(findLeaks('<!doctype html>\n<html><body><div class="known"></div></body></html>\n', ['known'])).toEqual([]);
+    expect(findLeaks('<!doctype html>\n<html><body><div class="msg other"></div></body></html>\n', ['known'])).toEqual(['attribute class value']);
+  });
+
+  it('keeps counting digit groups of closed words next to stylesheet classes', () => {
+    const html = '<!doctype html>\n<html><body><div class="msg-1 msg-2 hashed-c4f91a02"></div></body></html>\n';
+    expect(findLeaks(html, ['hashed-c4f91a02'])).toEqual(['digit groups']);
+  });
+
+  it('carries the declared classes and the statistics in the injected script answer', () => {
+    const dom = new JSDOM(STYLED_PAGE, { runScripts: 'outside-only' });
+    const parsed = JSON.parse(dom.window.eval(sanitizeScript('deepseek')) as string) as { ok: boolean; html: string; classes: string[]; stats: SanitizeStats };
+    const direct = sanitizePageDetailed(new JSDOM(STYLED_PAGE).window.document, 'deepseek', SANITIZE_POLICY);
+    expect(parsed.ok).toBe(true);
+    expect(parsed.html).toBe(direct.html);
+    expect(parsed.classes).toEqual(direct.classes);
+    expect(parsed.stats).toEqual(direct.stats);
+    expect(parsed.stats.classes.stylesheet).toBe(7);
+  });
+
+  it('counts elements before and after and class tokens by outcome, with no text in the numbers', () => {
+    const { stats } = styledResult();
+    expect(stats.classes).toEqual({ seen: 13, closed: 1, stylesheet: 7, dropped: 5 });
+    expect(stats.stylesheets).toMatchObject({ total: 1, readable: 1, unreadable: 0 });
+    expect(stats.stylesheets.classNames).toBe(7);
+    expect(stats.elements.before).toMatchObject({ body: 1, main: 1, div: 3 });
+    expect(stats.elements.after).toMatchObject({ main: 1, div: 3 });
+    expect(JSON.stringify(stats)).not.toMatch(/secret|acme|merger/);
+  });
+
+  it('buckets elements with an unknown name as other and skips the head in the before count', () => {
+    const dom = new JSDOM('<body><my-widget><x-y></x-y></my-widget><div></div></body>');
+    const { stats } = sanitizePageDetailed(dom.window.document, 'x', SANITIZE_POLICY);
+    expect(stats.elements.before).toEqual({ body: 1, other: 2, div: 1 });
+    expect(stats.elements.after).toEqual({ body: 1, div: 3 });
+  });
+
+  it('counts a stylesheet that cannot be read and goes on with the others', () => {
+    const dom = new JSDOM('<head><style>.readable-x{}</style><style>.other-y{}</style></head><body><div class="readable-x other-y"></div></body>');
+    const sheets = dom.window.document.styleSheets;
+    Object.defineProperty(sheets[1], 'cssRules', { get: () => { throw new Error('SecurityError'); } });
+    const { stats, classes } = sanitizePageDetailed(dom.window.document, 'x', SANITIZE_POLICY);
+    expect(stats.stylesheets).toMatchObject({ total: 2, readable: 1, unreadable: 1 });
+    expect(classes).toEqual(['readable-x']);
+  });
+
+  it('stops collecting stylesheet classes at the cap', () => {
+    const selectors = Array.from({ length: 50500 }, (_, index) => `.n${String(index)}`).join(',');
+    const dom = new JSDOM(`<head><style>${selectors}{}</style></head><body><div class="n7 n50400"></div></body>`);
+    const { stats, classes } = sanitizePageDetailed(dom.window.document, 'x', SANITIZE_POLICY);
+    expect(stats.stylesheets.classNames).toBe(50000);
+    expect(classes).toEqual(['n7']);
+  });
+
+  it('survives a document without a body', () => {
+    const dom = new JSDOM('<html></html>');
+    dom.window.document.documentElement.removeChild(dom.window.document.body);
+    const { stats } = sanitizePageDetailed(dom.window.document, 'x', SANITIZE_POLICY);
+    expect(stats.elements.before).toEqual({});
   });
 });

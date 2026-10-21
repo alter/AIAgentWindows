@@ -21,6 +21,8 @@ export const REPLY_SELECTOR = [
 ].join(', ');
 
 const MAX_LINKS = 500;
+export const MIN_MESSAGES = 2;
+const MAX_SCANNED = 20000;
 
 export interface Discovery {
   origin: string;
@@ -32,7 +34,12 @@ export interface Discovery {
 export interface Probe {
   url: string;
   nodes: number;
+  textChars: number;
   reply: boolean;
+  messageList: boolean;
+  mainRegion: boolean;
+  width: number;
+  height: number;
 }
 
 export function conversationPathOf(kind: SiteKind, pathname: string): boolean {
@@ -73,10 +80,30 @@ export function discoverScript(): string {
 export function probeScript(): string {
   return `(() => {
   try {
+    const main = document.querySelector('main, [role="main"]');
+    const root = main || document.body;
+    const outside = 'nav, aside, [role="navigation"]';
+    const plain = (child) => !/^(button|a|svg|option|label|input|textarea|select)$/i.test(child.localName) && (child.textContent || '').trim() !== '';
+    let messageList = false;
+    if (root) {
+      const scanned = [root].concat(Array.from(root.querySelectorAll('*')).slice(0, ${MAX_SCANNED}));
+      for (const element of scanned) {
+        if (element.closest(outside)) continue;
+        if (Array.from(element.children).filter(plain).length >= ${MIN_MESSAGES}) {
+          messageList = true;
+          break;
+        }
+      }
+    }
     return JSON.stringify({
       url: location.href,
       nodes: document.getElementsByTagName('*').length,
+      textChars: document.body ? (document.body.textContent || '').length : 0,
       reply: document.querySelector(${JSON.stringify(REPLY_SELECTOR)}) !== null,
+      messageList,
+      mainRegion: main !== null,
+      width: window.innerWidth,
+      height: window.innerHeight,
     });
   } catch (error) {
     return 'null';
@@ -106,7 +133,8 @@ export function parseDiscovery(raw: unknown): Discovery | null {
 export function parseProbe(raw: unknown): Probe | null {
   const value = parseObject(raw);
   if (value === null) return null;
-  const { url, nodes, reply } = value;
-  if (typeof url !== 'string' || typeof nodes !== 'number' || typeof reply !== 'boolean') return null;
-  return { url, nodes, reply };
+  const { url, nodes, textChars, reply, messageList, mainRegion, width, height } = value;
+  if (typeof url !== 'string' || typeof reply !== 'boolean' || typeof messageList !== 'boolean' || typeof mainRegion !== 'boolean') return null;
+  if (typeof nodes !== 'number' || typeof textChars !== 'number' || typeof width !== 'number' || typeof height !== 'number') return null;
+  return { url, nodes, textChars, reply, messageList, mainRegion, width, height };
 }

@@ -2,7 +2,7 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { type SiteKind } from '../shared/agents';
-import { findLeaks, sanitizeScript } from '../shared/capture-sanitize';
+import { findLeaks, sanitizeScript, type SanitizeStats } from '../shared/capture-sanitize';
 import type { PageRunner } from './site-adapters/types';
 
 export const CAPTURE_ENV = 'AIAW_CAPTURE_SITES';
@@ -19,11 +19,14 @@ export interface CaptureResult {
   path?: string;
   error?: string;
   leak?: boolean;
+  stats?: SanitizeStats;
 }
 
 interface PageAnswer {
   ok: boolean;
   html?: string;
+  classes?: unknown;
+  stats?: unknown;
   error?: string;
 }
 
@@ -46,14 +49,16 @@ export async function captureOne(target: CaptureTarget, outDir: string): Promise
     return { site, ok: false, error: 'the page could not be read' };
   }
   if (!answer.ok || typeof answer.html !== 'string') return { site, ok: false, error: answer.error ?? 'page-error' };
-  const problems = findLeaks(answer.html);
-  if (problems.length > 0) return { site, ok: false, leak: true, error: `not saved, sanitizer check failed: ${problems.join(', ')}` };
+  const classes = Array.isArray(answer.classes) ? answer.classes.filter((name): name is string => typeof name === 'string') : [];
+  const stats = answer.stats as SanitizeStats | undefined;
+  const problems = findLeaks(answer.html, classes);
+  if (problems.length > 0) return { site, ok: false, leak: true, error: `not saved, sanitizer check failed: ${problems.join(', ')}`, ...(stats === undefined ? {} : { stats }) };
   await mkdir(outDir, { recursive: true });
   const file = path.join(outDir, `${site}.html`);
   const temporary = `${file}.tmp`;
   await writeFile(temporary, answer.html, 'utf8');
   await rename(temporary, file);
-  return { site, ok: true, path: file };
+  return { site, ok: true, path: file, ...(stats === undefined ? {} : { stats }) };
 }
 
 export async function captureSites(targets: readonly CaptureTarget[], outDir: string): Promise<CaptureResult[]> {

@@ -130,8 +130,28 @@ export function isKeptAttributeName(name: string, sets: NameSets): boolean {
   return name.split('-').slice(1).every((part) => sets.words.has(part));
 }
 
-export function sanitizePage(source: Document, site: string, policy: SanitizePolicy): string {
+export interface SanitizeStats {
+  elements: { before: Record<string, number>; after: Record<string, number> };
+  classes: { seen: number; closed: number; stylesheet: number; dropped: number };
+  stylesheets: { total: number; readable: number; unreadable: number; classNames: number };
+}
+
+export interface SanitizeResult {
+  html: string;
+  classes: string[];
+  stats: SanitizeStats;
+}
+
+export const STYLESHEET_CLASS_SHAPE = /^[A-Za-z_-][A-Za-z0-9_\-:./%[\]#]{0,63}$/;
+
+export function sanitizePageDetailed(source: Document, site: string, policy: SanitizePolicy): SanitizeResult {
   const TEXT = 'x';
+  const SHEET_SHAPE = /^[A-Za-z_-][A-Za-z0-9_\-:./%[\]#]{0,63}$/;
+  const MAX_SHEET_CLASSES = 50000;
+  const sheetClasses = new Set<string>();
+  const sheetStats = { total: 0, readable: 0, unreadable: 0 };
+  const classStats = { seen: 0, closed: 0, stylesheet: 0, dropped: 0 };
+  const usedSheetClasses = new Set<string>();
   const MAX_NODES = policy.maxNodes;
   const MAX_DEPTH = 400;
   const skip = new Set(['script', 'style', 'noscript', 'template', 'link', 'meta', 'title', 'base', 'head']);
@@ -152,6 +172,44 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   const out = source.implementation.createHTMLDocument('');
   let nodes = 0;
   let truncated = false;
+
+  const collectSelector = (selector: string): void => {
+    const bare = selector.replace(/(?<!\\)\[(?:[^\]\\]|\\.)*\]/g, '');
+    for (const match of bare.matchAll(/\.((?:\\.|[A-Za-z0-9_-])+)/g)) {
+      const name = String(match[1]).replace(/\\(.)/g, '$1');
+      if (SHEET_SHAPE.test(name) && sheetClasses.size < MAX_SHEET_CLASSES) sheetClasses.add(name);
+    }
+  };
+
+  const collectRules = (rules: CSSRuleList, depth: number): void => {
+    for (const rule of Array.from(rules)) {
+      const selector = (rule as CSSStyleRule).selectorText;
+      if (typeof selector === 'string') collectSelector(selector);
+      const inner = (rule as CSSGroupingRule).cssRules;
+      if (inner !== undefined && depth < 8) collectRules(inner, depth + 1);
+    }
+  };
+
+  for (const sheet of Array.from(source.styleSheets)) {
+    sheetStats.total += 1;
+    try {
+      collectRules(sheet.cssRules, 0);
+      sheetStats.readable += 1;
+    } catch {
+      sheetStats.unreadable += 1;
+    }
+  }
+
+  const counted = new Set([...policy.tags, ...skip, 'html']);
+  const tally = (elements: Iterable<Element>): Record<string, number> => {
+    const counts: Record<string, number> = {};
+    for (const element of elements) {
+      const name = element.localName.toLowerCase();
+      const key = counted.has(name) ? name : 'other';
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  };
 
   const closed = (value: string, budget: { left: number }): string => {
     if (!isClosedValue(value, words)) return TEXT;
@@ -176,11 +234,24 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
     if (name === 'class') {
       const kept: string[] = [];
       for (const part of value.split(/\s+/)) {
-        if (!isClosedValue(part, words) || !hasWord(part, words)) continue;
-        const count = numberCount(part);
-        if (count > budget.left) continue;
-        budget.left -= count;
-        kept.push(part);
+        if (part === '') continue;
+        classStats.seen += 1;
+        if (isClosedValue(part, words) && hasWord(part, words)) {
+          const count = numberCount(part);
+          if (count <= budget.left) {
+            budget.left -= count;
+            kept.push(part);
+            classStats.closed += 1;
+            continue;
+          }
+        }
+        if (sheetClasses.has(part)) {
+          usedSheetClasses.add(part);
+          kept.push(part);
+          classStats.stylesheet += 1;
+          continue;
+        }
+        classStats.dropped += 1;
       }
       return kept.length === 0 ? null : kept.join(' ');
     }
@@ -230,7 +301,22 @@ export function sanitizePage(source: Document, site: string, policy: SanitizePol
   const body = source.body === null ? null : copy(source.body, 0);
   root.replaceChildren(body ?? out.createElement('body'));
   if (truncated) root.setAttribute('data-aiaw-truncated', 'true');
-  return '<!doctype html>\n' + root.outerHTML + '\n';
+  return {
+    html: '<!doctype html>\n' + root.outerHTML + '\n',
+    classes: [...usedSheetClasses].sort(),
+    stats: {
+      elements: {
+        before: tally(source.body === null ? [] : [source.body, ...Array.from(source.body.querySelectorAll('*'))]),
+        after: tally(root.querySelectorAll('*')),
+      },
+      classes: classStats,
+      stylesheets: { ...sheetStats, classNames: sheetClasses.size },
+    },
+  };
+}
+
+export function sanitizePage(source: Document, site: string, policy: SanitizePolicy): string {
+  return sanitizePageDetailed(source, site, policy).html;
 }
 
 export function sanitizeScript(site: string): string {
@@ -241,8 +327,8 @@ export function sanitizeScript(site: string): string {
     const hasWord = ${hasWord.toString()};
     const buildNameSets = ${buildNameSets.toString()};
     const isKeptAttributeName = ${isKeptAttributeName.toString()};
-    const html = (${sanitizePage.toString()})(document, ${JSON.stringify(site)}, ${JSON.stringify(SANITIZE_POLICY)});
-    return JSON.stringify({ ok: true, html });
+    const result = (${sanitizePageDetailed.toString()})(document, ${JSON.stringify(site)}, ${JSON.stringify(SANITIZE_POLICY)});
+    return JSON.stringify({ ok: true, html: result.html, classes: result.classes, stats: result.stats });
   } catch (error) {
     return JSON.stringify({ ok: false, error: 'page-error', detail: String(error && error.message || error) });
   }
@@ -259,7 +345,7 @@ const ATTRIBUTE = /\s([^\s=<>"']+)(?:="([^"]*)")?/g;
 const FORBIDDEN_TAG = /<\s*(script|style|noscript|template|link|meta|base|title)\b/i;
 const FORBIDDEN_ATTRIBUTE = /^(on.*|style|srcdoc|nonce|integrity)$/i;
 
-function attributeProblem(name: string, value: string, tally: { numbers: number }): string | null {
+function attributeProblem(name: string, value: string, tally: { numbers: number }, sheetClasses: ReadonlySet<string>): string | null {
   const lower = name.toLowerCase();
   if (FORBIDDEN_ATTRIBUTE.test(lower)) return `attribute ${lower}`;
   if (!OWN_ATTRIBUTES.has(lower) && !isKeptAttributeName(lower, NAME_SETS)) return 'attribute name';
@@ -267,8 +353,10 @@ function attributeProblem(name: string, value: string, tally: { numbers: number 
   if (lower === 'data-aiaw-site') return SITE.test(value) ? null : `attribute ${lower} value`;
   if (lower === 'class') {
     const parts = value.split(/\s+/).filter((part) => part !== '');
-    if (parts.some((part) => !isClosedValue(part, WORDS) || !hasWord(part, WORDS))) return 'attribute class value';
-    tally.numbers += parts.reduce((sum, part) => sum + numberCount(part), 0);
+    const closedParts = parts.filter((part) => isClosedValue(part, WORDS) && hasWord(part, WORDS));
+    const others = parts.filter((part) => !closedParts.includes(part));
+    if (others.some((part) => !sheetClasses.has(part) || !STYLESHEET_CLASS_SHAPE.test(part))) return 'attribute class value';
+    tally.numbers += closedParts.reduce((sum, part) => sum + numberCount(part), 0);
     return null;
   }
   if (TEXT_ATTRIBUTES.includes(lower)) return CONTROL_LABELS.includes(value.toLowerCase()) ? null : `attribute ${lower} value`;
@@ -281,7 +369,8 @@ function attributeProblem(name: string, value: string, tally: { numbers: number 
   return null;
 }
 
-export function findLeaks(html: string): string[] {
+export function findLeaks(html: string, stylesheetClasses: readonly string[] = []): string[] {
+  const sheetClasses = new Set(stylesheetClasses);
   const problems = new Set<string>();
   if (FORBIDDEN_TAG.test(html)) problems.add('forbidden element');
   if (/<!--/.test(html.replace(/<!doctype[^>]*>/i, ''))) problems.add('comment');
@@ -293,7 +382,7 @@ export function findLeaks(html: string): string[] {
     const tally = { numbers: 0 };
     for (const match of attributes.matchAll(ATTRIBUTE)) {
       const [, name = '', value = ''] = match;
-      const problem = attributeProblem(name, value, tally);
+      const problem = attributeProblem(name, value, tally, sheetClasses);
       if (problem !== null) problems.add(problem);
     }
     if (tally.numbers > 1) problems.add('digit groups');
