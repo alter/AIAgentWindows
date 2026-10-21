@@ -51,6 +51,8 @@ Node v22.22.0, npm 10.9.4 (machine). Electron 44.6.0, node-pty 1.1.0, @xterm/xte
 
 - arch_check (T09) sees `preload` only in constructor arguments written inline; T12 writes the `WebContentsView` and popup-window options for sites inline, never through a shared options variable (coordinator note, 2026-10-21).
 
+- T10 spawns the CLI when the agent is added, before the renderer has a pane. T11 must not lose that early output: main keeps a per-agent ring buffer of pty output (cap 256 KB) and the renderer, on creating a pane, asks for the backlog and then follows `pty:data`; the pane reports its size so main calls `pty.resize` (FitAddon never resizes the pty) (coordinator note, 2026-10-21).
+
 ## Out of scope
 - Forward, shared directory content, last-reply adapters — next tasks of 10-app-shell
 - Import of existing local sessions with filters — its own task of 10-app-shell
