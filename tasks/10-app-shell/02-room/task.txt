@@ -38,6 +38,7 @@ WRITE-SET
   package.json
   package-lock.json
   tasks/10-app-shell/02-room/
+  tasks/DECISIONS.md
 
 DATA
   room.prompt: dir=in; type=text typed by the owner; size=1..100000 chars; null=no; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/context-bridge.md
