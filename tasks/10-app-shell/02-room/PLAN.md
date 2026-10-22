@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -239,3 +239,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-23 02:25 T40 done: claude room argv `--tools Read,Grep,Glob,WebSearch,WebFetch --allowedTools WebSearch,WebFetch` under plan mode (no Bash/Edit/Write, MCP still denied); codex room `-c web_search="live"` before `resume` (not `--search`: it is a flag of top-level `codex`, `codex exec --search` fails to parse, spikes/web-access-flags.txt); CLI intro says the web is available, web participants unchanged; docs/tech, EVIDENCE CC32/CC33/CX33/CX34, PROJECT.md Room row; red first (4 unit failures on the old argv); vitest room-sessions+cli-args+room-history+integration/room 159/159, fast tier 11/11 (FASTRUN-2026-10-23-021906190235), electron-smoke 27/27; real-turn behaviour of both (CC33, CX34) is open for the owner's next run
 - 2026-10-23 coordinator: T40 verified (vitest room-sessions+cli-args+room-history+integration/room 159/159, fast tier 11 commands exit 0, electron-smoke 27/27 — this run); codex takes `-c web_search="live"` because `exec` rejects `--search` (spikes/web-access-flags.txt); a real web turn is the owner's next run (CC33, CX34).
 - 2026-10-23 02:36 T41 done: entries carry `round` (relay: pass 1..N by schedule index, broadcast: pass) and optional `state`; `feedSections`/`entryState`/`finalText` in room-view.ts; `src/renderer/room-feed.ts` renders sections with a heading and `<details>` per entry (collapsed, final open with Copy above and below, appended incrementally so opened entries survive new ones); `room:copy-final` IPC copies the snapshot's final text in main; red first (unit room-view 8, room-archive 1, ipc-validate 1, integration room 4 failed on the old code); vitest room-view+room-model+room-archive+ipc-validate+integration room/room-wiring 202/202, fast tier 11/11 (FASTRUN-2026-10-23-023329550527), electron-smoke 29/29
+- 2026-10-23 coordinator: T41 verified (vitest room-view+room-model+room-archive+integration/room 174/174, fast tier 11 commands exit 0, electron-smoke 29/29, reverse control of the new smoke test red then restored, NOTES.md T41 — this run). Paused on AC7 (ChatGPT and Grok).

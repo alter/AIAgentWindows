@@ -260,3 +260,7 @@ History `<shared>/rooms/room-20261022-215925-1c1787.md` (142,799 bytes), debug `
 
 T38 holds on the real page: from round 2 the anchor is the latest echo (rank = hits - 1), the navigator copies before it are skipped. T39 holds: every turn saw the completion stream end, and the turn finished after it. Not covered by this run: ChatGPT and Grok (not participants), so AC7 stays open for them.
 
+## T41 — reverse control of the feed smoke test (2026-10-23, coordinator)
+
+Mutation in `src/renderer/room-feed.ts` `entryNode`: `node.open = entry.kind === 'final'` → `node.open = false`, rebuilt, `npx playwright test --project=electron-smoke -g "grouped by round"`: exit 1, 1 test, 1 failure, `expect(locator).toHaveJSProperty(expected) failed`. File restored from a copy, `git status` clean.
+
