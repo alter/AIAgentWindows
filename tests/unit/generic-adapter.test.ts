@@ -518,8 +518,8 @@ describe('generic adapter: a question navigator after the composer repeats every
   }
 
   it.each([
-    ['full', 4, 2],
-    ['ellipsis', 2, 0],
+    ['full', 5, 2],
+    ['ellipsis', 3, 0],
   ])('reads the newest reply in the second round when the navigator holds the prompt (%s)', async (kind, hits, rank) => {
     const { first, second, traces } = await twoRounds(`?nomain=1&nostop=1&numbered=1&nav=${kind}`);
     expect(first).toContain('ECHO 1:');

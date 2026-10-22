@@ -110,6 +110,7 @@ export interface AnchoredReply extends ExtractedReply {
 
 interface EchoHits {
   tails: string[];
+  tailStarts: number[];
   hitsAtLineStart: number;
   lineKeys: number[];
 }
@@ -118,11 +119,11 @@ export const KEY_NONE = 0;
 export const KEY_AT_START = 1;
 export const KEY_MID_LINE = 2;
 
-function echoHits(text: string, prompt: string): EchoHits {
+function echoHits(text: string, prompt: string, accept: (index: number) => boolean = () => true): EchoHits {
   const key = collapse(prompt).slice(0, ECHO_KEY_CHARS).trimEnd();
   const lines = text.split('\n');
   const lineKeys = lines.map(() => KEY_NONE);
-  if (key === '') return { tails: [], hitsAtLineStart: 0, lineKeys };
+  if (key === '') return { tails: [], tailStarts: [], hitsAtLineStart: 0, lineKeys };
   const starts: number[] = [];
   let joined = '';
   for (const line of lines) {
@@ -131,24 +132,25 @@ function echoHits(text: string, prompt: string): EchoHits {
   }
   const hits: number[] = [];
   for (let at = joined.indexOf(key); at !== -1; at = joined.indexOf(key, at + 1)) hits.push(at);
-  const atStart: string[] = [];
-  const midLine: string[] = [];
+  const atStart: Array<[string, number]> = [];
+  const midLine: Array<[string, number]> = [];
   const taken = new Set<string>();
   for (let n = hits.length - 1; n >= 0; n -= 1) {
     const at = hits[n] ?? 0;
     let index = starts.length - 1;
     while (index > 0 && (starts[index] ?? 0) > at) index -= 1;
+    if (!accept(index)) continue;
     const offset = at - (starts[index] ?? 0);
     lineKeys[index] = Math.max(lineKeys[index] ?? KEY_NONE, offset === 0 ? KEY_AT_START : KEY_MID_LINE);
     const id = `${index}:${offset}`;
     if (taken.has(id)) continue;
     taken.add(id);
     const first = offset === 0 ? (lines[index] ?? '') : collapse(lines[index] ?? '').slice(offset);
-    (offset === 0 ? atStart : midLine).push([first, ...lines.slice(index + 1)].join('\n'));
+    (offset === 0 ? atStart : midLine).push([[first, ...lines.slice(index + 1)].join('\n'), index]);
   }
-  const tails = [...atStart, ...midLine];
+  const ordered = [...atStart, ...midLine];
   const hitsAtLineStart = atStart.length;
-  return { tails, hitsAtLineStart, lineKeys };
+  return { tails: ordered.map(([tail]) => tail), tailStarts: ordered.map(([, index]) => index), hitsAtLineStart, lineKeys };
 }
 
 export function echoTails(text: string, prompt: string): string[] {
@@ -184,34 +186,46 @@ interface Anchor {
   hitsAtLineStart: number;
 }
 
-function chooseAnchor(unseen: string, prompt: string): Anchor {
-  const { tails, hitsAtLineStart } = echoHits(unseen, prompt);
+function unseenMask(lines: readonly string[], before: ReadonlyMap<string, number>): boolean[] {
+  const left = new Map(before);
+  return lines.map((line) => {
+    const key = collapse(line);
+    return key === '' || !takeOne(left, key);
+  });
+}
+
+function unseenTail(tail: string, start: number, fresh: readonly boolean[]): string {
+  return tail
+    .split('\n')
+    .filter((line, offset) => collapse(line) === '' || fresh[start + offset] === true)
+    .join('\n');
+}
+
+function chooseAnchor(all: readonly string[], fresh: readonly boolean[], prompt: string): Anchor {
+  const accept = (index: number): boolean => fresh[index] === true || echoMask([all[index] ?? ''], prompt)[0] === true;
+  const { tails, tailStarts, hitsAtLineStart } = echoHits(all.join('\n'), prompt, accept);
   if (tails.length === 0) return { tail: null, keyHits: 0, rank: -1, hitsAtLineStart };
-  const found = tails.findIndex((tail) => hasAnswer(cleanTail(tail, prompt)));
+  const novelTails = tails.map((tail, index) => unseenTail(tail, tailStarts[index] ?? 0, fresh));
+  const found = novelTails.findIndex((tail) => hasAnswer(cleanTail(tail, prompt)));
   const rank = found === -1 ? 0 : found;
-  return { tail: tails[rank] ?? null, keyHits: tails.length, rank, hitsAtLineStart };
+  return { tail: novelTails[rank] ?? null, keyHits: tails.length, rank, hitsAtLineStart };
 }
 
 function extract(current: string, before: string, prompt: string, anchored: boolean): AnchoredReply {
-  const earlier = countLines(before.split('\n'));
-  const left = new Map(earlier);
   const all = current.split('\n');
-  const unseen = withoutLines(all, (key) => takeOne(left, key));
-  const unseenText = unseen.join('\n');
-  const anchor: Anchor = anchored ? chooseAnchor(unseenText, prompt) : { tail: unseenText, keyHits: 0, rank: -1, hitsAtLineStart: 0 };
-  const { fresh, echoFree, markerFree, candidates } = cleanTail(anchor.tail ?? '', prompt);
-  const novel = withoutLines(candidates, (key) => earlier.has(key));
-  const reply = joined(novel) ?? joined(candidates);
-  const kept = joined(novel) === null ? candidates : novel;
+  const fresh = unseenMask(all, countLines(before.split('\n')));
+  const unseen = all.filter((_, index) => fresh[index]);
+  const anchor: Anchor = anchored ? chooseAnchor(all, fresh, prompt) : { tail: unseen.join('\n'), keyHits: 0, rank: -1, hitsAtLineStart: 0 };
+  const { fresh: tailLines, echoFree, markerFree, candidates } = cleanTail(anchor.tail ?? '', prompt);
   return {
-    reply,
+    reply: joined(candidates),
     echoFound: anchor.tail !== null,
     keyHits: anchor.keyHits,
     anchorRank: anchor.rank,
     hitsAtLineStart: anchor.hitsAtLineStart,
     dropped: {
-      seen: filled(all) - filled(unseen) + filled(candidates) - filled(kept),
-      echo: filled(fresh) - filled(echoFree),
+      seen: filled(all) - filled(unseen),
+      echo: filled(tailLines) - filled(echoFree),
       marker: filled(echoFree) - filled(markerFree),
       label: filled(markerFree) - filled(candidates),
     },

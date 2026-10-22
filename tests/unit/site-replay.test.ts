@@ -10,6 +10,7 @@ import { createTurnRecorder } from '../../src/main/site-adapters/recorder';
 import { formatReplay, readRecording, replay, runReplay, type Recording } from '../../src/main/site-adapters/replay';
 import { runAdapterTurn } from '../../src/main/site-adapters/turn';
 import type { PageRunner } from '../../src/main/site-adapters/types';
+import { NEW_REPLY, REPEATED_TIMING, writeRepeatedPromptRecording } from './helpers/repeated-prompt-recording';
 import { ANSWER_FRAMES, SCRIPT_PROMPT, scriptedPage } from './helpers/scripted-page';
 
 const OPTIONS = { quietMs: 130, confirmMs: 300, confirmPollMs: 10, maxReplyChars: 1_000_000 };
@@ -196,5 +197,18 @@ describe('replay outcomes on hand-made recordings', () => {
   it('reads the files the recorder wrote', async () => {
     const dir = await recordScripted();
     expect(JSON.parse(await readFile(path.join(dir, 'meta.json'), 'utf8')).timing).toMatchObject({ quietMs: 130 });
+  });
+});
+
+describe('replay of a page that repeats the same prompt every round', () => {
+  it('replies with the new answer at the quiet time although the earlier bubble and a navigator copy of the prompt are on the page', async () => {
+    const dir = path.join(root, 'repeated');
+    const { lastChangeMs } = await writeRepeatedPromptRecording(dir);
+    const recording = await readRecording(dir);
+    const result = replay(recording);
+    expect(result.outcome).toBe('reply');
+    expect(result.reply).toBe(NEW_REPLY.join('\n'));
+    expect(result.finishedAtMs).toBeGreaterThanOrEqual(lastChangeMs + REPEATED_TIMING.quietMs);
+    expect(result.finishedAtMs).toBeLessThanOrEqual(lastChangeMs + REPEATED_TIMING.quietMs + REPEATED_TIMING.settleMs + REPEATED_TIMING.pollMs);
   });
 });

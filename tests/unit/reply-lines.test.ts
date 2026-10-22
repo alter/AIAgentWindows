@@ -121,7 +121,7 @@ describe('extractReplyDetailed', () => {
     expect(found.dropped).toEqual({ seen: 2, echo: 4, marker: 1, label: 2 });
   });
 
-  it('counts lines dropped as seen when the repeated-answer fallback keeps them', () => {
+  it('counts lines as seen only up to their number before, so a repeated answer is still read', () => {
     const prompt = 'Room so far:\nSame answer\nContinue.';
     const before = 'Question one\nSame answer';
     const found = extractReplyDetailed(`${before}\n${prompt}\nSame answer`, before, prompt);
@@ -280,5 +280,40 @@ describe('describeLines', () => {
     expect(report.lines).toBe(450);
     expect(report.listed).toBe(400);
     expect(report.entries.split(',')).toHaveLength(400);
+  });
+});
+
+describe('extractAnchoredReply: the same prompt in every round', () => {
+  const PROMPT_LINES = ['Room so far: the owner asks for one concrete point about the sample topic', 'Reply with a short answer'];
+  const ASKED = PROMPT_LINES.join('\n');
+  const NAVIGATOR = PROMPT_LINES.join(' ');
+  const OLD_REPLY = ['Old reply opens with a sentence about the topic', 'Old reply continues with a second sentence'];
+  const NEW_REPLY = ['New reply opens with a different sentence about the topic', 'New reply adds a second point', 'New reply closes with a summary line'];
+  const before = ['Chat title', ...PROMPT_LINES, ...OLD_REPLY, 'Copy', NAVIGATOR].join('\n');
+
+  it('reads the new reply that sits before the navigator copy of the prompt at the end of the page', () => {
+    const now = ['Chat title', ...PROMPT_LINES, ...NEW_REPLY, 'Copy', NAVIGATOR, NAVIGATOR].join('\n');
+    const found = extractAnchoredReply(now, before, ASKED);
+    expect(found.reply).toBe(NEW_REPLY.join('\n'));
+    expect(found.echoFound).toBe(true);
+    expect(found.keyHits).toBe(3);
+  });
+
+  it('reads the new reply when the earlier bubble and its reply are still above the new bubble', () => {
+    const now = ['Chat title', ...PROMPT_LINES, ...OLD_REPLY, ...PROMPT_LINES, ...NEW_REPLY, 'Copy', NAVIGATOR, NAVIGATOR].join('\n');
+    expect(extractAnchoredReply(now, before, ASKED).reply).toBe(NEW_REPLY.join('\n'));
+  });
+
+  it('never returns the reply of an older bubble while the new reply has not started', () => {
+    const now = ['Chat title', ...PROMPT_LINES, ...OLD_REPLY, ...PROMPT_LINES, 'Copy', NAVIGATOR, NAVIGATOR].join('\n');
+    const found = extractAnchoredReply(now, before, ASKED);
+    expect(found.reply).toBeNull();
+    expect(found.echoFound).toBe(true);
+  });
+
+  it('ignores a short prompt that only occurs inside static text of the page', () => {
+    const found = extractAnchoredReply('Chat title\nThis page is about something else', 'Chat title\nThis page is about something else', 'hi');
+    expect(found.echoFound).toBe(false);
+    expect(found.reply).toBeNull();
   });
 });
