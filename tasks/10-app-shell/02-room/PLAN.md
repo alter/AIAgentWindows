@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -197,3 +197,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 coordinator: T31 verified by the worker's single runs and the coordinator's checks below; removed the leaked `stub-sessions/` (four empty files from a 03:43 test run) → T32a.
 - 2026-10-22 12:20 T32 done: a failed finalizer hands the final turn to Claude Code first (else the next participant that answered in the last round), feed marked `Final by X (finalizer Y failed)`, banner and headline honest, total +1 per handover; red first (7 new tests failed on the old code: 4 integration fallback cases, 2 view, 1 existing test needing the new entries); vitest room+room-view+stub-print 105/105, fast tier 11/11 (FASTRUN-2026-10-22-121421614224), integrity 0 findings
 - 2026-10-22 12:20 T32a done: stub-print refuses to run without the session directory env (exit 3), red first (2 of 3 new tests in stub-print.test.ts failed: stub exited 0 and wrote stub-sessions into its cwd), the same fast tier run leaves no untracked file outside reports/ and the plan dir
+- 2026-10-22 coordinator: T32, T32a verified (targeted suites, fast tier, electron-smoke — this run); repository root clean after the suites. Paused on AC7.
