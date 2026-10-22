@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -208,3 +208,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 13:25 T34 done: render switches (`src/shared/render-switches.ts`, applied before ready) + parking BrowserWindow for every site view that is not shown (moved with remove/addChildView, setBounds after each move, resized with the main window, destroyed on main `closed` and `closeAll()`), start grace fails `no-response` only without an echo, trace `frames`/`textLenBefore`/`textLenAtEnd`; red first: 5 unit tests on the old adapter, smoke `room-hidden-views.spec.ts` on the old site-views (frame-only site never done, no parking window); reverse control 1 (switches without parking) red, reverse control 2 (parking without switches) NOT red in the Playwright smoke because Playwright's Electron loader adds both switches (kept at probe level, spikes/t34-reverse-controls.txt, NOTES.md); fast tier 11/11 (FASTRUN-2026-10-22-132301324877), electron-smoke 25/25, integrity 0 findings, evidence_check 0 problems
 - 2026-10-22 coordinator: T34 verified (vitest site-adapters+generic-adapter+render-switches 69/69, fast tier with shellcheck and gitleaks exit 0, electron-smoke 25/25 — this run); root cause stays a hypothesis until the owner's AC7 run shows frames>0 with echoFound=true on DeepSeek. Paused on AC7.
 - 2026-10-22 16:45 T35 done: anchor walks the key's occurrences last to first and takes the last one a reply follows (else as before), prefix lines cut with an ellipsis count as echo, trace `keyHits`/`anchorRank`; red first (generic-adapter navigator: full variant timed out in round 2, ellipsis variant leaked the navigator item into the reply; reply-lines 7 failed on the old file), vitest generic-adapter+reply-lines+site-adapters 111/111, fast tier 11/11 (FASTRUN-2026-10-22-164103733296), electron-smoke 25/25, integrity 0 findings; residual risks in NOTES.md
+- 2026-10-22 coordinator: T35 verified (vitest site-adapters+generic-adapter+reply-lines 111/111, fast tier with shellcheck and gitleaks exit 0, electron-smoke 25/25 — this run); the navigator cause is inferred from the sanitized capture, the owner's next run's keyHits/anchorRank confirms it. Paused on AC7.
