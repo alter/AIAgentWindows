@@ -18,3 +18,8 @@ Received: "running"
 
 ## T03 reverse control
 Tests written after the code, so red was shown by breaking the code in place and restoring (diff clean afterwards): dropping the running-to-stopped mapping of `snapshotFromRecord` and the fallback-final `total` count turned red `equals the live snapshot after a timeout, a failed finalizer and a fallback final`, `a stopped record keeps its replies and says Stopped`, `a record still marked running is shown as stopped, never as running` (tests/unit/room-view.test.ts: 3 failed, 125 passed). `restored entries render like live entries` guards existing renderHistory and buildParticipantPrompt against a record round trip; it was green at first run because the product code already fenced entries (it is a regression guard, not a new behaviour test).
+
+## T03 — reverse control of `restored entries render like live entries` (2026-10-23, coordinator)
+
+The worker's test was green on its first run. Mutation in `parseEntry` of `src/shared/room-model.ts`: `text` → `text.trim()`; `npx vitest run tests/unit/room-history.test.ts -t "restored entries"`: 1 failed, `AssertionError: expected '# Room r1 ...' to be '# Room r1 ...' // Object.is equality`. File restored from a copy, `git status` clean.
+
