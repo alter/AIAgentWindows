@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OwnerPause, Room, type DriverFactory, type ParticipantDriver, type RoomEvent, type TurnRequest } from '../../src/main/room';
 import { DEFAULT_ROOM_TIMING, createRoomDrivers } from '../../src/main/room-drivers';
 import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
-import type { PageRunner, SiteAdapter } from '../../src/main/site-adapters/types';
+import type { NetSink, NetWatch, PageRunner, SiteAdapter, StreamSource } from '../../src/main/site-adapters/types';
 import { escapeBody, historyNonce } from '../../src/shared/room-history';
 import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, defaultFinalizerId, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
 
@@ -1029,6 +1029,78 @@ describe('room with a web participant that is not ready at first', () => {
     expect(result.entries.map((entry) => entry.kind)).toEqual(['prompt', 'reply', 'error', 'error']);
     expect(result.entries[2]?.text).toContain('page not ready');
     expect(trace.filter((item) => item === 'insert')).toHaveLength(1);
+  });
+});
+
+describe('room web turns watch the network whether or not a debug recording runs', () => {
+  const READY = { pollMs: 20, settleMs: 40, readyMs: 400, readyPollMs: 10 };
+
+  function watchedRig(options: { debug: boolean; failWatch?: boolean }) {
+    const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+    const watches: Array<{ sink: NetSink; stopped: boolean }> = [];
+    const sources: Array<StreamSource | null> = [];
+    const states: string[] = [];
+    const runner: PageRunner = {
+      run: (code) => Promise.resolve(dom.window.eval(code)),
+      watchNetwork: (sink) => {
+        if (options.failWatch === true) return Promise.reject(new Error('debugger busy'));
+        const watch = { sink, stopped: false };
+        watches.push(watch);
+        const handle: NetWatch = { stop: () => ((watch.stopped = true), Promise.resolve()) };
+        return Promise.resolve(handle);
+      },
+    };
+    const base = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+    const adapter: SiteAdapter = {
+      ...base,
+      watchStream: (source) => void sources.push(source),
+      submit: async (target) => {
+        await base.submit(target);
+        const sink = watches[0]?.sink;
+        sink?.event('net', { phase: 'request', id: 's', method: 'POST', resourceType: 'Fetch' });
+        sink?.event('net', { phase: 'response', id: 's', mime: 'text/event-stream' });
+        states.push(sources[sources.length - 1]?.view(Date.now()).state ?? 'no-source');
+      },
+    };
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: () => ({ adapter, runner }),
+      timing: READY,
+      ...(options.debug ? { debugRoot: path.join(dir, 'debug') } : {}),
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    return { room, watches, sources, states };
+  }
+
+  it('attaches a watch without bodies and gives the turn a stream source when nothing is recorded', async () => {
+    const { room, watches, sources, states } = watchedRig({ debug: false });
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    expect(watches).toHaveLength(2);
+    expect(watches.every((watch) => watch.stopped)).toBe(true);
+    expect(watches.every((watch) => watch.sink.saveBody === undefined)).toBe(true);
+    expect(sources.filter((source) => source !== null).length).toBeGreaterThanOrEqual(2);
+    expect(states[0]).toBe('open');
+  });
+
+  it('keeps the bodies for a recording and still feeds the stream source', async () => {
+    const { room, watches, states } = watchedRig({ debug: true });
+    const result = await room.start(config([C], { turnTimeoutMs: 20000, debugSites: true })).done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    expect(watches.every((watch) => typeof watch.sink.saveBody === 'function')).toBe(true);
+    expect(states[0]).toBe('open');
+  });
+
+  it('runs the turn on the quiet rule when the watch cannot be attached', async () => {
+    const { room, watches, states } = watchedRig({ debug: false, failWatch: true });
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    expect(watches).toEqual([]);
+    expect(states[0]).toBe('none');
   });
 });
 

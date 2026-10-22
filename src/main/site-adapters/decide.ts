@@ -1,5 +1,9 @@
 // decide.ts
 import { extractAnchoredReply, isAnswerStart, type ReplyDrops } from './reply-lines';
+import { NO_STREAM } from './stream-state';
+import type { StreamView } from './types';
+
+export const STREAM_QUIET_CAP_MS = 120_000;
 
 export interface PageRead {
   stop: boolean;
@@ -58,10 +62,20 @@ export interface GeneratingVerdict {
   settledText: string | null;
 }
 
-export function judgeGenerating(track: ReplyTrack, read: PageRead, now: number, quietMs: number): GeneratingVerdict {
+export function judgeGenerating(
+  track: ReplyTrack,
+  read: PageRead,
+  now: number,
+  quietMs: number,
+  stream: StreamView = NO_STREAM,
+): GeneratingVerdict {
   if (read.stop) return { generating: true, settledText: null };
+  if (stream.state === 'open' && !(track.started && now - track.changedAt >= STREAM_QUIET_CAP_MS)) {
+    return { generating: true, settledText: null };
+  }
   if (!track.started) return { generating: false, settledText: null };
-  const generating = now - track.changedAt < quietMs || !read.accepting;
+  const quiet = stream.state === 'ended' || now - track.changedAt >= quietMs;
+  const generating = !quiet || !read.accepting;
   return { generating, settledText: generating ? null : read.text };
 }
 

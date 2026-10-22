@@ -24,6 +24,7 @@ export interface RecorderFinish {
 }
 
 export interface TurnRecorder extends TurnTap, NetSink {
+  saveBody(text: string): Promise<string | null>;
   readonly dir: string;
   finish(info: RecorderFinish): Promise<void>;
 }

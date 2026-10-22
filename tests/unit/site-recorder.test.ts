@@ -217,7 +217,7 @@ describe('site debug recording of a turn', () => {
       run: () => Promise.resolve(''),
       watchNetwork: async (sink: NetSink): Promise<NetWatch> => {
         sink.event('net', { phase: 'request', id: '1', path: '/api/chat' });
-        const file = await sink.saveBody('STREAM BODY');
+        const file = await sink.saveBody?.('STREAM BODY');
         sink.event('net', { phase: 'body', id: '1', file: file ?? 'none' });
         return {
           stop: () => {

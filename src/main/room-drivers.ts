@@ -14,6 +14,7 @@ import type { SiteLogger } from './site-log-file';
 import { SiteAdapterError, type NetWatch, type PageRunner, type SiteAdapter } from './site-adapters/types';
 import { waitUntilReady } from './site-adapters/ready';
 import { createTurnRecorder, type TurnRecorder } from './site-adapters/recorder';
+import { createStreamTracker, tappedSink, type StreamTracker } from './site-adapters/stream-state';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
 export interface RoomTiming {
@@ -196,22 +197,25 @@ class SiteDriver implements ParticipantDriver {
     });
   }
 
-  private async watch(rec: TurnRecorder | null): Promise<NetWatch | null> {
-    if (rec === null || this.seat.runner.watchNetwork === undefined) return null;
+  private async watch(rec: TurnRecorder | null, stream: StreamTracker): Promise<NetWatch | null> {
+    if (this.seat.runner.watchNetwork === undefined) return null;
     try {
-      return await this.seat.runner.watchNetwork(rec);
+      return await this.seat.runner.watchNetwork(tappedSink(stream, rec));
     } catch (error) {
-      rec.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
+      rec?.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
 
-  private async close(rec: TurnRecorder, watch: NetWatch | null, outcome: string, code: string, trace: Readonly<Record<string, SiteLogValue>>): Promise<void> {
+  private async unwatch(rec: TurnRecorder | null, watch: NetWatch | null): Promise<void> {
     try {
       await watch?.stop();
     } catch (error) {
-      rec.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
+      rec?.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
     }
+  }
+
+  private async close(rec: TurnRecorder, outcome: string, code: string, trace: Readonly<Record<string, SiteLogValue>>): Promise<void> {
     let dom: string | null = null;
     try {
       dom = (await this.seat.adapter.domDump?.(this.seat.runner)) ?? null;
@@ -224,6 +228,7 @@ class SiteDriver implements ParticipantDriver {
   async turn(request: TurnRequest): Promise<string | null> {
     const turn = randomBytes(3).toString('hex');
     const rec = this.open(request, turn);
+    const stream = createStreamTracker();
     let watch: NetWatch | null = null;
     let outcome = 'failed';
     let code = 'error';
@@ -231,7 +236,7 @@ class SiteDriver implements ParticipantDriver {
     try {
       await this.ready(request, rec);
       if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
-      watch = await this.watch(rec);
+      watch = await this.watch(rec, stream);
       const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
         ...DEFAULT_TURN_OPTIONS,
         pollMs: this.timing.pollMs,
@@ -239,6 +244,7 @@ class SiteDriver implements ParticipantDriver {
         timeoutMs: request.timeoutMs,
         signal: request.signal,
         turnId: turn,
+        stream,
         tap: rec ?? undefined,
         trace: (fields) => {
           trace = fields;
@@ -253,7 +259,8 @@ class SiteDriver implements ParticipantDriver {
       code = error instanceof SiteAdapterError ? error.code : 'error';
       throw error;
     } finally {
-      if (rec !== null) await this.close(rec, watch, outcome, code, trace);
+      await this.unwatch(rec, watch);
+      if (rec !== null) await this.close(rec, outcome, code, trace);
     }
   }
 

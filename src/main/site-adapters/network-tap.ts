@@ -75,11 +75,13 @@ export async function watchNetwork(cdp: NetDebugger, pageUrl: string | null, sin
   const pending = new Set<Promise<void>>();
 
   const saveBody = async (id: string, path: string): Promise<void> => {
+    const keep = sink.saveBody?.bind(sink);
+    if (keep === undefined) return;
     try {
       const reply = (await cdp.sendCommand('Network.getResponseBody', { requestId: id })) as { body?: unknown; base64Encoded?: unknown };
       const raw = text(reply.body);
       const decoded = reply.base64Encoded === true ? Buffer.from(raw, 'base64').toString('utf8') : raw;
-      const file = await sink.saveBody(capBody(decoded));
+      const file = await keep(capBody(decoded));
       sink.event('net', { phase: 'body', id, path, file: file ?? 'not-saved', chars: decoded.length });
     } catch (error) {
       sink.event('net', { phase: 'body-failed', id, path, error: failure(error) });
@@ -94,7 +96,7 @@ export async function watchNetwork(cdp: NetDebugger, pageUrl: string | null, sin
       const path = pathOf(text(request['url']), origin);
       if (path === null) return;
       tracked.set(id, { path, startedAt: seconds(raw['timestamp']), mime: '' });
-      sink.event('net', { phase: 'request', id, path, method: text(request['method']) });
+      sink.event('net', { phase: 'request', id, path, method: text(request['method']), resourceType: text(raw['type']) });
       return;
     }
     const known = tracked.get(id);

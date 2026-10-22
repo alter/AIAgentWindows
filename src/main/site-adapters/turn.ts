@@ -2,7 +2,7 @@
 import { randomBytes } from 'node:crypto';
 import type { SiteLogValue } from '../../shared/site-log';
 import { freshLoop, stepLoop, timedOut } from './decide';
-import type { PageRunner, PollProbe, SiteAdapter } from './types';
+import type { PageRunner, PollProbe, SiteAdapter, StreamSource } from './types';
 import { SiteAdapterError } from './types';
 
 export { SiteAdapterError };
@@ -30,6 +30,7 @@ export interface TurnTap {
 export interface TurnOptions {
   turnId?: string;
   tap?: TurnTap;
+  stream?: StreamSource & { markSubmit(at: number): void };
   timeoutMs: number;
   pollMs: number;
   settleMs: number;
@@ -79,6 +80,8 @@ async function converse(adapter: SiteAdapter, runner: PageRunner, prompt: string
   const inserted = adapter.trace?.();
   tap?.event('insert', { composer: String(inserted?.['composer'] ?? 'none'), chars: Number(inserted?.['inserted'] ?? 0) });
   const baseline = await adapter.lastReply(runner);
+  adapter.watchStream?.(options.stream ?? null);
+  options.stream?.markSubmit(Date.now());
   await adapter.submit(runner);
   const started = Date.now();
   const submitted = adapter.trace?.();

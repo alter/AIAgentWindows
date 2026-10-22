@@ -1,7 +1,8 @@
 // site-network-tap.test.ts
 import { describe, expect, it } from 'vitest';
-import { MAX_BODY_BYTES, capBody, isBodyMime, originOf, watchNetwork, type NetDebugger } from '../../src/main/site-adapters/network-tap';
+import { LONG_RESPONSE_MS, MAX_BODY_BYTES, capBody, isBodyMime, originOf, watchNetwork, type NetDebugger } from '../../src/main/site-adapters/network-tap';
 import { createIsolatedRunner } from '../../src/main/site-adapters/isolated-runner';
+import { createStreamTracker, isStreamMime, tappedSink } from '../../src/main/site-adapters/stream-state';
 import type { NetSink } from '../../src/main/site-adapters/types';
 
 type Listener = (event: unknown, method: string, params: unknown) => void;
@@ -249,5 +250,172 @@ describe('isolated runner network watch', () => {
     const runner = createIsolatedRunner({ executeJavaScriptInIsolatedWorld: () => Promise.resolve(''), isDestroyed: () => false, debugger: cdp });
     await runner.watchNetwork?.(sink);
     expect(sink.events[0]?.name).toBe('net-skipped');
+  });
+});
+
+describe('network tap resource types and bodies', () => {
+  it('records the resource type of every request, empty when the protocol sends none', async () => {
+    const cdp = new FakeDebugger();
+    const sink = new Sink();
+    await watchNetwork(cdp, PAGE, sink);
+    cdp.emit('Network.requestWillBeSent', { requestId: '1', request: { url: 'https://chat.example.com/', method: 'GET' }, type: 'Document', timestamp: 1 });
+    cdp.emit('Network.requestWillBeSent', { requestId: '2', request: { url: 'https://chat.example.com/api/x', method: 'POST' }, type: 'Fetch', timestamp: 1 });
+    request(cdp, '3', 'https://chat.example.com/api/y');
+    expect(sink.events.map((item) => item.fields['resourceType'])).toEqual(['Document', 'Fetch', '']);
+  });
+
+  it('fetches no body at all for a sink that cannot keep one', async () => {
+    const cdp = new FakeDebugger();
+    const events: string[] = [];
+    const watch = await watchNetwork(cdp, PAGE, { event: (_name, fields) => void events.push(String(fields?.['phase'])) });
+    request(cdp, '1', 'https://chat.example.com/stream', 100);
+    cdp.emit('Network.responseReceived', { requestId: '1', response: { mimeType: 'text/event-stream', status: 200 }, timestamp: 100.1 });
+    cdp.emit('Network.loadingFinished', { requestId: '1', timestamp: 105 });
+    await watch.stop();
+    expect(events).toEqual(['request', 'response', 'finished']);
+    expect(cdp.commands.some((item) => item.method === 'Network.getResponseBody')).toBe(false);
+  });
+});
+
+function net(tracker: ReturnType<typeof createStreamTracker>, at: number, fields: Record<string, string | number>): void {
+  tracker.feed(fields, at);
+}
+
+describe('stream tracker', () => {
+  it('knows the stream mime types', () => {
+    for (const mime of ['text/event-stream', 'Text/Event-Stream; charset=utf-8', 'application/x-ndjson']) expect(isStreamMime(mime)).toBe(true);
+    for (const mime of ['application/json', 'text/html', '']) expect(isStreamMime(mime)).toBe(false);
+  });
+
+  it('says none until a stream or a long POST is seen after the submit', () => {
+    const tracker = createStreamTracker();
+    expect(tracker.view(10)).toEqual({ state: 'none', endedAt: null });
+    tracker.markSubmit(100);
+    net(tracker, 120, { phase: 'request', id: 'a', method: 'POST' });
+    net(tracker, 200, { phase: 'response', id: 'a', mime: 'application/json' });
+    net(tracker, 220, { phase: 'finished', id: 'a' });
+    net(tracker, 300, { phase: 'request', id: 'b', method: 'GET' });
+    expect(tracker.view(100000)).toEqual({ state: 'none', endedAt: null });
+  });
+
+  it('is open from the response of a text/event-stream and ended at its end', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(100);
+    net(tracker, 150, { phase: 'request', id: 'a', method: 'POST', resourceType: 'Fetch' });
+    expect(tracker.view(160).state).toBe('none');
+    net(tracker, 200, { phase: 'response', id: 'a', mime: 'text/event-stream; charset=utf-8' });
+    expect(tracker.view(5000)).toEqual({ state: 'open', endedAt: null });
+    net(tracker, 7000, { phase: 'finished', id: 'a' });
+    expect(tracker.view(7001)).toEqual({ state: 'ended', endedAt: 7000 });
+  });
+
+  it('is failed when the stream fails and nothing else ended', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    net(tracker, 10, { phase: 'request', id: 'a', method: 'POST' });
+    net(tracker, 20, { phase: 'response', id: 'a', mime: 'application/x-ndjson' });
+    net(tracker, 90, { phase: 'failed', id: 'a' });
+    expect(tracker.view(100)).toEqual({ state: 'failed', endedAt: null });
+  });
+
+  it('counts a POST that stays unfinished for longer than the long response time as open, and as ended once it finishes', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    net(tracker, 100, { phase: 'request', id: 'a', method: 'POST' });
+    expect(tracker.view(100 + LONG_RESPONSE_MS)).toEqual({ state: 'none', endedAt: null });
+    expect(tracker.view(100 + LONG_RESPONSE_MS + 1)).toEqual({ state: 'open', endedAt: null });
+    net(tracker, 4000, { phase: 'finished', id: 'a' });
+    expect(tracker.view(4001)).toEqual({ state: 'ended', endedAt: 4000 });
+  });
+
+  it('does not count a slow GET, and a POST that finished within the long response time stays none', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    net(tracker, 10, { phase: 'request', id: 'g', method: 'GET', resourceType: 'Document' });
+    net(tracker, 20, { phase: 'request', id: 'p', method: 'POST' });
+    net(tracker, 500, { phase: 'finished', id: 'p' });
+    expect(tracker.view(60000).state).toBe('none');
+  });
+
+  it('ignores what started before the submit, even when it ends after it', () => {
+    const tracker = createStreamTracker();
+    net(tracker, 10, { phase: 'request', id: 'early', method: 'POST' });
+    net(tracker, 20, { phase: 'response', id: 'early', mime: 'text/event-stream' });
+    tracker.markSubmit(100);
+    net(tracker, 150, { phase: 'finished', id: 'early' });
+    net(tracker, 160, { phase: 'response', id: 'unknown', mime: 'text/event-stream' });
+    expect(tracker.view(5000)).toEqual({ state: 'none', endedAt: null });
+  });
+
+  it('prefers a response with a stream mime over a long POST and stays open while any stream is open', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    net(tracker, 10, { phase: 'request', id: 'slow', method: 'POST' });
+    net(tracker, 20, { phase: 'request', id: 's1', method: 'POST' });
+    net(tracker, 30, { phase: 'response', id: 's1', mime: 'text/event-stream' });
+    net(tracker, 40, { phase: 'request', id: 's2', method: 'POST' });
+    net(tracker, 50, { phase: 'response', id: 's2', mime: 'application/x-ndjson' });
+    net(tracker, 3000, { phase: 'finished', id: 's1' });
+    expect(tracker.view(3001).state).toBe('open');
+    net(tracker, 3500, { phase: 'finished', id: 's2' });
+    net(tracker, 9000, { phase: 'finished', id: 'slow' });
+    expect(tracker.view(9001)).toEqual({ state: 'ended', endedAt: 3500 });
+  });
+
+  it('is ended when one stream failed and another ended', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    for (const id of ['a', 'b']) {
+      net(tracker, 10, { phase: 'request', id, method: 'POST' });
+      net(tracker, 20, { phase: 'response', id, mime: 'text/event-stream' });
+    }
+    net(tracker, 100, { phase: 'failed', id: 'a' });
+    net(tracker, 200, { phase: 'finished', id: 'b' });
+    expect(tracker.view(300)).toEqual({ state: 'ended', endedAt: 200 });
+  });
+
+  it('accepts requests that started a little before the marked submit time when the mark is earlier', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(-50);
+    net(tracker, -20, { phase: 'request', id: 'a', method: 'POST' });
+    net(tracker, 0, { phase: 'response', id: 'a', mime: 'text/event-stream' });
+    expect(tracker.view(10).state).toBe('open');
+  });
+
+  it('ignores events without a request id or of other phases', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    net(tracker, 1, { phase: 'request', method: 'POST' });
+    net(tracker, 2, { phase: 'body', id: 'a' });
+    net(tracker, 3, { phase: 'request', id: 'a' });
+    net(tracker, 4, { phase: 'response', id: 'a', mime: 'text/event-stream' });
+    expect(tracker.view(5).state).toBe('open');
+    net(tracker, 6, { phase: 'body', id: 'a' });
+    expect(tracker.view(7).state).toBe('open');
+  });
+});
+
+describe('tapped sink', () => {
+  it('feeds net events to the tracker with the clock and passes every event on to the inner sink', () => {
+    const tracker = createStreamTracker();
+    tracker.markSubmit(0);
+    const inner = new Sink();
+    let clock = 10;
+    const sink = tappedSink(tracker, inner, () => clock);
+    sink.event('net', { phase: 'request', id: 'a', method: 'POST' });
+    clock = 20;
+    sink.event('net', { phase: 'response', id: 'a', mime: 'text/event-stream' });
+    sink.event('net-skipped', { reason: 'no-origin' });
+    expect(tracker.view(30).state).toBe('open');
+    expect(inner.events.map((item) => item.name)).toEqual(['net', 'net', 'net-skipped']);
+  });
+
+  it('keeps bodies only when the inner sink keeps them', async () => {
+    const tracker = createStreamTracker();
+    const inner = new Sink();
+    expect(await tappedSink(tracker, inner).saveBody?.('text')).toBe('net/0001.txt');
+    expect(inner.saved).toEqual(['text']);
+    expect(tappedSink(tracker, null).saveBody).toBeUndefined();
+    expect(() => tappedSink(tracker, null).event('net', { phase: 'request', id: 'a', method: 'GET' })).not.toThrow();
   });
 });

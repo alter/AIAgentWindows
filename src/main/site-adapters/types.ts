@@ -3,7 +3,18 @@ import type { SiteLogValue } from '../../shared/site-log';
 
 export interface NetSink {
   event(name: string, fields?: Readonly<Record<string, SiteLogValue>>): void;
-  saveBody(text: string): Promise<string | null>;
+  saveBody?(text: string): Promise<string | null>;
+}
+
+export type StreamState = 'none' | 'open' | 'ended' | 'failed';
+
+export interface StreamView {
+  state: StreamState;
+  endedAt: number | null;
+}
+
+export interface StreamSource {
+  view(now: number): StreamView;
 }
 
 export interface NetWatch {
@@ -55,6 +66,7 @@ export interface SiteAdapter {
   composerReady?(runner: PageRunner): Promise<boolean>;
   isIdle?(runner: PageRunner): Promise<boolean>;
   echoSeen?(): boolean;
+  watchStream?(source: StreamSource | null): void;
   trace?(): Readonly<Record<string, SiteLogValue>>;
   lineReport?(): Readonly<Record<string, SiteLogValue>> | null;
   probe?(): PollProbe | null;

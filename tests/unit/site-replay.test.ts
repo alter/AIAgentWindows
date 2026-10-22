@@ -212,3 +212,87 @@ describe('replay of a page that repeats the same prompt every round', () => {
     expect(result.finishedAtMs).toBeLessThanOrEqual(lastChangeMs + REPEATED_TIMING.quietMs + REPEATED_TIMING.settleMs + REPEATED_TIMING.pollMs);
   });
 });
+
+describe('replay of a recording that carries the network events', () => {
+  const SUBMIT_AT = 500;
+
+  async function recorded(net: Array<[number, Record<string, string | number>]>): Promise<{ dir: string; lastChangeMs: number }> {
+    const dir = path.join(root, 'streamed');
+    const { lastChangeMs } = await writeRepeatedPromptRecording(dir);
+    const rows = [
+      { at: 3, event: 'idle-wait', ms: 0 },
+      { at: SUBMIT_AT, event: 'submit', path: 'enter', composerClearedMs: 6 },
+      ...net.map(([t, fields]) => ({ at: SUBMIT_AT + t, event: 'net', ...fields })),
+      { at: 9000, event: 'finish', outcome: 'reply', replyChars: 1 },
+    ];
+    await writeFile(path.join(dir, 'events.jsonl'), `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`, 'utf8');
+    return { dir, lastChangeMs };
+  }
+
+  async function quietResult(): Promise<ReturnType<typeof replay>> {
+    const plain = path.join(root, 'plain');
+    await writeRepeatedPromptRecording(plain);
+    return replay(await readRecording(plain));
+  }
+
+  const STREAM = (end: number, last: Record<string, string | number> = { phase: 'finished', id: 'c' }): Array<[number, Record<string, string | number>]> => [
+    [-400, { phase: 'request', id: 'old', method: 'POST', resourceType: 'Fetch' }],
+    [-300, { phase: 'response', id: 'old', mime: 'text/event-stream' }],
+    [-200, { phase: 'finished', id: 'old' }],
+    [300, { phase: 'request', id: 'c', method: 'POST', resourceType: 'Fetch' }],
+    [400, { phase: 'response', id: 'c', mime: 'text/event-stream', status: 200 }],
+    [end, last],
+  ];
+
+  it('finishes about the settle time after the end of the stream instead of at the quiet time', async () => {
+    const { dir, lastChangeMs } = await recorded(STREAM(3200));
+    const quiet = await quietResult();
+    const result = replay(await readRecording(dir));
+    expect(result.outcome).toBe('reply');
+    expect(result.reply).toBe(NEW_REPLY.join('\n'));
+    expect(result.finishedAtMs).toBeGreaterThanOrEqual(3200 + REPEATED_TIMING.settleMs);
+    expect(result.finishedAtMs).toBeLessThanOrEqual(3200 + REPEATED_TIMING.settleMs + REPEATED_TIMING.pollMs);
+    expect(result.finishedAtMs).toBeLessThan(quiet.finishedAtMs);
+    expect(quiet.finishedAtMs).toBeGreaterThanOrEqual(lastChangeMs + REPEATED_TIMING.quietMs);
+  });
+
+  it('keeps waiting past the quiet time while the recorded stream is still open', async () => {
+    const { dir, lastChangeMs } = await recorded(STREAM(6000));
+    const result = replay(await readRecording(dir));
+    expect(result.outcome).toBe('reply');
+    expect(result.finishedAtMs).toBeGreaterThanOrEqual(6000 + REPEATED_TIMING.settleMs);
+    expect(result.finishedAtMs).toBeGreaterThan(lastChangeMs + REPEATED_TIMING.quietMs + REPEATED_TIMING.settleMs + REPEATED_TIMING.pollMs);
+  });
+
+  it('judges by the quiet rule when the stream failed, and when the recording has no network events', async () => {
+    const quiet = await quietResult();
+    const failed = await recorded(STREAM(3200, { phase: 'failed', id: 'c', error: 'net::ERR_ABORTED' }));
+    expect(replay(await readRecording(failed.dir)).finishedAtMs).toBe(quiet.finishedAtMs);
+    const none = await recorded([]);
+    expect(replay(await readRecording(none.dir)).finishedAtMs).toBe(quiet.finishedAtMs);
+  });
+
+  it('ignores the network events from before the submit', async () => {
+    const { dir } = await recorded(STREAM(3200).slice(0, 3));
+    expect(replay(await readRecording(dir)).finishedAtMs).toBe((await quietResult()).finishedAtMs);
+  });
+
+  it('reads the net events of the recording with their time counted from the submit, and none when there is no submit event', async () => {
+    const { dir } = await recorded(STREAM(3200));
+    const recording = await readRecording(dir);
+    expect(recording.net?.map((item) => item.t)).toEqual([-400, -300, -200, 300, 400, 3200]);
+    expect(recording.submitMarkMs).toBe(-6);
+    await writeFile(path.join(dir, 'events.jsonl'), `${JSON.stringify({ at: 5, event: 'net', phase: 'request', id: 'x' })}\n`, 'utf8');
+    expect((await readRecording(dir)).net).toEqual([]);
+  });
+
+  it('prints the stream state beside a line only when there is one', async () => {
+    const { dir } = await recorded(STREAM(3200));
+    const lines = await runReplay(dir);
+    expect(lines.some((line) => / stream=open$/.test(line))).toBe(true);
+    expect(lines.filter((line) => line.startsWith('t=0 ')).every((line) => !line.includes('stream='))).toBe(true);
+    const plain = path.join(root, 'plain');
+    await writeRepeatedPromptRecording(plain);
+    expect((await runReplay(plain)).some((line) => line.includes('stream='))).toBe(false);
+  });
+});

@@ -2,6 +2,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { freshLoop, freshTrack, judgeGenerating, observe, stepLoop, timedOut } from './decide';
+import { createStreamTracker } from './stream-state';
+import type { StreamState } from './types';
+import type { SiteLogValue } from '../../shared/site-log';
 
 export interface ReplayTiming {
   pollMs: number;
@@ -27,8 +30,15 @@ export interface RecordedSnapshot {
   accepting: boolean;
 }
 
+export interface RecordedNet {
+  t: number;
+  fields: Readonly<Record<string, SiteLogValue>>;
+}
+
 export interface Recording {
   meta: RecordedMeta;
+  net?: RecordedNet[];
+  submitMarkMs?: number;
   prompt: string;
   before: string;
   snapshots: RecordedSnapshot[];
@@ -40,6 +50,7 @@ export interface ReplayLine {
   replyChars: number;
   started: boolean;
   generating: boolean;
+  stream: StreamState;
   keyHits: number;
   anchorRank: number;
 }
@@ -66,6 +77,10 @@ export function replay(recording: Recording): ReplayResult {
   const options = { timeoutMs: timing.timeoutMs, startGraceMs: timing.startGraceMs, settleMs: timing.settleMs };
   let track = freshTrack();
   let loop = freshLoop();
+  const tracker = createStreamTracker();
+  tracker.markSubmit(recording.submitMarkMs ?? 0);
+  const net = [...(recording.net ?? [])].sort((a, b) => a.t - b.t);
+  let fed = 0;
   const lines: ReplayLine[] = [];
   for (const [index, snapshot] of snapshots.entries()) {
     const next = snapshots[index + 1]?.t ?? null;
@@ -74,7 +89,13 @@ export function replay(recording: Recording): ReplayResult {
       if (timedOut(now, 0, timing.timeoutMs)) return { lines, outcome: 'timeout', finishedAtMs: now, reply: null };
       const seen = observe(track, snapshot, recording.before, recording.prompt, now, now, timing.maxReplyChars);
       track = seen.track;
-      const { generating } = judgeGenerating(track, snapshot, now, timing.quietMs);
+      while (fed < net.length && (net[fed]?.t ?? Number.POSITIVE_INFINITY) <= now) {
+        const item = net[fed] as RecordedNet;
+        tracker.feed(item.fields, item.t);
+        fed += 1;
+      }
+      const stream = tracker.view(now);
+      const { generating } = judgeGenerating(track, snapshot, now, timing.quietMs, stream);
       if (position === 0) {
         lines.push({
           t: snapshot.t,
@@ -82,6 +103,7 @@ export function replay(recording: Recording): ReplayResult {
           replyChars: seen.reply?.length ?? 0,
           started: track.started,
           generating,
+          stream: stream.state,
           keyHits: seen.keyHits,
           anchorRank: seen.anchorRank,
         });
@@ -98,7 +120,7 @@ export function replay(recording: Recording): ReplayResult {
 export function formatReplay(result: ReplayResult, meta: RecordedMeta): string[] {
   const rows = result.lines.map(
     (line) =>
-      `t=${line.t} text=${line.textChars} reply=${line.replyChars} started=${line.started} generating=${line.generating} keyHits=${line.keyHits} anchorRank=${line.anchorRank}`,
+      `t=${line.t} text=${line.textChars} reply=${line.replyChars} started=${line.started} generating=${line.generating} keyHits=${line.keyHits} anchorRank=${line.anchorRank}${line.stream === 'none' ? '' : ` stream=${line.stream}`}`,
   );
   const recorded = `recorded=${meta.outcome}${meta.code === '' ? '' : `:${meta.code}`} recordedAtMs=${meta.finishedAtMs}`;
   return [...rows, `outcome=${result.outcome} finishedAtMs=${result.finishedAtMs} ${recorded}`];
@@ -106,6 +128,29 @@ export function formatReplay(result: ReplayResult, meta: RecordedMeta): string[]
 
 async function readText(file: string): Promise<string> {
   return readFile(file, 'utf8');
+}
+
+function readEvents(raw: string): { net: RecordedNet[]; submitMarkMs: number } {
+  const rows: Array<Record<string, SiteLogValue>> = [];
+  for (const line of raw.split('\n')) {
+    try {
+      const row = JSON.parse(line) as unknown;
+      if (typeof row === 'object' && row !== null) rows.push(row as Record<string, SiteLogValue>);
+    } catch {
+      continue;
+    }
+  }
+  const submit = rows.find((row) => row['event'] === 'submit' && typeof row['at'] === 'number');
+  if (submit === undefined) return { net: [], submitMarkMs: 0 };
+  const submitAt = Number(submit['at']);
+  const cleared = Number(submit['composerClearedMs']);
+  const net: RecordedNet[] = [];
+  for (const row of rows) {
+    if (row['event'] !== 'net' || typeof row['at'] !== 'number') continue;
+    const fields = Object.fromEntries(Object.entries(row).filter(([key]) => key !== 'at' && key !== 'event'));
+    net.push({ t: Number(row['at']) - submitAt, fields });
+  }
+  return { net, submitMarkMs: -Math.max(0, Number.isFinite(cleared) ? cleared : 0) };
 }
 
 export async function readRecording(dir: string): Promise<Recording> {
@@ -123,7 +168,8 @@ export async function readRecording(dir: string): Promise<Recording> {
     }
     snapshots.push({ t: value.t, text: value.text, stop: value.stop === true, accepting: value.accepting === true });
   }
-  return { meta, prompt: await readText(path.join(dir, 'prompt.txt')), before: await readText(path.join(dir, 'before.txt')), snapshots };
+  const events = await readText(path.join(dir, 'events.jsonl')).then(readEvents, () => ({ net: [], submitMarkMs: 0 }));
+  return { meta, ...events, prompt: await readText(path.join(dir, 'prompt.txt')), before: await readText(path.join(dir, 'before.txt')), snapshots };
 }
 
 export async function runReplay(dir: string): Promise<string[]> {

@@ -14,7 +14,8 @@ import {
 import { callPage } from './page-call';
 import { freshTrack, judgeGenerating, observe, type ReplyTrack } from './decide';
 import { describeLines, type ReplyDrops } from './reply-lines';
-import { SiteAdapterError, type PageRunner, type PollProbe, type SiteAdapter } from './types';
+import { NO_STREAM } from './stream-state';
+import { SiteAdapterError, type PageRunner, type PollProbe, type SiteAdapter, type StreamSource } from './types';
 
 export interface GenericOptions {
   quietMs: number;
@@ -82,6 +83,7 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let frames = -1;
   let textLenBefore = -1;
   let textLenAtEnd = -1;
+  let stream: StreamSource | null = null;
 
   async function snapshot(runner: PageRunner): Promise<PageSnapshot> {
     return (await callPage(runner, genericStateScript())).value as PageSnapshot;
@@ -184,7 +186,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     },
     async isGenerating(runner) {
       const state = await readState(runner);
-      const verdict = judgeGenerating(track, state, Date.now(), options.quietMs);
+      const now = Date.now();
+      const verdict = judgeGenerating(track, state, now, options.quietMs, stream?.view(now) ?? NO_STREAM);
       if (verdict.settledText !== null) settledText = verdict.settledText;
       return verdict.generating;
     },
@@ -204,8 +207,14 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     echoSeen() {
       return echoFound;
     },
+    watchStream(source) {
+      stream = source;
+    },
     trace(): Readonly<Record<string, SiteLogValue>> {
+      const seen = stream?.view(Date.now()) ?? NO_STREAM;
       return {
+        stream: seen.state,
+        streamEndMs: seen.endedAt === null ? -1 : seen.endedAt - submittedAt,
         composer: composerKind,
         inserted,
         submit: submitPath,

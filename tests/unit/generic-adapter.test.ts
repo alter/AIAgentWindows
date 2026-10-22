@@ -1,12 +1,16 @@
 // generic-adapter.test.ts
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { freshTrack, judgeGenerating, STREAM_QUIET_CAP_MS } from '../../src/main/site-adapters/decide';
 import { createGenericAdapter } from '../../src/main/site-adapters/generic-adapter';
+import { genericEnterScript } from '../../src/main/site-adapters/generic-scripts';
 import { adapterFor } from '../../src/main/site-adapters/registry';
+import { createStreamTracker } from '../../src/main/site-adapters/stream-state';
 import { runAdapterTurn } from '../../src/main/site-adapters/turn';
 import { SiteAdapterError, type PageRunner } from '../../src/main/site-adapters/types';
 import { SITE_KINDS_WITH_ADAPTER } from '../../src/shared/agents';
+import { SCRIPT_PROMPT, scriptedPage, type ScriptedFrame } from './helpers/scripted-page';
 
 const FIXTURE = readFileSync(new URL('../fixtures/sites/composer.html', import.meta.url), 'utf8');
 const MARKUP = '<img src=x onerror="window.pwned=1"><b>bold</b>\nsecond & line';
@@ -629,5 +633,137 @@ describe('generic adapter: files and registry', () => {
       expect(first?.site).toBe(kind);
       expect(adapterFor(kind)).not.toBe(first);
     }
+  });
+});
+
+describe('judgeGenerating with the network stream', () => {
+  const read = { stop: false, text: 'page', accepting: true };
+  const started = { ...freshTrack(), started: true, changedAt: 1000 };
+  const open = { state: 'open', endedAt: null } as const;
+  const ended = { state: 'ended', endedAt: 1000 } as const;
+
+  it('without a stream keeps the quiet rule', () => {
+    expect(judgeGenerating(started, read, 1000 + 4999, 5000).generating).toBe(true);
+    expect(judgeGenerating(started, read, 1000 + 5000, 5000)).toEqual({ generating: false, settledText: 'page' });
+    expect(judgeGenerating(freshTrack(), read, 10, 5000).generating).toBe(false);
+  });
+
+  it('is generating while a stream is open, before the text started and while the text is still', () => {
+    expect(judgeGenerating(freshTrack(), read, 10, 5000, open)).toEqual({ generating: true, settledText: null });
+    expect(judgeGenerating(started, read, 1000 + 60000, 5000, open)).toEqual({ generating: true, settledText: null });
+  });
+
+  it('lets the quiet rule decide again when a stream stays open for a very long time without any text change', () => {
+    expect(judgeGenerating(started, read, 1000 + STREAM_QUIET_CAP_MS - 1, 5000, open).generating).toBe(true);
+    expect(judgeGenerating(started, read, 1000 + STREAM_QUIET_CAP_MS, 5000, open)).toEqual({ generating: false, settledText: 'page' });
+    expect(judgeGenerating(freshTrack(), read, STREAM_QUIET_CAP_MS * 2, 5000, open).generating).toBe(true);
+  });
+
+  it('is not generating once the stream ended and the text started, even when the text moved a moment ago', () => {
+    expect(judgeGenerating(started, read, 1001, 5000, ended)).toEqual({ generating: false, settledText: 'page' });
+  });
+
+  it('still waits after the end of the stream for a stop button or a composer that is not ready', () => {
+    expect(judgeGenerating(started, { ...read, stop: true }, 2000, 5000, ended).generating).toBe(true);
+    expect(judgeGenerating(started, { ...read, accepting: false }, 2000, 5000, ended).generating).toBe(true);
+  });
+
+  it('does not take the end of a stream for the end of an answer that never started', () => {
+    expect(judgeGenerating(freshTrack(), read, 2000, 5000, ended).generating).toBe(false);
+  });
+
+  it('falls back to the quiet rule after a failed stream', () => {
+    const failed = { state: 'failed', endedAt: null } as const;
+    expect(judgeGenerating(started, read, 1100, 5000, failed).generating).toBe(true);
+    expect(judgeGenerating(started, read, 6000, 5000, failed).generating).toBe(false);
+  });
+});
+
+describe('generic adapter: a turn judged with the network stream', () => {
+  const FIRST = 'First part of the scripted answer arrives';
+  const SECOND = 'Second part of the scripted answer arrives';
+  const NO_STOP: readonly ScriptedFrame[] = [
+    { from: 0, lines: [], stop: false },
+    { from: 100, lines: [FIRST], stop: false },
+    { from: 200, lines: [FIRST, SECOND], stop: false },
+  ];
+  const REQUEST = { phase: 'request', id: 'a', method: 'POST', resourceType: 'Fetch' };
+  const RESPONSE = { phase: 'response', id: 'a', mime: 'text/event-stream' };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function run(quietMs: number, script: ReadonlyArray<[number, Record<string, string>]>, stream = true) {
+    vi.useFakeTimers();
+    const tracker = createStreamTracker();
+    const page = scriptedPage(SCRIPT_PROMPT, NO_STOP);
+    const adapter = createGenericAdapter('fixture', { ...OPTIONS, quietMs });
+    const traces: Array<Record<string, unknown>> = [];
+    let begun = 0;
+    const runner: PageRunner = {
+      run(code) {
+        if (code === genericEnterScript()) {
+          begun = Date.now();
+          for (const [delay, fields] of script) setTimeout(() => tracker.feed(fields, Date.now()), delay);
+        }
+        return page.runner.run(code);
+      },
+    };
+    let settled = false;
+    let outcome: unknown = null;
+    const running = runAdapterTurn(adapter, runner, SCRIPT_PROMPT, { ...FAST, trace: (fields) => traces.push(fields), ...(stream ? { stream: tracker } : {}) })
+      .then(
+        (reply) => {
+          outcome = reply;
+        },
+        (error: unknown) => {
+          outcome = error;
+        },
+      )
+      .finally(() => {
+        settled = true;
+      });
+    while (!settled) await vi.advanceTimersByTimeAsync(5);
+    await running;
+    return { outcome, elapsed: Date.now() - begun, trace: traces[0] };
+  }
+
+  it('finishes about the settle time after the end of the stream instead of waiting for the quiet time', async () => {
+    const made = await run(3000, [[60, REQUEST], [70, RESPONSE], [260, { phase: 'finished', id: 'a' }]]);
+    expect(made.outcome).toBe(`${FIRST}\n${SECOND}`);
+    expect(made.elapsed).toBeGreaterThanOrEqual(260 + FAST.settleMs);
+    expect(made.elapsed).toBeLessThan(260 + FAST.settleMs + 60);
+    expect(made.trace).toMatchObject({ stream: 'ended' });
+    expect(Number(made.trace?.['streamEndMs'])).toBeGreaterThanOrEqual(250);
+    expect(Number(made.trace?.['streamEndMs'])).toBeLessThanOrEqual(280);
+  });
+
+  it('keeps waiting past the quiet time while the stream is open', async () => {
+    const made = await run(130, [[60, REQUEST], [70, RESPONSE], [900, { phase: 'finished', id: 'a' }]]);
+    expect(made.outcome).toBe(`${FIRST}\n${SECOND}`);
+    expect(made.elapsed).toBeGreaterThanOrEqual(900 + FAST.settleMs);
+    expect(made.elapsed).toBeLessThan(900 + FAST.settleMs + 60);
+  });
+
+  it('uses the quiet rule when no stream was seen, and says so in the trace', async () => {
+    const made = await run(130, []);
+    expect(made.outcome).toBe(`${FIRST}\n${SECOND}`);
+    expect(made.elapsed).toBeGreaterThanOrEqual(200 + 130);
+    expect(made.elapsed).toBeLessThan(200 + 130 + 2 * FAST.settleMs + 60);
+    expect(made.trace).toMatchObject({ stream: 'none', streamEndMs: -1 });
+  });
+
+  it('uses the quiet rule when the turn is given no stream source at all', async () => {
+    const made = await run(130, [[60, REQUEST], [70, RESPONSE], [900, { phase: 'finished', id: 'a' }]], false);
+    expect(made.elapsed).toBeLessThan(600);
+    expect(made.trace).toMatchObject({ stream: 'none', streamEndMs: -1 });
+  });
+
+  it('falls back to the quiet rule when the stream failed', async () => {
+    const made = await run(130, [[60, REQUEST], [70, RESPONSE], [100, { phase: 'failed', id: 'a' }]]);
+    expect(made.outcome).toBe(`${FIRST}\n${SECOND}`);
+    expect(made.elapsed).toBeGreaterThanOrEqual(200 + 130);
+    expect(made.trace).toMatchObject({ stream: 'failed', streamEndMs: -1 });
   });
 });
