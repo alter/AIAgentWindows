@@ -12,3 +12,6 @@ Expected: "stopped"
 Received: "running"
  Tests  1 failed | 28 passed (29)
 ```
+
+## T02 write set
+`tests/integration/room.test.ts` added to WRITE-SET: the plan names it for the Room.start record and continuation tests, and the Room rig lives there.

@@ -42,6 +42,7 @@ WRITE-SET
   src/preload/
   src/renderer/room-pane.ts
   tests/unit/room-archive.test.ts
+  tests/integration/room.test.ts
   tests/unit/room-view.test.ts
   tests/unit/room-history.test.ts
   tests/full/room.spec.ts
