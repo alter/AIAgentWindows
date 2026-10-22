@@ -28,3 +28,37 @@ The worker's test was green on its first run. Mutation in `parseEntry` of `src/s
 src/main/index.ts (await roomService.init() before the window loads), tests/integration/room-wiring.test.ts (RoomService tests) and tests/unit/ipc-validate.test.ts (channel validation) added to WRITE-SET: the task line names init from index.ts and the service and IPC tests, which live in these files.
 
 T05 write set gains src/renderer/room-feed.ts (RoomFeed.reload rebuilds the feed from an opened snapshot) and src/renderer/styles.css (room list width).
+
+## T06 reverse control
+New file tests/full/room-archive.spec.ts (two smoke tests; windows hidden by the harness). Each was red once against a mutation of the product code, then the code was restored.
+
+Mutation 1: `stopInterrupted` not called in `RoomService.init` (src/main/room-service.ts). Test 'a run cut by closing the app mid-turn reopens as stopped ...' red, the first test stays green:
+```
+    ✘  2 [electron-smoke] › tests/full/room-archive.spec.ts:138:5 › a run cut by closing the app mid-turn reopens as stopped with the replies written before the close (3.8s)
+    1) [electron-smoke] › tests/full/room-archive.spec.ts:138:5 › a run cut by closing the app mid-turn reopens as stopped with the replies written before the close 
+      Error: expect(received).toBe(expected) // Object.is equality
+      Expected: "stopped"
+      Received: "running"
+        164 |   }
+        165 |   const record = readRecord(files.json);
+      > 166 |   expect(record.status).toBe('stopped');
+            |                         ^
+        167 |   expect(record.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(written);
+        168 | });
+        169 |
+```
+
+Mutation 2: `writeRecord` returns before writing (src/main/room-archive.ts). Both tests red:
+```
+    ✘  1 [electron-smoke] › tests/full/room-archive.spec.ts:88:5 › a finished room survives an app restart, is reopened from the list and continues after its old entries (874ms)
+    ✘  2 [electron-smoke] › tests/full/room-archive.spec.ts:138:5 › a run cut by closing the app mid-turn reopens as stopped with the replies written before the close (3.4s)
+    1) [electron-smoke] › tests/full/room-archive.spec.ts:88:5 › a finished room survives an app restart, is reopened from the list and continues after its old entries 
+      Error: expect(received).toHaveLength(expected)
+      Expected length: 1
+      Received length: 0
+      Received array:  []
+        69 |   const json = names.filter((name) => name.endsWith('.json'));
+        70 |   const md = names.filter((name) => name.endsWith('.md'));
+      > 71 |   expect(json).toHaveLength(1);
+           |                ^
+```
