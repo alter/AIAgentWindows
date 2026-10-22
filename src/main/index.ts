@@ -112,6 +112,7 @@ async function start(): Promise<void> {
       agents: () => active.snapshot().agents,
       page: (agent) => siteViews.pageFor(agent.id, agent.kind),
       prepare: (agent, timeoutMs, signal) => siteViews.prepare(agent.id, agent.kind, timeoutMs, signal),
+      newChat: (agent, timeoutMs, signal) => siteViews.newChat(agent.id, agent.kind, timeoutMs, signal),
       adapterFor: (kind) => adapterFor(kind, roomSiteOptions(process.env)),
     }),
   });

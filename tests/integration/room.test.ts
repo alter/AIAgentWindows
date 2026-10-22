@@ -1015,6 +1015,83 @@ describe('room with a web participant that is not ready at first', () => {
   });
 });
 
+describe('room with web participants starts a new chat per run', () => {
+  const FAST = { pollMs: 20, settleMs: 40, readyMs: 400, readyPollMs: 10 };
+  const D: RoomParticipant = { id: 'd', kind: 'deepseek', label: 'DeepSeek' };
+
+  function seatRig(order: string[]) {
+    const seatFor = (participant: RoomParticipant) => {
+      const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+      const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
+      const base = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+      const adapter = {
+        ...base,
+        insertText: (target: PageRunner, text: string) => {
+          order.push(`insert:${participant.id}`);
+          return base.insertText(target, text);
+        },
+      };
+      return { adapter, runner, newChat: () => { order.push(`new-chat:${participant.id}`); return Promise.resolve(); } };
+    };
+    const seats = new Map<string, ReturnType<typeof seatFor>>();
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: (participant) => {
+        const seat = seats.get(participant.id) ?? seatFor(participant);
+        seats.set(participant.id, seat);
+        return seat;
+      },
+      timing: FAST,
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    return room;
+  }
+
+  it('loads a new chat for every web participant before its first turn of every run and not between rounds', async () => {
+    const order: string[] = [];
+    const room = seatRig(order);
+    const first = await room.start(config([C, D], { rounds: 2, turnTimeoutMs: 20000 })).done;
+    expect(first.status).toBe('done');
+    const second = await room.start(config([C, D], { rounds: 1, turnTimeoutMs: 20000 })).done;
+    expect(second.status).toBe('done');
+    const secondRunStart = order.indexOf('new-chat:c', 1);
+    expect(order.filter((item) => item.startsWith('new-chat'))).toEqual(['new-chat:c', 'new-chat:d', 'new-chat:c', 'new-chat:d']);
+    for (const id of ['c', 'd']) {
+      expect(order.indexOf(`new-chat:${id}`)).toBeLessThan(order.indexOf(`insert:${id}`));
+    }
+    expect(secondRunStart).toBeGreaterThan(order.indexOf('insert:d'));
+    const afterSecond = order.slice(secondRunStart);
+    expect(afterSecond.indexOf('new-chat:c')).toBeLessThan(afterSecond.indexOf('insert:c'));
+    expect(afterSecond.indexOf('new-chat:d')).toBeLessThan(afterSecond.indexOf('insert:d'));
+  });
+
+  it('a new chat that fails to load is an error entry and nothing is inserted into the old chat', async () => {
+    const order: string[] = [];
+    const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+    const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
+    const base = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+    const adapter = { ...base, insertText: (target: PageRunner, text: string) => { order.push('insert'); return base.insertText(target, text); } };
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: () => ({ adapter, runner, newChat: () => Promise.reject(new Error('start page did not load')) }),
+      timing: FAST,
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('error');
+    expect(result.entries[1]?.text).toContain('start page did not load');
+    expect(order).toEqual([]);
+  });
+});
+
 describe('room finalizer', () => {
   const answer: Behaviour = (_request, call) => Promise.resolve(call === 3 ? 'FINAL ANSWER' : `reply ${call}`);
 

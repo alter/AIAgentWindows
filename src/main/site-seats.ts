@@ -10,6 +10,7 @@ export interface SiteSeatDeps {
   agents(): readonly Agent[];
   page(agent: Agent & { kind: SiteKind }): IsolatedContents;
   prepare(agent: Agent & { kind: SiteKind }, timeoutMs: number, signal: AbortSignal): Promise<void>;
+  newChat(agent: Agent & { kind: SiteKind }, timeoutMs: number, signal: AbortSignal): Promise<void>;
   adapterFor(kind: SiteKind): SiteAdapter | null;
 }
 
@@ -26,6 +27,7 @@ export function createSiteSeats(deps: SiteSeatDeps): (participant: RoomParticipa
       adapter,
       runner: createIsolatedRunner(deps.page(site)),
       prepare: (timeoutMs, signal) => deps.prepare(site, timeoutMs, signal),
+      newChat: (timeoutMs, signal) => deps.newChat(site, timeoutMs, signal),
     };
   };
 }

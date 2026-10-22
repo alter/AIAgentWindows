@@ -62,6 +62,24 @@ export class SiteViews {
   async prepare(id: string, kind: SiteKind, timeoutMs: number, signal: AbortSignal): Promise<void> {
     const entry = this.ensure(id, kind);
     this.layout();
+    await this.within(entry.loaded, kind, timeoutMs, signal);
+  }
+
+  async newChat(id: string, kind: SiteKind, timeoutMs: number, signal: AbortSignal): Promise<void> {
+    const existed = this.entries.has(id);
+    const entry = this.ensure(id, kind);
+    this.layout();
+    if (!existed) {
+      await this.within(entry.loaded, kind, timeoutMs, signal);
+      return;
+    }
+    const reload = entry.view.webContents.loadURL(siteStartUrl(kind, this.env)).catch(() => {
+      throw new SiteAdapterError('not-ready', `${kind}: the start page did not load`);
+    });
+    await this.within(reload, kind, timeoutMs, signal);
+  }
+
+  private async within(work: Promise<void>, kind: SiteKind, timeoutMs: number, signal: AbortSignal): Promise<void> {
     let timer: NodeJS.Timeout | undefined;
     let onAbort: (() => void) | undefined;
     const failure = new Promise<never>((_resolve, reject) => {
@@ -71,11 +89,12 @@ export class SiteViews {
       else signal.addEventListener('abort', onAbort, { once: true });
     });
     try {
-      await Promise.race([entry.loaded, failure]);
+      await Promise.race([work, failure]);
     } finally {
       clearTimeout(timer);
       if (onAbort !== undefined) signal.removeEventListener('abort', onAbort);
       failure.catch(() => undefined);
+      work.catch(() => undefined);
     }
   }
 

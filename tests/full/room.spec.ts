@@ -326,3 +326,94 @@ test('a web participant whose view was never opened answers on its first turn', 
     server.close();
   }
 });
+
+const SAME_ANSWER = ['SAME-ANSWER line one', 'SAME-ANSWER line two', 'SAME-ANSWER line three'];
+
+const REMEMBERING_SITE = `<!doctype html>
+<html><head><meta charset="utf-8"><title>remembering chat</title></head>
+<body>
+<main id="log" style="white-space: pre-wrap"></main>
+<textarea aria-label="Message"></textarea>
+<button type="button" id="send" disabled>Send</button>
+<button type="button" id="stop" hidden>Stop</button>
+<script>
+const ta = document.querySelector('textarea');
+const send = document.getElementById('send');
+const stop = document.getElementById('stop');
+const log = document.getElementById('log');
+const say = (role, text) => {
+  const node = document.createElement('div');
+  node.className = 'msg ' + role;
+  node.textContent = text;
+  log.appendChild(node);
+};
+const submit = () => {
+  const text = ta.value;
+  if (text === '') return;
+  ta.value = '';
+  send.disabled = true;
+  say('user', text);
+  stop.hidden = false;
+  setTimeout(() => say('assistant', ${JSON.stringify(SAME_ANSWER.join('\n'))}), 60);
+  setTimeout(() => { stop.hidden = true; }, 90);
+};
+ta.addEventListener('input', () => { send.disabled = ta.value === ''; });
+ta.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    submit();
+  }
+});
+send.addEventListener('click', submit);
+</script>
+</body></html>`;
+
+function firstReplyIn(historyFile: string): string {
+  const match = /kind=reply>>>\n([\s\S]*?)\n<<<end-/.exec(readFileSync(historyFile, 'utf8'));
+  return match?.[1] ?? '';
+}
+
+async function historyFileOf(page: Page): Promise<string> {
+  const status = (await field(page, 'status').textContent()) ?? '';
+  return status.split('History: ')[1]?.trim() ?? '';
+}
+
+test('a second run opens a new chat and its reply is complete although identical to the first', async () => {
+  let loads = 0;
+  const server = createServer((_request, response) => {
+    loads += 1;
+    response.setHeader('content-type', 'text/html; charset=utf-8');
+    response.end(REMEMBERING_SITE);
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  const { app, page } = await open({ AIAW_SITE_URL_DEEPSEEK: `http://127.0.0.1:${port}/` });
+  try {
+    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.menu-item[data-kind="deepseek"]').click();
+    await page.locator('[data-room="open"]').click();
+    await expect(page.locator('[data-room="pane"]')).toBeVisible();
+    await field(page, 'prompt').fill('same question');
+    await page.locator('input[data-participant="deepseek"]').check();
+    await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'rounds').fill('1');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(1, 1));
+    const firstFile = await historyFileOf(page);
+    const loadsAfterFirst = loads;
+    expect(firstReplyIn(firstFile)).toBe(SAME_ANSWER.join('\n'));
+    await field(page, 'start').click();
+    await expect(async () => {
+      const file = await historyFileOf(page);
+      expect(file).not.toBe('');
+      expect(file).not.toBe(firstFile);
+    }).toPass({ timeout: 10000 });
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(1, 1));
+    const secondFile = await historyFileOf(page);
+    expect(loads).toBeGreaterThan(loadsAfterFirst);
+    expect(firstReplyIn(secondFile)).toBe(SAME_ANSWER.join('\n'));
+  } finally {
+    await app.close();
+    server.close();
+  }
+});

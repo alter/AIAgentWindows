@@ -261,17 +261,22 @@ describe('participants without an adapter', () => {
         calls.push([item.id, timeoutMs]);
         return Promise.resolve();
       },
+      newChat: (item, timeoutMs) => {
+        calls.push([`new:${item.id}`, timeoutMs]);
+        return Promise.resolve();
+      },
       adapterFor,
     });
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
     const seat = seats(deepseek);
     await seat?.prepare?.(1234, new AbortController().signal);
-    expect(calls).toEqual([['ds-1', 1234]]);
+    await seat?.newChat?.(777, new AbortController().signal);
+    expect(calls).toEqual([['ds-1', 1234], ['new:ds-1', 777]]);
   });
 
   it('the driver error for a missing adapter names the missing adapter, not the chat page', () => {
-    const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, prepare: () => Promise.resolve(), adapterFor: () => null });
+    const seats = createSiteSeats({ agents: () => [], page: () => { throw new Error('unused'); }, prepare: () => Promise.resolve(), newChat: () => Promise.resolve(), adapterFor: () => null });
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
     expect(() => seats(deepseek)).toThrow(/DeepSeek has no site adapter/);

@@ -34,6 +34,7 @@ export interface SiteSeat {
   adapter: SiteAdapter;
   runner: PageRunner;
   prepare?(timeoutMs: number, signal: AbortSignal): Promise<void>;
+  newChat?(timeoutMs: number, signal: AbortSignal): Promise<void>;
 }
 
 export interface RoomDriverDeps {
@@ -125,6 +126,8 @@ class CliDriver implements ParticipantDriver {
 }
 
 class SiteDriver implements ParticipantDriver {
+  private chatRunId: string | null = null;
+
   constructor(
     private readonly seat: SiteSeat,
     private readonly timing: RoomTiming,
@@ -133,6 +136,10 @@ class SiteDriver implements ParticipantDriver {
 
   private async ready(request: TurnRequest): Promise<void> {
     try {
+      if (this.chatRunId !== request.runId) {
+        await this.seat.newChat?.(this.timing.readyMs, request.signal);
+        this.chatRunId = request.runId;
+      }
       await this.seat.prepare?.(this.timing.readyMs, request.signal);
       await waitUntilReady(this.seat.adapter, this.seat.runner, {
         timeoutMs: this.timing.readyMs,

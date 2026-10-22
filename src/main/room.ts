@@ -29,6 +29,7 @@ import {
 export type { RoomEvent, RoomStatus, StepState } from '../shared/room-model';
 
 export interface TurnRequest {
+  runId: string;
   text: string;
   attachPath: string | null;
   historyText: string | null;
@@ -298,6 +299,7 @@ export class Room {
       driver = await this.driver(participant);
       const prompt = buildParticipantPrompt(participant, run.id, seen, phase);
       const request: TurnRequest = {
+        runId: run.id,
         text: prompt.text,
         attachPath: prompt.attachHistory ? run.historyPath : null,
         historyText: prompt.placeHistory ? run.render(seen) : null,
