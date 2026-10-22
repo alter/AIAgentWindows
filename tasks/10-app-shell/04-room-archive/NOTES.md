@@ -62,3 +62,5 @@ Mutation 2: `writeRecord` returns before writing (src/main/room-archive.ts). Bot
       > 71 |   expect(json).toHaveLength(1);
            |                ^
 ```
+
+T06 write set: tests/full/room-archive.spec.ts added (the plan allowed a new spec file; the restart tests need their own launch helper that reuses the profile directory).

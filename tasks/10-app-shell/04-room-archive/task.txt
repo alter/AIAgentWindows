@@ -51,6 +51,7 @@ WRITE-SET
   tests/unit/room-view.test.ts
   tests/unit/room-history.test.ts
   tests/full/room.spec.ts
+  tests/full/room-archive.spec.ts
   tests/fixtures/
   docs/PROJECT.md
   tasks/10-app-shell/04-room-archive/
