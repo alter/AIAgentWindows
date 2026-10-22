@@ -12,6 +12,7 @@ import {
   type RoomEntry,
   type RoomEntryState,
   type RoomEvent,
+  type RoomListItem,
   type PausedSession,
   type RoomMode,
   type RoomParticipant,
@@ -296,4 +297,17 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
     finalizerId: config.finalizerId,
     debugSites: config.debugSites,
   };
+}
+
+export interface RoomListOption {
+  id: string;
+  label: string;
+  disabled: boolean;
+}
+
+export function roomListOption(item: RoomListItem): RoomListOption {
+  if (item.unreadable) return { id: item.id, label: `${item.id} · unreadable`, disabled: true };
+  const first = item.firstPrompt.replace(/\s+/g, ' ').trim();
+  const when = new Date(item.updatedAt).toLocaleString();
+  return { id: item.id, label: `${when} · ${item.status} · ${first === '' ? item.id : first}`, disabled: false };
 }

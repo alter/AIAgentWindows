@@ -72,9 +72,14 @@ export class RoomFeed {
     this.element.scrollTop = this.element.scrollHeight;
   }
 
-  private reset(): void {
+  reset(): void {
     this.element.replaceChildren();
     this.sections.clear();
     this.shown = 0;
+  }
+
+  reload(snapshot: RoomSnapshot): void {
+    this.reset();
+    this.render(snapshot);
   }
 }

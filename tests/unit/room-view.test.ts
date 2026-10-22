@@ -14,6 +14,7 @@ import {
   formToConfig,
   participantAvailability,
   resolveFinalizer,
+  roomListOption,
   roomProgress,
   snapshotFromRecord,
   type RoomFormValues,
@@ -737,5 +738,28 @@ describe('snapshot from a record', () => {
     const config = { ...CONFIG, participants, finalizerId: 'codex', rounds: 2, turnTimeoutMs: 90_000 };
     const result = formToConfig({ ...formFromRecord(record([prompt()], 'done', config)), prompt: 'again' });
     expect(result).toEqual({ ok: true, config: { ...config, prompt: 'again' } });
+  });
+});
+
+describe('roomListOption', () => {
+  const readable = { id: 'r1', unreadable: false as const, createdAt: 1_700_000_000_000, updatedAt: 1_700_000_100_000, status: 'stopped' as const, firstPrompt: 'what is\n  up' };
+
+  it('a readable room can be chosen and shows its status and first prompt', () => {
+    const option = roomListOption(readable);
+    expect(option.id).toBe('r1');
+    expect(option.disabled).toBe(false);
+    expect(option.label).toContain('stopped');
+    expect(option.label).toContain('what is up');
+    expect(option.label).not.toContain('\n');
+  });
+
+  it('an unreadable room is disabled and still identifiable', () => {
+    const option = roomListOption({ id: 'broken-1', unreadable: true });
+    expect(option.disabled).toBe(true);
+    expect(option.label).toContain('broken-1');
+  });
+
+  it('a room with an empty prompt still has a label', () => {
+    expect(roomListOption({ ...readable, firstPrompt: '' }).label.length).toBeGreaterThan(0);
   });
 });

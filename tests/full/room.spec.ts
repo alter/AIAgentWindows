@@ -465,3 +465,29 @@ test('a new entry does not close or rebuild an entry the owner opened', async ()
     await app.close();
   }
 });
+
+test('a finished room is listed, New room clears the feed and the list reopens it for a continuation', async () => {
+  const { app, page } = await open();
+  try {
+    await run(page, 'broadcast', 1, 'archive question');
+    const feedCount = await page.locator('.room-entry').count();
+    expect(feedCount).toBeGreaterThan(0);
+    await expect(field(page, 'rooms').locator('option:not([value=""])')).toHaveCount(1);
+    await field(page, 'new').click();
+    await expect(page.locator('.room-entry')).toHaveCount(0);
+    await field(page, 'rooms').selectOption({ index: 1 });
+    await expect(page.locator('.room-entry')).toHaveCount(feedCount);
+    await expect(field(page, 'prompt')).toHaveValue('');
+    await expect(page.locator('input[data-participant="claude"]')).toBeChecked();
+    const before = (await field(page, 'status').textContent()) ?? '';
+    await field(page, 'prompt').fill('second question');
+    await field(page, 'start').click();
+    await expect(page.locator('.room-entry')).not.toHaveCount(feedCount);
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
+    expect(await page.locator('.room-entry').count()).toBeGreaterThan(feedCount);
+    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(1);
+    expect(before).toContain('History:');
+  } finally {
+    await app.close();
+  }
+});

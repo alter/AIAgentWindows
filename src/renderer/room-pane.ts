@@ -1,8 +1,8 @@
 // room-pane.ts
 import { isCliKind, type Agent } from '../shared/agents';
 import type { PtyDataEvent } from '../shared/ipc';
-import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEvent, type RoomMode } from '../shared/room-model';
-import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, roomProgress, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
+import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEvent, type RoomListItem, type RoomMode } from '../shared/room-model';
+import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, roomListOption, roomProgress, type CarryWhat, type RoomFormValues, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
 import { RoomFeed } from './room-feed';
@@ -32,6 +32,8 @@ export class RoomPane {
   private readonly timeout = el('input');
   private readonly finalizer = el('select');
   private readonly debugSites = el('input');
+  private readonly rooms = el('select', 'room-list');
+  private readonly newRoom = el('button', 'room-button', 'New room');
   private readonly start = el('button', 'room-button', 'Start');
   private readonly stop = el('button', 'room-button stop', 'Stop');
   private readonly progress = el('div', 'room-progress');
@@ -54,6 +56,8 @@ export class RoomPane {
   });
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
   private debugDir: string | null = null;
+  private openedId: string | null = null;
+  private listed: readonly RoomListItem[] = [];
 
   constructor() {
     this.element.hidden = true;
@@ -79,13 +83,14 @@ export class RoomPane {
     this.resume.dataset['room'] = 'resume';
     this.resume.addEventListener('click', () => void api.roomResume());
     this.pause.append(this.pauseNotes, this.terminals, this.resume);
-    this.element.append(el('h2', 'room-title', 'Room'), this.progress, this.feed.element, this.pause, this.controls());
+    this.element.append(el('h2', 'room-title', 'Room'), this.archive(), this.progress, this.feed.element, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
   }
 
   show(): void {
     this.element.hidden = false;
+    void this.refreshList();
   }
 
   hide(): void {
@@ -94,14 +99,17 @@ export class RoomPane {
 
   load(snapshot: RoomSnapshot): void {
     this.snapshot = snapshot;
-    this.renderFeed();
+    this.feed.reload(snapshot);
     this.renderState();
+    void this.refreshList();
+    if (snapshot.roomId !== null && snapshot.phase !== 'running' && this.openedId === null) void this.openRoom(snapshot.roomId);
   }
 
   apply(event: RoomEvent): void {
     this.snapshot = applyRoomEvent(this.snapshot, event);
     this.renderFeed();
     this.renderState();
+    if (event.type === 'finished') void this.refreshList();
   }
 
   terminalData(event: PtyDataEvent): void {
@@ -118,6 +126,76 @@ export class RoomPane {
     }
     if (previous.length > 0) this.target.value = previous;
     this.renderState();
+  }
+
+  private archive(): HTMLElement {
+    const row = el('div', 'room-row room-archive');
+    this.rooms.dataset['room'] = 'rooms';
+    this.newRoom.type = 'button';
+    this.newRoom.dataset['room'] = 'new';
+    this.rooms.addEventListener('change', () => {
+      if (this.rooms.value !== '') void this.openRoom(this.rooms.value);
+    });
+    this.newRoom.addEventListener('click', () => this.onNewRoom());
+    row.append(field('Rooms', this.rooms), this.newRoom);
+    return row;
+  }
+
+  private async refreshList(): Promise<void> {
+    this.listed = await api.roomList().catch(() => []);
+    this.renderList();
+  }
+
+  private renderList(): void {
+    const placeholder = el('option', undefined, this.listed.length === 0 ? 'No saved rooms' : `Saved rooms (${this.listed.length})`);
+    placeholder.value = '';
+    this.rooms.replaceChildren(placeholder);
+    for (const item of this.listed.map(roomListOption)) {
+      const option = el('option', undefined, item.label);
+      option.value = item.id;
+      option.disabled = item.disabled;
+      this.rooms.append(option);
+    }
+    this.rooms.value = this.openedId !== null && this.listed.some((item) => item.id === this.openedId) ? this.openedId : '';
+  }
+
+  private async openRoom(id: string): Promise<void> {
+    this.message.textContent = '';
+    const opened = await api.roomOpen(id);
+    if (!opened.ok) {
+      this.message.textContent = opened.error;
+      this.renderList();
+      return;
+    }
+    this.openedId = id;
+    this.debugDir = null;
+    this.snapshot = opened.snapshot;
+    this.applyForm(opened.form);
+    this.feed.reload(opened.snapshot);
+    this.renderState();
+    this.renderList();
+  }
+
+  private onNewRoom(): void {
+    this.openedId = null;
+    this.debugDir = null;
+    this.message.textContent = '';
+    this.prompt.value = '';
+    this.snapshot = emptyRoomSnapshot();
+    this.feed.reload(this.snapshot);
+    this.renderState();
+    this.renderList();
+  }
+
+  private applyForm(form: RoomFormValues): void {
+    for (const [id, input] of this.boxes) input.checked = form.checked.includes(id) && !input.disabled;
+    this.prompt.value = form.prompt;
+    this.mode.value = form.mode;
+    this.rounds.value = form.rounds;
+    this.timeout.value = form.timeoutMinutes;
+    this.debugSites.checked = form.debugSites ?? false;
+    this.renderFinalizer();
+    this.finalizer.value = resolveFinalizer(this.checkedIds(), form.finalizerId ?? '');
   }
 
   private controls(): HTMLElement {
@@ -212,7 +290,7 @@ export class RoomPane {
       return;
     }
     this.debugDir = null;
-    const started = await api.roomStart(result.config);
+    const started = await api.roomStart(result.config, this.openedId ?? undefined);
     if (!started.ok) this.message.textContent = started.error;
     else this.debugDir = started.debugDir;
     this.renderState();
@@ -279,6 +357,9 @@ export class RoomPane {
     const { phase, completed, total, running, historyPath, paused } = this.snapshot;
     const busy = phase === 'running';
     this.start.disabled = busy;
+    this.start.textContent = this.openedId === null ? 'Start' : 'Continue';
+    this.rooms.disabled = busy;
+    this.newRoom.disabled = busy;
     this.stop.disabled = !busy;
     this.prompt.disabled = busy;
     this.mode.disabled = busy;

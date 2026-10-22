@@ -306,6 +306,7 @@ body {
 .room-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .room-row label { display: inline-flex; align-items: center; gap: 6px; }
 .room-row input[type="number"] { width: 64px; }
+.room-list { max-width: min(520px, 60vw); text-overflow: ellipsis; }
 .room-row label.unavailable { opacity: 0.55; }
 .room-unavailable { font-size: 11px; }
 .room-row select, .room-row input[type="number"] { font: inherit; }
