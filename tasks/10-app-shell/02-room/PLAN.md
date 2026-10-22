@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -212,3 +212,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 16:45 T35 done: anchor walks the key's occurrences last to first and takes the last one a reply follows (else as before), prefix lines cut with an ellipsis count as echo, trace `keyHits`/`anchorRank`; red first (generic-adapter navigator: full variant timed out in round 2, ellipsis variant leaked the navigator item into the reply; reply-lines 7 failed on the old file), vitest generic-adapter+reply-lines+site-adapters 111/111, fast tier 11/11 (FASTRUN-2026-10-22-164103733296), electron-smoke 25/25, integrity 0 findings; residual risks in NOTES.md
 - 2026-10-22 coordinator: T35 verified (vitest site-adapters+generic-adapter+reply-lines 111/111, fast tier with shellcheck and gitleaks exit 0, electron-smoke 25/25 — this run); the navigator cause is inferred from the sanitized capture, the owner's next run's keyHits/anchorRank confirms it. Paused on AC7.
 - 2026-10-22 17:20 T36 done: echo hits behind a file card (mid-line) are walked after the line-start hits, tail starts at the key; `hitsAtLineStart` in every turn trace; `turn-lines` record (lengths and flags only) on timeout and no-response; "N web pages" is a UI label; red first (reply-lines 11 failed on the old file, card+navigator round 2 timed out on the old code); vitest reply-lines+generic-adapter+site-adapters 127/127, fast tier 11/11 (FASTRUN-2026-10-22-171143140133), electron-smoke 25/25
+- 2026-10-22 coordinator: T36 verified (vitest reply-lines+generic-adapter+site-adapters 127/127, fast tier with shellcheck and gitleaks exit 0, electron-smoke 25/25 — this run); the inline file card is still a hypothesis for the real page, the next run's hitsAtLineStart/keyHits or a turn-lines record settles it. Paused on AC7.
