@@ -1,6 +1,6 @@
 // reply-lines.test.ts
 import { describe, expect, it } from 'vitest';
-import { anchorAfterEcho, echoTails, extractAnchoredReply, extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
+import { anchorAfterEcho, describeLines, echoTails, extractAnchoredReply, extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
 import { stripEntryMarkerLines } from '../../src/shared/room-history';
 
 const PROMPT = ['Intro line that is long enough', '<<<entry-abc author="Owner" kind=prompt>>>', 'Ask', '<<<end-abc>>>'].join('\n');
@@ -80,7 +80,7 @@ describe('stripEntryMarkerLines', () => {
 });
 
 describe('UI labels', () => {
-  it.each(['New chat', 'AI-generated, for reference only', 'Deep thinking', 'Smart Search', 'Thought for 3 seconds', 'Thinking...', 'ChatGPT can make mistakes. Check important info.'])(
+  it.each(['13 web pages', 'Read 13 web pages', 'searched 5 Web Pages', 'Found 1 web pages', 'New chat', 'AI-generated, for reference only', 'Deep thinking', 'Smart Search', 'Thought for 3 seconds', 'Thinking...', 'ChatGPT can make mistakes. Check important info.'])(
     'knows %s',
     (line) => {
       expect(isUiLabel(line)).toBe(true);
@@ -92,6 +92,8 @@ describe('UI labels', () => {
     'Thinking about the design, the first option is simpler',
     'Language models can make mistakes in arithmetic, so the final figure should be recomputed by hand before it goes anywhere.',
     'Copy the file first',
+    'Found 13 web pages worth reading about the topic',
+    'About 13 web pages',
   ])('keeps the answer line %s', (line) => {
     expect(isUiLabel(line)).toBe(false);
   });
@@ -149,14 +151,14 @@ describe('anchorAfterEcho', () => {
     );
   });
 
-  it('prefers the line that starts with the prompt over a later reply line that quotes it', () => {
+  it('prefers the line that starts with the prompt over a later reply line that quotes it mid-line', () => {
     const page = `Old title\n${ASK}\nMy answer begins here\nAs you wrote: ${ASK.replace(/\s+/g, ' ')}`;
     expect(anchorAfterEcho(page, ASK)).toBe(`${ASK}\nMy answer begins here\nAs you wrote: ${ASK.replace(/\s+/g, ' ')}`);
   });
 
-  it('falls back to the last mention when no line starts with the prompt', () => {
+  it('starts the tail of a mid-line hit at the key, the part of the line before it is not reply', () => {
     expect(anchorAfterEcho('Title\nYou said: hello there my friend\nAnswer', 'hello there my friend')).toBe(
-      'You said: hello there my friend\nAnswer',
+      'hello there my friend\nAnswer',
     );
   });
 
@@ -177,7 +179,7 @@ describe('echoTails', () => {
   it('is empty without the key and gives one tail for a key mentioned only inside a line', () => {
     expect(echoTails('nothing here', ASK)).toEqual([]);
     expect(echoTails('Title\nYou said: hello there my friend\nAnswer', 'hello there my friend')).toEqual([
-      'You said: hello there my friend\nAnswer',
+      'hello there my friend\nAnswer',
     ]);
   });
 });
@@ -220,5 +222,63 @@ describe('anchored reply with a navigator that repeats the prompt', () => {
 
   it('reports no hits and no rank without an echo', () => {
     expect(extractAnchoredReply('Sidebar title\nSomething else', '', ASK)).toMatchObject({ echoFound: false, keyHits: 0, anchorRank: -1 });
+  });
+});
+
+describe('anchored reply when the echo sits mid-line behind a file card', () => {
+  const ASK = 'You are DeepSeek in a room where several agents take turns.\nCompare the two designs.';
+  const ONE_LINE = ASK.replace(/\s+/g, ' ');
+  const FIRST = 'You are DeepSeek in a room where several agents take turns.';
+  const ANSWER = 'The first design is simpler and the second scales better.';
+  const CARD_LINE = `history.md 14 KB${FIRST}`;
+
+  it('anchors on the mid-line echo when the navigator items after the reply are the only line-start hits', () => {
+    const page = [CARD_LINE, 'Compare the two designs.', ANSWER, ONE_LINE, ONE_LINE].join('\n');
+    const found = extractAnchoredReply(page, '', ASK);
+    expect(found).toMatchObject({ reply: ANSWER, echoFound: true, keyHits: 3, anchorRank: 2, hitsAtLineStart: 2 });
+  });
+
+  it('does not put the file card of the echo line into the reply', () => {
+    const page = [CARD_LINE, 'Compare the two designs.', ANSWER].join('\n');
+    const found = extractAnchoredReply(page, '', ASK);
+    expect(found.reply).toBe(ANSWER);
+    expect(found.hitsAtLineStart).toBe(0);
+  });
+
+  it('counts the hits at a line start separately from the mid-line ones', () => {
+    expect(extractAnchoredReply(`${ASK}\n${ANSWER}\n${CARD_LINE}`, '', ASK)).toMatchObject({ keyHits: 2, hitsAtLineStart: 1 });
+  });
+});
+
+describe('describeLines', () => {
+  const ASK = 'You are DeepSeek in a room where several agents take turns.\nCompare the two designs.';
+  const SECRET = 'private sentence that must never reach a log';
+
+  it('describes every line by length and flags only, never by text', () => {
+    const before = `${SECRET} earlier\nNew chat`;
+    const page = [`${SECRET} earlier`, 'New chat', `card${ASK.split('\n')[0]}`, 'Compare the two designs.', SECRET, 'Thinking...'].join('\n');
+    const report = describeLines(page, before, ASK);
+    expect(report.lines).toBe(6);
+    expect(report.listed).toBe(6);
+    expect(report.hitsAtLineStart).toBe(0);
+    const length = (text: string): number => text.length;
+    expect(report.entries.split(',')).toEqual([
+      `${length(`${SECRET} earlier`)}:0001`,
+      '8:0011',
+      `${length(`card${ASK.split('\n')[0]}`)}:2000`,
+      '24:0100',
+      `${length(SECRET)}:0000`,
+      '11:0010',
+    ]);
+    expect(JSON.stringify(report)).not.toContain('private');
+    expect(JSON.stringify(report)).not.toContain('Compare');
+  });
+
+  it('keeps the last 400 lines when the page is longer', () => {
+    const page = Array.from({ length: 450 }, (_, n) => `line number ${n}`).join('\n');
+    const report = describeLines(page, '', ASK);
+    expect(report.lines).toBe(450);
+    expect(report.listed).toBe(400);
+    expect(report.entries.split(',')).toHaveLength(400);
   });
 });

@@ -88,6 +88,11 @@
         for (const line of lines) {
           const row = document.createElement('p');
           row.textContent = line;
+          if (query.has('card') && role === 'user' && node.childElementCount === 0) {
+            const card = document.createElement('span');
+            card.textContent = 'history.md 14 KB';
+            row.prepend(card);
+          }
           node.appendChild(row);
         }
         log.appendChild(node);
@@ -134,7 +139,7 @@
         const row = document.createElement('p');
         reply.appendChild(row);
         const fixed = query.get('reply');
-        const chunks = fixed === null ? [(query.has('numbered') ? 'ECHO ' + window.submissions + ': ' : 'ECHO: ') + text, ' part-2', ' part-3'] : fixed.split('|');
+        const chunks = fixed === null && query.has('plain') ? ['Reply ' + window.submissions + ' on the design, its first half', ' and its second half'] : fixed === null ? [(query.has('numbered') ? 'ECHO ' + window.submissions + ': ' : 'ECHO: ') + text, ' part-2', ' part-3'] : fixed.split('|');
         let index = 0;
         const step = () => {
           if (fixed === null) row.textContent += chunks[index];

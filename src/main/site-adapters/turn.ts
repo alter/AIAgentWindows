@@ -13,6 +13,7 @@ export interface TurnOptions {
   startGraceMs: number;
   signal?: AbortSignal;
   trace?: (fields: Record<string, SiteLogValue>) => void;
+  diagnose?: (fields: Record<string, SiteLogValue>) => void;
 }
 
 export const DEFAULT_TURN_OPTIONS: TurnOptions = {
@@ -94,7 +95,12 @@ export async function runAdapterTurn(
     report({ outcome: 'reply', replyChars: reply.length });
     return reply;
   } catch (error) {
-    report({ outcome: 'failed', code: error instanceof SiteAdapterError ? error.code : 'error', replyChars: 0 });
+    const code = error instanceof SiteAdapterError ? error.code : 'error';
+    report({ outcome: 'failed', code, replyChars: 0 });
+    if (code === 'timeout' || code === 'no-response') {
+      const lines = adapter.lineReport?.();
+      if (lines) options.diagnose?.({ turn, code, ...lines });
+    }
     throw error;
   }
 }

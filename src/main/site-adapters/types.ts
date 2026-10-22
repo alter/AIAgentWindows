@@ -26,6 +26,7 @@ export interface SiteAdapter {
   isIdle?(runner: PageRunner): Promise<boolean>;
   echoSeen?(): boolean;
   trace?(): Readonly<Record<string, SiteLogValue>>;
+  lineReport?(): Readonly<Record<string, SiteLogValue>> | null;
 }
 
 export type SiteAdapterErrorCode =

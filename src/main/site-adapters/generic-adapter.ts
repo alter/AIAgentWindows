@@ -11,7 +11,7 @@ import {
   genericStateScript,
 } from './generic-scripts';
 import { callPage } from './page-call';
-import { extractAnchoredReply, isAnswerStart, type ReplyDrops } from './reply-lines';
+import { describeLines, extractAnchoredReply, isAnswerStart, type ReplyDrops } from './reply-lines';
 import { SiteAdapterError, type PageRunner, type SiteAdapter } from './types';
 
 export interface GenericOptions {
@@ -63,6 +63,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let echoFound = false;
   let keyHits = 0;
   let anchorRank = -1;
+  let hitsAtLineStart = 0;
+  let lastText = '';
   let visibleComposers = 0;
   let composerClearedMs = -1;
   let lastSeen: string | null = null;
@@ -93,6 +95,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     echoFound = found.echoFound;
     keyHits = found.keyHits;
     anchorRank = found.anchorRank;
+    hitsAtLineStart = found.hitsAtLineStart;
+    lastText = value.text;
     const now = Date.now();
     if (value.stop) stopSeen = true;
     textLenAtEnd = value.text.length;
@@ -142,6 +146,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       echoFound = false;
       keyHits = 0;
       anchorRank = -1;
+      hitsAtLineStart = 0;
+      lastText = '';
       visibleComposers = 0;
       composerClearedMs = -1;
       drops = NO_DROPS;
@@ -211,6 +217,7 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         echoFound,
         keyHits,
         anchorRank,
+        hitsAtLineStart,
         visibleComposers,
         firstGrowthMs,
         stopSeen,
@@ -223,6 +230,10 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         droppedMarker: drops.marker,
         droppedLabel: drops.label,
       };
+    },
+    lineReport(): Readonly<Record<string, SiteLogValue>> | null {
+      if (!submitted || prompt === null) return null;
+      return { ...describeLines(lastText, before, prompt) };
     },
     async composerReady(runner) {
       try {

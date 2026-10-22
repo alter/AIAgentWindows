@@ -518,14 +518,97 @@ describe('generic adapter: a question navigator after the composer repeats every
   }
 
   it.each([
-    ['full', 3, 2],
-    ['ellipsis', 1, 0],
+    ['full', 4, 2],
+    ['ellipsis', 2, 0],
   ])('reads the newest reply in the second round when the navigator holds the prompt (%s)', async (kind, hits, rank) => {
     const { first, second, traces } = await twoRounds(`?nomain=1&nostop=1&numbered=1&nav=${kind}`);
     expect(first).toContain('ECHO 1:');
     expect(second).toContain('ECHO 2:');
     expect(second).toBe(`ECHO 2: ${ROOM_PROMPT.replace(/\s+/g, ' ')} part-2 part-3`);
     expect(traces[1]).toMatchObject({ outcome: 'reply', echoFound: true, keyHits: hits, anchorRank: rank });
+  });
+});
+
+describe('generic adapter: the echo sits mid-line behind a file card and a navigator follows', () => {
+  const ROOM_PROMPT = 'Room so far, continue the discussion with a new point.\nKeep it short and concrete.';
+
+  async function twoRounds(search: string) {
+    const page = openPage(search);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    const options = { ...FAST, timeoutMs: 5000, trace: (fields: Record<string, unknown>) => traces.push(fields) };
+    const first = await runAdapterTurn(adapter, page.runner, ROOM_PROMPT, options);
+    const second = await runAdapterTurn(adapter, page.runner, ROOM_PROMPT, options).then(
+      (reply) => reply,
+      (error: unknown) => error,
+    );
+    return { first, second, traces };
+  }
+
+  it.each([
+    ['full', 3],
+    ['ellipsis', 1],
+  ])('reads the newest reply in the second round (navigator %s)', async (kind, hits) => {
+    const { first, second, traces } = await twoRounds(`?nomain=1&nostop=1&plain=1&card=1&nav=${kind}`);
+    expect(first).toBe('Reply 1 on the design, its first half and its second half');
+    expect(second).toBe('Reply 2 on the design, its first half and its second half');
+    expect(traces[0]).toMatchObject({ outcome: 'reply', hitsAtLineStart: 0 });
+    expect(traces[1]).toMatchObject({ outcome: 'reply', echoFound: true });
+    expect(traces[1]).toMatchObject({ keyHits: hits });
+  });
+});
+
+describe('generic adapter: a failed turn writes one record about the lines, never their text', () => {
+  const SEEN_TEXT = 'Welcome. Ask me anything.';
+
+  async function failed(search: string, prompt: string, options: Record<string, number>) {
+    const page = openPage(search);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const records: Array<Record<string, unknown>> = [];
+    const error = await runAdapterTurn(adapter, page.runner, prompt, {
+      ...FAST,
+      ...options,
+      diagnose: (fields) => records.push(fields),
+    }).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    return { error, records };
+  }
+
+  it('on no-response lists length and flags per line and the line-start hits', async () => {
+    const { error, records } = await failed('?noecho=1&silent=1', 'secret prompt words here', { startGraceMs: 150 });
+    expect(error).toMatchObject({ code: 'no-response' });
+    expect(records).toHaveLength(1);
+    const record = records[0] ?? {};
+    expect(record).toMatchObject({ code: 'no-response', hitsAtLineStart: 0 });
+    expect(String(record['entries'])).toMatch(/^\d+:\d{4}(,\d+:\d{4})*$/);
+    expect(Number(record['lines'])).toBe(Number(record['listed']));
+    expect(JSON.stringify(record)).not.toContain('secret');
+    expect(JSON.stringify(record)).not.toContain('Welcome');
+    expect(JSON.stringify(record)).not.toContain(SEEN_TEXT);
+  });
+
+  it('on timeout flags the echo line as key and echo and the old line as seen', async () => {
+    const { error, records } = await failed('?stall=1&nostop=1', 'secret prompt words here', { timeoutMs: 600 });
+    expect(error).toMatchObject({ code: 'timeout' });
+    expect(records).toHaveLength(1);
+    const entries = String(records[0]?.['entries']).split(',');
+    expect(entries.some((entry) => entry.endsWith(':1100') || entry.endsWith(':2100'))).toBe(true);
+    expect(entries.some((entry) => entry.endsWith('1'))).toBe(true);
+    expect(JSON.stringify(records)).not.toContain('secret');
+  });
+
+  it('writes no record for a reply or for another failure', async () => {
+    const page = openPage('?nostop=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const records: Array<Record<string, unknown>> = [];
+    await runAdapterTurn(adapter, page.runner, 'question', { ...FAST, diagnose: (fields) => records.push(fields) });
+    const refused = openPage('?noenter=1&sendoff=1');
+    await expect(
+      runAdapterTurn(createGenericAdapter('fixture', OPTIONS), refused.runner, 'question', { ...FAST, diagnose: (fields) => records.push(fields) }),
+    ).rejects.toMatchObject({ code: 'not-submitted' });
+    expect(records).toEqual([]);
   });
 });
 

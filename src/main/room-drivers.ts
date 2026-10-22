@@ -169,6 +169,7 @@ class SiteDriver implements ParticipantDriver {
       timeoutMs: request.timeoutMs,
       signal: request.signal,
       trace: (fields) => this.log(this.seat.adapter.site, 'turn', fields),
+      diagnose: (fields) => this.log(this.seat.adapter.site, 'turn-lines', fields),
     });
     return withoutMarkers(reply);
   }
