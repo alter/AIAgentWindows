@@ -390,12 +390,37 @@ describe('roomProgress', () => {
   it('a done run announces the final answer and its author', () => {
     const events: RoomEvent[] = [
       BEGIN,
-      { type: 'entry', roomId: 'r1', entry: entry('final', 'answer', 'Claude Code') },
+      { type: 'entry', roomId: 'r1', entry: { ...entry('final', 'answer', 'Claude Code'), authorId: 'a' } },
       step('a', 'replied', 5),
       { type: 'finished', roomId: 'r1', status: 'done' },
     ];
     expect(roomProgress(run(events))?.banner).toEqual({ tone: 'done', text: 'Done \u2014 final answer from Claude Code' });
     expect(roomProgress(run(events))?.remainingText).toBe('0 turns left');
+  });
+
+  describe('final turn handed to another participant', () => {
+    const afterRounds = [
+      BEGIN,
+      step('a', 'running', 0), step('a', 'replied', 1), step('b', 'running', 1), step('b', 'replied', 2),
+      step('a', 'running', 2), step('a', 'replied', 3), step('b', 'running', 3), step('b', 'replied', 4),
+      step('a', 'running', 4), step('a', 'failed', 5),
+    ];
+
+    it('shows the finalizer and the stand-in, and names the hand-over in the headline', () => {
+      const events = [...afterRounds, step('b', 'running', 5)];
+      expect(chips(events)).toEqual([['a', 'error'], ['b', 'running']]);
+      expect(roomProgress(run(events))?.headline).toBe('Final: Codex (finalizer Claude Code failed)');
+    });
+
+    it('a done run says who gave the final answer and that the finalizer failed', () => {
+      const events: RoomEvent[] = [
+        ...afterRounds,
+        { type: 'entry', roomId: 'r1', entry: { ...entry('final', 'answer', 'Codex'), authorId: 'b' } },
+        step('b', 'replied', 6),
+        { type: 'finished', roomId: 'r1', status: 'done' },
+      ];
+      expect(roomProgress(run(events))?.banner).toEqual({ tone: 'warn', text: 'Done \u2014 final by Codex (finalizer Claude Code failed)' });
+    });
   });
 
   it('a done run without a final entry says the finalizer failed', () => {

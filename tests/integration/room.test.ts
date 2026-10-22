@@ -223,6 +223,8 @@ describe('room relay', () => {
       'b:error',
       'c:reply',
       'a:error',
+      'room:error',
+      'c:final',
     ]);
     expect(result.entries[2]?.text).toBe('no session for Codex');
     await t.room.start(config([B])).done;
@@ -677,7 +679,7 @@ describe('room with stub CLIs', () => {
     const room = new Room({ roomsDir, driverFor: drivers.factory });
     rooms.push(room);
     const first = await room.start(config([A, B], { turnTimeoutMs: 1000 })).done;
-    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error']);
+    expect(first.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error', 'room:error', 'b:final']);
     expect(first.entries[1]?.text).toContain('did not end');
     delete extra['a'];
     const second = await room.start(config([A], { turnTimeoutMs: 10000 })).done;
@@ -742,7 +744,7 @@ describe('room with stub CLIs', () => {
   });
 
   it('runs a turn without the login shell when told to, and through it otherwise', async () => {
-    const env = { PATH: process.env.PATH, SHELL: path.join(dir, 'no-such-shell'), AIAW_CLAUDE_BIN: STUB, AIAW_STUB_REPLY_DELAY_MS: '10' };
+    const env = { PATH: process.env.PATH, SHELL: path.join(dir, 'no-such-shell'), AIAW_CLAUDE_BIN: STUB, AIAW_STUB_REPLY_DELAY_MS: '10', CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config') };
     const run = async (loginShell: boolean): Promise<string[]> => {
       const drivers = createRoomDrivers({ cwd: roomsDir, sharedDir: dir, platform: 'darwin', envFor: () => env, siteFor: () => null, loginShell, timing: { killGraceMs: 200 } });
       const room = new Room({ roomsDir, driverFor: drivers.factory });
@@ -767,7 +769,7 @@ describe('room with stub CLIs', () => {
     rooms.push(room);
     const result = await room.start(config([A, B], { turnTimeoutMs: 10000 })).done;
     await room.shutdown();
-    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error']);
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'a:error', 'room:error', 'b:final']);
     expect(result.entries[1]?.text).toContain('could not be started');
   });
 });
@@ -1145,11 +1147,57 @@ describe('room finalizer', () => {
     expect(progress[progress.length - 1]).toMatchObject({ completed: 4, total: 4, participantId: 'c' });
   });
 
-  it('a failing finalizer leaves an error entry and the run still ends done', async () => {
+  it('a failing finalizer leaves an error entry, the next participant gives the final answer and the run ends done', async () => {
     const t = rig({ a: (_request, call) => (call > 1 ? Promise.reject(new Error('no final')) : Promise.resolve('first')) });
     const result = await t.room.start(config([A, B])).done;
     expect(result.status).toBe('done');
-    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply', 'b:reply', 'a:error']);
+    expect(result.entries.map((entry) => `${entry.authorId}:${entry.kind}`)).toEqual(['owner:prompt', 'a:reply', 'b:reply', 'a:error', 'room:error', 'b:final']);
+  });
+
+  describe('fallback when the finalizer fails', () => {
+    const fails: Behaviour = (_request, call) => (call > 1 ? Promise.reject(new Error('no final')) : Promise.resolve('c first'));
+    const authors = (entries: readonly { authorId: string; kind: string }[]): string[] => entries.map((entry) => `${entry.authorId}:${entry.kind}`);
+
+    it('hands the final turn to Claude Code first, marks the feed and counts the extra step', async () => {
+      const t = rig({ c: fails });
+      const result = await t.room.start(config([B, A, C], { finalizerId: 'c' })).done;
+      expect(result.status).toBe('done');
+      expect(authors(result.entries)).toEqual(['owner:prompt', 'b:reply', 'a:reply', 'c:reply', 'c:error', 'room:error', 'a:final']);
+      expect(result.entries[5]?.text).toBe('Final by Claude Code (finalizer ChatGPT failed)');
+      const progress = t.events.filter((event) => event.type === 'progress');
+      expect(progress[progress.length - 1]).toMatchObject({ participantId: 'a', state: 'replied', completed: 5, total: 5 });
+    });
+
+    it('without Claude Code takes the next participant that answered in the last round', async () => {
+      const t = rig({ c: fails });
+      const result = await t.room.start(config([B, C], { finalizerId: 'c' })).done;
+      expect(authors(result.entries)).toEqual(['owner:prompt', 'b:reply', 'c:reply', 'c:error', 'room:error', 'b:final']);
+    });
+
+    it('skips a participant that failed in the last round', async () => {
+      const t = rig({ a: () => Promise.reject(new Error('down')), c: fails });
+      const result = await t.room.start(config([A, B, C], { finalizerId: 'c' })).done;
+      expect(authors(result.entries)).toEqual(['owner:prompt', 'a:error', 'b:reply', 'c:reply', 'c:error', 'room:error', 'b:final']);
+    });
+
+    it('moves on to the next candidate when the fallback fails too, and ends done without a final entry when none is left', async () => {
+      const t = rig({ a: (_request, call) => (call > 1 ? Promise.reject(new Error('a down')) : Promise.resolve('a first')), c: fails });
+      const result = await t.room.start(config([A, B, C], { finalizerId: 'c' })).done;
+      expect(result.status).toBe('done');
+      expect(authors(result.entries)).toEqual([
+        'owner:prompt', 'a:reply', 'b:reply', 'c:reply', 'c:error', 'room:error', 'a:error', 'room:error', 'b:final',
+      ]);
+      const none = rig({ a: (_request, call) => (call > 1 ? Promise.reject(new Error('down')) : Promise.resolve('first')) });
+      const lone = await none.room.start(config([A])).done;
+      expect(authors(lone.entries)).toEqual(['owner:prompt', 'a:reply', 'a:error']);
+    });
+
+    it('a successful finalizer needs no fallback', async () => {
+      const t = rig();
+      const result = await t.room.start(config([A, B, C], { finalizerId: 'c' })).done;
+      expect(result.entries.some((entry) => entry.authorId === 'room')).toBe(false);
+      expect(t.trace).toEqual(['a', 'b', 'c', 'c']);
+    });
   });
 
   it('a stopped run gets no final turn', async () => {

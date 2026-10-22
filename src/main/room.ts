@@ -116,11 +116,18 @@ function abortion(signal: AbortSignal): Promise<'aborted'> {
   });
 }
 
+function fallbackFinalizers(run: RunState, lastRound: readonly RoomEntry[]): RoomParticipant[] {
+  const answered = new Set(lastRound.filter((entry) => entry.kind === 'reply').map((entry) => entry.authorId));
+  const candidates = run.config.participants.filter((participant) => participant.id !== run.finalizer.id && answered.has(participant.id));
+  return [...candidates.filter((participant) => participant.kind === 'claude'), ...candidates.filter((participant) => participant.kind !== 'claude')];
+}
+
 class RunState {
   readonly entries: RoomEntry[] = [];
   readonly controller = new AbortController();
   completed = 0;
   chars = 0;
+  total: number;
   readonly waiting = new Set<() => void>();
   readonly finalizer: RoomParticipant;
   private nonce: string | null = null;
@@ -130,9 +137,10 @@ class RunState {
     readonly id: string,
     readonly historyPath: string,
     readonly config: RoomConfig,
-    readonly total: number,
+    total: number,
     private readonly random: (() => string) | undefined,
   ) {
+    this.total = total;
     this.finalizer = config.participants.find((participant) => participant.id === config.finalizerId) ?? config.participants[0] ?? FALLBACK_FINALIZER;
   }
 
@@ -226,7 +234,7 @@ export class Room {
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
       else await this.broadcast(run);
-      if (!run.signal.aborted) await this.step(run, run.finalizer, [...run.entries], 'final');
+      if (!run.signal.aborted) await this.finalize(run);
       if (run.signal.aborted) {
         status = 'stopped';
         this.append(run, ROOM_ID, ROOM_LABEL, 'error', STOP_TEXT);
@@ -239,6 +247,19 @@ export class Room {
       this.emit({ type: 'finished', roomId: run.id, status });
     }
     return { roomId: run.id, historyPath: run.historyPath, status, entries: [...run.entries] };
+  }
+
+  private async finalize(run: RunState): Promise<void> {
+    const lastRound = run.entries
+      .filter((entry) => entry.authorId !== OWNER_ID && entry.authorId !== ROOM_ID)
+      .slice(-run.config.participants.length);
+    if (await this.step(run, run.finalizer, [...run.entries], 'final')) return;
+    for (const candidate of fallbackFinalizers(run, lastRound)) {
+      if (run.signal.aborted) return;
+      this.append(run, ROOM_ID, ROOM_LABEL, 'error', `Final by ${candidate.label} (finalizer ${run.finalizer.label} failed)`);
+      run.total += 1;
+      if (await this.step(run, candidate, [...run.entries], 'final')) return;
+    }
   }
 
   private async relay(run: RunState): Promise<void> {
@@ -278,14 +299,15 @@ export class Room {
     return driver;
   }
 
-  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase): Promise<void> {
+  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase): Promise<boolean> {
     this.progress(run, participant, 'running');
     const outcome = await this.turn(run, participant, seen, phase);
-    if (outcome.kind === 'aborted') return;
+    if (outcome.kind === 'aborted') return false;
     const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
     this.append(run, participant.id, participant.label, kind, outcome.text);
     await run.flushed();
     this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : outcome.timedOut === true ? 'timeout' : 'failed');
+    return outcome.kind === 'reply';
   }
 
   private async turn(

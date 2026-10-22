@@ -165,6 +165,9 @@ function finishedBanner(snapshot: RoomSnapshot, plan: RoomPlan, finalizerLabel: 
   if (snapshot.phase === 'failed') return { tone: 'failed', text: 'Failed' };
   if (snapshot.phase !== 'done') return null;
   const final = snapshot.entries.find((entry) => entry.kind === 'final');
+  if (final !== undefined && final.authorId !== plan.finalizerId) {
+    return { tone: 'warn', text: `Done \u2014 final by ${final.label} (finalizer ${finalizerLabel} failed)` };
+  }
   if (final !== undefined) return { tone: 'done', text: `Done \u2014 final answer from ${final.label}` };
   return { tone: 'warn', text: `Done \u2014 no final answer (${finalizerLabel} failed)` };
 }
@@ -176,9 +179,12 @@ export function roomProgress(snapshot: RoomSnapshot): RoomProgress | null {
   const finalizerLabel = finalizer?.label ?? plan.finalizerId;
   const inFinal = snapshot.round > plan.rounds;
   const remaining = Math.max(0, snapshot.total - snapshot.completed);
-  const shown = inFinal ? plan.participants.filter((participant) => participant.id === plan.finalizerId) : plan.participants;
+  const active = plan.participants.filter((participant) => (snapshot.chips[participant.id] ?? 'waiting') !== 'waiting');
+  const shown = inFinal ? (active.length > 0 ? active : plan.participants.filter((participant) => participant.id === plan.finalizerId)) : plan.participants;
+  const handedOver = inFinal ? shown.find((participant) => participant.id !== plan.finalizerId && snapshot.chips[participant.id] === 'running') : undefined;
+  const finalHeadline = handedOver === undefined ? `Final: ${finalizerLabel}` : `Final: ${handedOver.label} (finalizer ${finalizerLabel} failed)`;
   return {
-    headline: inFinal ? `Final: ${finalizerLabel}` : `Round ${snapshot.round} of ${plan.rounds}`,
+    headline: inFinal ? finalHeadline : `Round ${snapshot.round} of ${plan.rounds}`,
     remaining,
     remainingText: turnsText(remaining),
     chips: shown.map((participant) => ({ id: participant.id, label: participant.label, state: snapshot.chips[participant.id] ?? 'waiting' })),

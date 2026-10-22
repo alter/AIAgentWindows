@@ -33,9 +33,12 @@ function valueAfter(argv, flag) {
   return index < 0 ? undefined : argv[index + 1];
 }
 
+function sessionHome(kind) {
+  return kind === 'claude' ? process.env.CLAUDE_CONFIG_DIR : process.env.CODEX_HOME;
+}
+
 function markerFile(kind, id) {
-  const home = kind === 'claude' ? process.env.CLAUDE_CONFIG_DIR : process.env.CODEX_HOME;
-  return path.join(home ?? '.', 'stub-sessions', id);
+  return path.join(sessionHome(kind), 'stub-sessions', id);
 }
 
 function remember(kind, id) {
@@ -135,6 +138,10 @@ async function runCodex(argv, prompt) {
 }
 
 export async function runPrint(kind, argv) {
+  if (!sessionHome(kind)) {
+    process.stderr.write(`stub: ${kind === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME'} must name the session directory\n`);
+    return 3;
+  }
   const prompt = await readStdin();
   logInvocation(argv, prompt);
   const code = await (kind === 'claude' ? runClaude(argv, prompt) : runCodex(argv, prompt));
