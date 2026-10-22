@@ -16,8 +16,8 @@ const OPTIONS = { quietMs: 130, confirmMs: 300, confirmPollMs: 10, maxReplyChars
 type Page = { dom: JSDOM; runner: PageRunner; win: JSDOM['window'] & Record<string, number> };
 const opened: JSDOM[] = [];
 
-function openPage(search = ''): Page {
-  const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: `https://fixture.test/${search}` });
+function openPage(search = '', visual = false): Page {
+  const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: `https://fixture.test/${search}`, pretendToBeVisual: visual });
   opened.push(dom);
   const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
   return { dom, runner, win: dom.window as Page['win'] };
@@ -264,12 +264,28 @@ describe('generic adapter: turn', () => {
     expect(await runAdapterTurn(adapter, page.runner, 'limit', FAST)).toBe('ECHO: limit ');
   });
 
-  it('fails with no-response when the page never answers', async () => {
-    const page = openPage('?silent=1');
+  it('fails with no-response when the page never shows the prompt', async () => {
+    const page = openPage('?noecho=1&silent=1');
     const adapter = createGenericAdapter('fixture', OPTIONS);
-    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, startGraceMs: 250 })).rejects.toMatchObject({
+    await expect(runAdapterTurn(adapter, page.runner, 'hi there', { ...FAST, startGraceMs: 250 })).rejects.toMatchObject({
       code: 'no-response',
     });
+  });
+
+  it('keeps waiting past the start grace once the echo of the prompt is on the page and times out only at the turn timeout', async () => {
+    const page = openPage('?silent=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const begun = Date.now();
+    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, startGraceMs: 150, timeoutMs: 700 })).rejects.toMatchObject({
+      code: 'timeout',
+    });
+    expect(Date.now() - begun).toBeGreaterThanOrEqual(650);
+  });
+
+  it('returns the reply of a page that starts answering after the start grace but has shown the echo', async () => {
+    const page = openPage(`?nostop=1&think=700&reply=${STREAMED_URL}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'question', { ...FAST, startGraceMs: 250, timeoutMs: 8000 })).toBe(STREAMED);
   });
 
   it('times out when the reply keeps growing', async () => {
@@ -316,8 +332,8 @@ describe('generic adapter: slow starts, busy pages, locked composers', () => {
   it('does not take a label that appears on submit for the start of an answer', async () => {
     const page = openPage('?sidebar=1&silent=1');
     const adapter = createGenericAdapter('fixture', OPTIONS);
-    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, startGraceMs: 250 })).rejects.toMatchObject({
-      code: 'no-response',
+    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, startGraceMs: 150, timeoutMs: 700 })).rejects.toMatchObject({
+      code: 'timeout',
     });
   });
 
@@ -416,9 +432,32 @@ describe('generic adapter: turn trace', () => {
   });
 
   it('reports a failed turn with its error code and no first growth', async () => {
-    const { traces, outcome } = await traced('?silent=1', 'hi', { ...FAST, startGraceMs: 250 });
+    const { traces, outcome } = await traced('?noecho=1&silent=1', 'hi', { ...FAST, startGraceMs: 250 });
     expect(outcome).toMatchObject({ code: 'no-response' });
     expect(traces[0]).toMatchObject({ outcome: 'failed', code: 'no-response', firstGrowthMs: -1, replyChars: 0 });
+  });
+
+  it('counts the animation frames of the page and the lengths of the conversation text, never the text', async () => {
+    const page = openPage('?nostop=1', true);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    await runAdapterTurn(adapter, page.runner, 'private words', { ...FAST, trace: (fields) => traces.push(fields) });
+    expect(Number(traces[0]?.['frames'])).toBeGreaterThan(0);
+    const before = Number(traces[0]?.['textLenBefore']);
+    const atEnd = Number(traces[0]?.['textLenAtEnd']);
+    expect(before).toBeGreaterThanOrEqual(0);
+    expect(atEnd).toBeGreaterThan(before);
+    expect(JSON.stringify(traces)).not.toContain('private');
+  });
+
+  it('reports frames 0 for a page that never draws a frame', async () => {
+    const page = openPage('?nostop=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    await runAdapterTurn(adapter, page.runner, 'x', { ...FAST, trace: (fields) => traces.push(fields) });
+    expect(traces[0]?.['frames']).toBe(0);
+    const failing = await traced('?noecho=1&silent=1', 'x', { ...FAST, startGraceMs: 100 });
+    expect(failing.traces[0]?.['frames']).toBe(0);
   });
 });
 
@@ -435,7 +474,7 @@ describe('generic adapter: the reply is anchored on the echo of the prompt', () 
   });
 
   it('reads nothing while the page has no echo of the prompt, whatever else changes', async () => {
-    const page = openPage('?nomain=1&nostop=1&title=1&silent=1');
+    const page = openPage('?nomain=1&nostop=1&title=1&silent=1&noecho=1');
     const adapter = createGenericAdapter('fixture', OPTIONS);
     await expect(runAdapterTurn(adapter, page.runner, 'question about sculptors', { ...FAST, startGraceMs: 400 })).rejects.toMatchObject({
       code: 'no-response',

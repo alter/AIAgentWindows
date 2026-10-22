@@ -272,7 +272,8 @@ test('a DeepSeek agent shows a visible view without the Electron token and Home 
     await expect(page.locator('.nav-address')).toHaveText(fixture.url);
 
     const visibleViews = await app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]
+      BrowserWindow.getAllWindows()
+        .find((window) => window.webContents.getURL().startsWith('file:'))
         ?.contentView.children.filter((child) => (child as { getVisible?: () => boolean }).getVisible?.() === true)
         .map((child) => child.getBounds()),
     );

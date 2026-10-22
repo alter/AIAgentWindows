@@ -62,7 +62,7 @@ async function converse(adapter: SiteAdapter, runner: PageRunner, prompt: string
     const changed = reply !== baseline;
     if (generating) sawGenerating = true;
     if (generating || changed) answering = true;
-    if (!answering && now - started >= options.startGraceMs) {
+    if (!answering && now - started >= options.startGraceMs && adapter.echoSeen?.() !== true) {
       throw new SiteAdapterError('no-response', `${adapter.site} did not start to answer`);
     }
     if (answering && !generating && reply !== null && (changed || sawGenerating)) {

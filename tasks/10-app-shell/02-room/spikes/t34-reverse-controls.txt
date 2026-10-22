@@ -1,0 +1,25 @@
+T34 reverse controls, 2026-10-22. Electron 44.6.0, macOS. Windows hidden (AIAW_USER_DATA set). Code broken in place, output kept, code restored.
+
+MAIN RED (current code before T34: view.setVisible(false), no switches, no parking), tests/full/room-hidden-views.spec.ts, test 'a site that draws only inside animation frames answers while the Room covers its view':
+  Error: expect(locator).toContainText(expected) failed
+  Locator: locator('[data-room="status"]')  Expected substring: "done"  Timeout: 25000ms
+  Received string: "Running DeepSeek (1/2). History: .../rooms/room-20261022-091152-9505af.md"
+  (the page's echo and reply are drawn in requestAnimationFrame callbacks, which a setVisible(false) view never gets)
+  same run, test 'a parked view keeps the owner identity...': expect(windows.some((window) => !window.focusable && window.children === 1)).toBe(true) -> Received: false (no parking window)
+
+REVERSE CONTROL 1: switches without parking (src/main/site-views.ts = HEAD, setVisible(false); applyRenderSwitches kept):
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "done"
+    Received string:    "Running DeepSeek (1/2). 
+  1 failed
+
+REVERSE CONTROL 2: parking without switches, in the Playwright smoke (switch call removed from src/main/index.ts):
+  1 passed (6.9s)
+  NOT RED. Playwright's Electron loader appends --disable-renderer-backgrounding and --disable-backgrounding-occluded-windows itself (node_modules/playwright-core/lib/server/electron/loader.js lines 43 and 64), and a never-shown main window is not occluded, so the smoke cannot reproduce the covered-window condition. The same control is therefore kept at the Electron level with the probe below (the window of the probe is shown inactive at opacity 0, 12 px at the screen corner).
+
+PROBE: spikes/raf-park-probe.js with opacity 0 (copy), view parked in a never-shown window; key "noocc":true means the two switches are present:
+{"noocc":false,"inMain":{"raf":0,"timer":12,"ro":0,"io":0,"loads":1,"vis":"visible","w":300,"h":300},"inParking":{"raf":0,"timer":26,"ro":0,"io":0,"loads":1,"vis":"visible","w":300,"h":300},"back":{"raf":0,"timer":30,"ro":0,"io":0,"loads":1,"vis":"visible","w":300,"h":300}}
+{"noocc":true,"inMain":{"raf":66,"timer":20,"ro":1,"io":1,"loads":1,"vis":"visible","w":300,"h":300},"inParking":{"raf":223,"timer":50,"ro":1,"io":1,"loads":1,"vis":"visible","w":300,"h":300},"back":{"raf":273,"timer":60,"ro":1,"io":1,"loads":1,"vis":"visible","w":300,"h":300}}
+
+UNIT CONTROL for the switches: tests/unit/render-switches.test.ts is red while src/shared/render-switches.ts is missing:
+  FAIL |unit| tests/unit/render-switches.test.ts  Error: Cannot find module '../../src/shared/render-switches'

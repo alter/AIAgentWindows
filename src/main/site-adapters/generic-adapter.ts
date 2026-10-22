@@ -34,6 +34,7 @@ interface PageSnapshot {
   stop: boolean;
   text: string;
   accepting: boolean;
+  frames?: number;
 }
 
 interface ComposerState {
@@ -74,6 +75,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let idleText: string | null = null;
   let idleSince = 0;
   let settledText: string | null = null;
+  let frames = -1;
+  let textLenBefore = -1;
+  let textLenAtEnd = -1;
 
   async function snapshot(runner: PageRunner): Promise<PageSnapshot> {
     return (await callPage(runner, genericStateScript())).value as PageSnapshot;
@@ -87,6 +91,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     echoFound = found.echoFound;
     const now = Date.now();
     if (value.stop) stopSeen = true;
+    textLenAtEnd = value.text.length;
+    frames = typeof value.frames === 'number' ? value.frames : -1;
     const text = started || isAnswerStart(found.reply) ? found.reply : null;
     if (text !== null && !started) {
       started = true;
@@ -134,6 +140,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       composerClearedMs = -1;
       drops = NO_DROPS;
       idleText = null;
+      frames = -1;
+      textLenBefore = -1;
+      textLenAtEnd = -1;
       const reply = await callPage(runner, genericInsertScript(text));
       composerKind = reply.kind ?? 'none';
       inserted = reply.length ?? 0;
@@ -144,6 +153,7 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     async submit(runner) {
       const entered = await callPage(runner, genericEnterScript());
       before = typeof entered.value === 'string' ? entered.value : '';
+      textLenBefore = before.length;
       submitted = true;
       submittedAt = Date.now();
       submitPath = 'enter';
@@ -183,6 +193,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       if (value.stop || !value.accepting) return false;
       return value.text === settledText || now - idleSince >= options.quietMs;
     },
+    echoSeen() {
+      return echoFound;
+    },
     trace(): Readonly<Record<string, SiteLogValue>> {
       return {
         composer: composerKind,
@@ -193,6 +206,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         visibleComposers,
         firstGrowthMs,
         stopSeen,
+        frames,
+        textLenBefore,
+        textLenAtEnd,
         quietForMs: started ? Date.now() - changedAt : -1,
         droppedSeen: drops.seen,
         droppedEcho: drops.echo,

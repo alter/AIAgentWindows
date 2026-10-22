@@ -88,7 +88,7 @@
         ta.value = '';
         ce.replaceChildren(document.createElement('p'));
         refresh();
-        add('user', query.has('oneline') ? [text.replace(/\s+/g, ' ')] : text.split('\n'));
+        if (!query.has('noecho')) add('user', query.has('oneline') ? [text.replace(/\s+/g, ' ')] : text.split('\n'));
         const item = document.createElement('li');
         item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
         history.appendChild(item);

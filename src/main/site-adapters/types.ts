@@ -24,6 +24,7 @@ export interface SiteAdapter {
   attachFile(runner: PageRunner, path: string): Promise<void>;
   composerReady?(runner: PageRunner): Promise<boolean>;
   isIdle?(runner: PageRunner): Promise<boolean>;
+  echoSeen?(): boolean;
   trace?(): Readonly<Record<string, SiteLogValue>>;
 }
 

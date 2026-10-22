@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { applyRenderSwitches } from '../shared/render-switches';
 import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
@@ -25,6 +26,7 @@ import { loadState } from './state-file';
 const userDataOverride = process.env['AIAW_USER_DATA'];
 if (userDataOverride) app.setPath('userData', userDataOverride);
 if (dockHidden(process.env, process.platform)) app.dock?.hide();
+applyRenderSwitches(app.commandLine);
 
 const smokeExit = process.argv.includes('--smoke-exit');
 let mainWindow: BrowserWindow | null = null;

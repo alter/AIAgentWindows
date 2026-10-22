@@ -1,8 +1,8 @@
 // site-views.ts
-import { session, WebContentsView, type BrowserWindow, type WebContents } from 'electron';
+import { BrowserWindow, session, WebContentsView, type WebContents } from 'electron';
 import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
-import { siteBounds } from '../shared/site-layout';
+import { siteBounds, type Bounds } from '../shared/site-layout';
 import { windowsVisible } from '../shared/window-visibility';
 import {
   originOf,
@@ -22,11 +22,13 @@ interface SiteEntry {
   kind: SiteKind;
   view: WebContentsView;
   loaded: Promise<void>;
+  home: 'main' | 'parking';
 }
 
 export class SiteViews {
   private readonly entries = new Map<string, SiteEntry>();
   private visibleId: string | null = null;
+  private parking: BrowserWindow | null = null;
 
   constructor(
     private readonly window: BrowserWindow,
@@ -35,15 +37,16 @@ export class SiteViews {
     private readonly log: SiteLogger = () => undefined,
   ) {
     window.on('resize', () => this.layout());
+    window.on('closed', () => this.destroyParking());
   }
 
   show(agent: Agent | null): void {
     const site = agent !== null && isSiteKind(agent.kind) ? { id: agent.id, kind: agent.kind } : null;
     const entry = site === null ? null : this.ensure(site.id, site.kind);
     this.visibleId = site === null ? null : site.id;
-    for (const [id, other] of this.entries) other.view.setVisible(id === this.visibleId);
-    if (site === null || entry === null) return;
+    for (const [id, other] of this.entries) this.place(other, id === this.visibleId ? 'main' : 'parking');
     this.layout();
+    if (site === null || entry === null) return;
     this.publish(site.id, entry.view);
     if (windowsVisible(this.env)) entry.view.webContents.focus();
   }
@@ -110,7 +113,7 @@ export class SiteViews {
     if (entry === undefined) return;
     this.entries.delete(id);
     if (this.visibleId === id) this.visibleId = null;
-    this.window.contentView.removeChildView(entry.view);
+    this.container(entry.home)?.contentView.removeChildView(entry.view);
     if (!entry.view.webContents.isDestroyed()) entry.view.webContents.close();
   }
 
@@ -120,6 +123,43 @@ export class SiteViews {
     }
     this.entries.clear();
     this.visibleId = null;
+    this.destroyParking();
+  }
+
+  private container(home: SiteEntry['home']): BrowserWindow | null {
+    const target = home === 'main' ? this.window : this.parking;
+    return target === null || target.isDestroyed() ? null : target;
+  }
+
+  private parkingWindow(): BrowserWindow {
+    if (this.parking !== null && !this.parking.isDestroyed()) return this.parking;
+    const [width, height] = this.window.getContentSize();
+    this.parking = new BrowserWindow({
+      width: width ?? 800,
+      height: height ?? 600,
+      useContentSize: true,
+      show: false,
+      focusable: false,
+      skipTaskbar: true,
+      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    });
+    return this.parking;
+  }
+
+  private destroyParking(): void {
+    const parking = this.parking;
+    this.parking = null;
+    if (parking !== null && !parking.isDestroyed()) parking.destroy();
+  }
+
+  private place(entry: SiteEntry, home: SiteEntry['home']): void {
+    if (entry.home === home) return;
+    this.container(entry.home)?.contentView.removeChildView(entry.view);
+    const target = home === 'main' ? this.window : this.parkingWindow();
+    target.contentView.addChildView(entry.view);
+    entry.home = home;
+    entry.view.setVisible(true);
+    entry.view.setBounds(this.bounds());
   }
 
   private ensure(id: string, kind: SiteKind): SiteEntry {
@@ -156,9 +196,9 @@ export class SiteViews {
     contents.on('did-navigate', refresh);
     contents.on('did-navigate-in-page', refresh);
     contents.on('did-finish-load', refresh);
-    view.setVisible(false);
-    this.window.contentView.addChildView(view);
-    const entry = { kind, view, loaded };
+    view.setVisible(true);
+    this.parkingWindow().contentView.addChildView(view);
+    const entry: SiteEntry = { kind, view, loaded, home: 'parking' };
     this.entries.set(id, entry);
     this.layout();
     void contents.loadURL(siteStartUrl(kind, this.env));
@@ -189,9 +229,16 @@ export class SiteViews {
     });
   }
 
+  private bounds(): Bounds {
+    const [width, height] = this.window.getContentSize();
+    return siteBounds(width ?? 0, height ?? 0);
+  }
+
   private layout(): void {
     const [width, height] = this.window.getContentSize();
-    const bounds = siteBounds(width ?? 0, height ?? 0);
+    const parking = this.container('parking');
+    if (parking !== null && width !== undefined && height !== undefined) parking.setContentSize(width, height);
+    const bounds = this.bounds();
     for (const entry of this.entries.values()) entry.view.setBounds(bounds);
   }
 

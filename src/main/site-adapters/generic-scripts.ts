@@ -5,6 +5,23 @@ const STOP_NAME = /(^|[^a-z])(stop|cancel)([^a-z]|$)|останов|отмен/i
 const SEND_NAME = /send|submit|отправ/i;
 const OTHER_NAME = /attach|upload|file|photo|image|mic|voice|dictat|record|search|think|reason|tool|model|menu|more|copy|share|прикреп|добав|голос|поиск/i;
 
+function frameState() {
+  if (!globalThis.__aiawFrames) globalThis.__aiawFrames = { n: 0, running: false };
+  return globalThis.__aiawFrames;
+}
+
+function startFrames() {
+  const state = frameState();
+  state.n = 0;
+  if (state.running || typeof requestAnimationFrame !== 'function') return;
+  state.running = true;
+  const loop = () => {
+    state.n += 1;
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+
 function collapse(value) {
   return value.replace(/\s+/g, ' ');
 }
@@ -156,6 +173,7 @@ ${body}
 
 export function genericInsertScript(text: string): string {
   return wrap(`
+    startFrames();
     const composer = findComposer();
     if (!composer) return JSON.stringify({ ok: false, error: 'input-missing' });
     const text = ${JSON.stringify(text)};
@@ -239,5 +257,5 @@ export function genericStateScript(): string {
     const accepting = composer !== null
       && composer.getAttribute('aria-disabled') !== 'true'
       && (collapse(fieldText(composer)).trim() === '' || chooseSendButton(composer) !== null);
-    return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer), accepting } });`);
+    return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer), accepting, frames: frameState().n } });`);
 }

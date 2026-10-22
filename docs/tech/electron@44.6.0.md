@@ -27,6 +27,15 @@ Pinned 2026-10-21: newest release at least two weeks old (44.6.0 published 2026-
 - Header rewriting in `session.webRequest.onBeforeSendHeaders` was not chosen: it does not change the JS side, and Electron 44.6.0 sends no `Sec-CH-UA*` request header at all on localhost (EVIDENCE W23), so there is nothing to rewrite and adding headers Electron never sends would be a new signal. Revisit if a site objects.
 - The string lives in `OWNER_USER_AGENT` (`src/shared/site-policy.ts`); the brand major comes from it, the full version of both brands from `process.versions.chrome` (the real engine), the platform version from `process.getSystemVersion()`.
 
+## Hidden and covered site views (studied for T34, 2026-10-22)
+
+- A `WebContentsView` with `setVisible(false)` gets no `requestAnimationFrame`, `ResizeObserver` or `IntersectionObserver` callbacks; timers still run and `document.visibilityState` stays `visible` (EVIDENCE W25, source `tasks/10-app-shell/02-room/spikes/raf-probe.txt`). The Room hid every site view that way, so a chat page that renders streamed text in a frame callback (DeepSeek turns of 2026-10-22 07:56-09:02 are consistent with it) did not change its DOM.
+- Without `disable-backgrounding-occluded-windows` and `disable-renderer-backgrounding` (`app.commandLine.appendSwitch`, before `ready`) no view renders while the app window is covered, minimized or on another Space (W26) — https://github.com/electron/electron/blob/v44.6.0/docs/api/command-line-switches.md, https://github.com/electron/electron/blob/v44.6.0/docs/api/app.md#appcommandline-readonly
+- A view that is not shown lives in a second `BrowserWindow` that is never shown (`show: false`, `focusable: false`, `skipTaskbar: true`) with `view.setVisible(true)`; `BaseWindow.contentView.removeChildView` then `addChildView` moves it without a reload, its viewport keeps the bounds set after the move, and ResizeObserver/IntersectionObserver fire (W26) — https://github.com/electron/electron/blob/v44.6.0/docs/api/view.md and https://github.com/electron/electron/blob/v44.6.0/docs/api/web-contents-view.md
+- The CDP debugger of the T33 user-agent override and the isolated world belong to the `webContents`, not to the window: both survive the move and the trusted `sendInputEvent` Enter works on a parked view (W28).
+- `BrowserWindow.getAllWindows()` lists the newest window first; once the parking window exists, index 0 is the parking window, not the main window — find the main window by its `file:` URL.
+- Playwright's Electron loader already appends both switches to every launched app, so the smoke cannot show them missing (W27).
+
 ## Main-process and IPC APIs used by the app shell (studied for T01, 2026-10-21)
 
 - `WebContentsView` extends `View`, is main-process only and unusable before `app` emits `ready`; `new WebContentsView({ webPreferences, webContents })` — `webContents` adopts an existing one, which may sit in only one view at a time; the page is `view.webContents`; built-in classes cannot be subclassed — https://github.com/electron/electron/blob/v44.6.0/docs/api/web-contents-view.md#L40-L56
