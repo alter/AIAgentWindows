@@ -32,11 +32,25 @@ describe('room sessions start read-only', () => {
     expect(valueAfter(cliArgs('claude'), '--permission-mode')).toBe('plan');
   });
 
-  it('gives claude an allowlist of read tools and nothing else', () => {
+  it('gives claude an allowlist of read tools and the two web tools, and nothing else', () => {
     const args = cliArgs('claude');
     const tools = (valueAfter(args, '--tools') ?? '').split(',');
-    expect(tools.sort()).toEqual(['Glob', 'Grep', 'Read']);
-    expect(args).not.toContain('--allowedTools');
+    expect(tools.sort()).toEqual(['Glob', 'Grep', 'Read', 'WebFetch', 'WebSearch']);
+  });
+
+  it('approves only the two web tools for a turn nobody can answer a prompt in', () => {
+    for (const resume of [false, true]) {
+      const approved = (valueAfter(cliArgs('claude', { resume }), '--allowedTools') ?? '').split(',');
+      expect(approved.sort()).toEqual(['WebFetch', 'WebSearch']);
+    }
+  });
+
+  it('never approves or offers a tool that runs commands or writes files', () => {
+    for (const resume of [false, true]) {
+      const args = cliArgs('claude', { resume });
+      const named = `${valueAfter(args, '--tools')},${valueAfter(args, '--allowedTools')}`;
+      expect(named).not.toMatch(/Bash|PowerShell|Edit|Write|NotebookEdit|Agent|Monitor/);
+    }
   });
 
   it('ignores the owner MCP servers: strict config with an empty server list', () => {
@@ -83,6 +97,17 @@ describe('room sessions start read-only', () => {
     expect(args).toContain('--skip-git-repo-check');
     expect(args.at(-1)).toBe('-');
     expect(args).not.toContain('resume');
+  });
+
+  it('gives codex live web search through its config override, before resume, where exec accepts it', () => {
+    for (const resume of [false, true]) {
+      const args = cliArgs('codex', { resume });
+      expect(args).not.toContain('--search');
+      expect(valueAfter(args, '-c')).toBe('web_search="live"');
+      if (resume) expect(args.indexOf('-c')).toBeLessThan(args.indexOf('resume'));
+      expect(args.indexOf('-c')).toBeLessThan(args.length - 1);
+      expect(valueAfter(args, '--sandbox')).toBe('read-only');
+    }
   });
 
   it('gives codex exec no flag that exec does not accept: it has no approval flag and no daemon', () => {

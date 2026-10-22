@@ -34,6 +34,8 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | CC29 | `claude -p` skips the workspace trust dialog; `--output-format stream-json` needs `--verbose`, prints one JSON object per line, starts with `system`/`init` and ends with a `result` message; a SIGTERM leaves the turn unfinished (exit 143) | doc | https://code.claude.com/docs/en/headless | confirmed |
 | CC30 | The `result` message has `subtype: "success"`, `is_error` and `result` (the reply text); a failed run has an `error_*` subtype, `is_error` and `errors` | doc | https://code.claude.com/docs/en/agent-sdk/typescript#sdkresultmessage | confirmed |
 | CC31 | `claude --help` of 2.1.306 lists `-p`, `--output-format`, `--verbose`, `--session-id`, `--resume [value]` and the variadic `--tools`, `--add-dir`, `--mcp-config`, `--disallowedTools`; an invalid `--output-format` value is rejected before a run, and the room argument list of a first and a resumed claude turn parses | run | `tasks/10-app-shell/02-room/spikes/print-mode-flags.txt` | confirmed |
+| CC32 | `WebSearch` and `WebFetch` need permission by default, `--allowedTools` allows them without a prompt, and `claude 2.1.308 --help` lists `--tools` and `--allowedTools` and parses the room argument list with both | run | `tasks/10-app-shell/02-room/spikes/web-access-flags.txt` | confirmed |
+| CC33 | A real `claude -p --permission-mode plan` turn with `--tools Read,Grep,Glob,WebSearch,WebFetch --allowedTools WebSearch,WebFetch` runs a web search or fetch without a permission denial (`result.permission_denials` empty) | assumption | HUMAN: next room run, NOTES.md | open |
 | CC16 | On Windows `claude` is resolved from the user's environment at spawn time | assumption | HUMAN: Windows 11 smoke | open |
 
 ## Codex windows
@@ -71,6 +73,8 @@ Every claim that `docs/PROJECT.md` makes about how the product works, with what 
 | CX29 | A `codex exec` turn ends with `turn.completed` or `turn.failed`; `error` events are not terminal; an interrupted turn emits neither and the exit code is 1 | doc | https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/event_processor_with_jsonl_output.rs and https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/lib.rs | confirmed |
 | CX30 | `codex exec` refuses to run outside a git repository without `--skip-git-repo-check`, reads the prompt from stdin when it is `-`, and resumes a UUID with no cwd filter | doc | https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec/src/lib.rs | confirmed |
 | CX32 | A real read-only `claude -p` turn in plan mode with `--tools Read,Grep,Glob` answers in `result.result` (not an unapproved plan), and a real `codex exec` turn ends in `turn.completed` with the answer in an `agent_message` | assumption | HUMAN: AC7 Room run, NOTES.md | open |
+| CX33 | `--search` is an option of the top-level `codex` command, not of `exec` or `exec resume`; `exec` accepts `-c web_search="live"` before `resume`, which is what `--search` sets | run | `tasks/10-app-shell/02-room/spikes/web-access-flags.txt` | confirmed |
+| CX34 | A real room `codex exec` turn with `-c web_search="live"` answers with live web search results | assumption | HUMAN: next room run, NOTES.md | open |
 
 ## Files, images, clipboard
 

@@ -47,14 +47,24 @@ const ROOM_CLAUDE_ARGS: readonly string[] = [
   '--permission-mode',
   'plan',
   '--tools',
-  'Read,Grep,Glob',
+  'Read,Grep,Glob,WebSearch,WebFetch',
+  '--allowedTools',
+  'WebSearch,WebFetch',
   '--strict-mcp-config',
   '--mcp-config',
   '{"mcpServers":{}}',
   '--disallowedTools',
   'mcp__*',
 ];
-const ROOM_CODEX_ARGS: readonly string[] = ['exec', '--sandbox', 'read-only', '--skip-git-repo-check', '--json'];
+const ROOM_CODEX_ARGS: readonly string[] = [
+  'exec',
+  '--sandbox',
+  'read-only',
+  '-c',
+  'web_search="live"',
+  '--skip-git-repo-check',
+  '--json',
+];
 const PROMPT_FROM_STDIN = '-';
 
 function sessionFlag(options: SpawnOptions): string[] {

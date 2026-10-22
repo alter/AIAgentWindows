@@ -621,7 +621,7 @@ describe('room with stub CLIs', () => {
     expect(codex).toHaveLength(2);
     for (const call of claude) {
       expect(flagValue(call, '--permission-mode')).toBe('plan');
-      expect(flagValue(call, '--tools')).toBe('Read,Grep,Glob');
+      expect(flagValue(call, '--tools')).toBe('Read,Grep,Glob,WebSearch,WebFetch');
     }
     for (const call of codex) expect(flagValue(call, '--sandbox')).toBe('read-only');
     for (const call of all) {

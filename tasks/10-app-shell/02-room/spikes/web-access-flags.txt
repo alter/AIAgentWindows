@@ -1,0 +1,52 @@
+# T40 probe: web access flags of claude -p 2.1.308 and codex exec 0.163.0 (parse only: every command ends in --help, no prompt is sent, stdin is /dev/null)
+# date: 2026-10-23
+$ claude --version
+2.1.308 (Claude Code)
+exit=0
+
+$ codex --version
+codex-cli 0.163.0
+exit=0
+
+$ claude -p --output-format stream-json --verbose --permission-mode plan --tools Read,Grep,Glob,WebSearch,WebFetch --allowedTools WebSearch,WebFetch --strict-mcp-config --mcp-config {"mcpServers":{}} --disallowedTools mcp__* --add-dir /tmp --session-id 3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b --help
+Usage: claude [options] [prompt]
+
+Claude Code - starts an interactive session by default, use -p/--print for
+non-interactive output
+exit=0
+
+$ codex exec --search --help
+error: unexpected argument '--search' found
+
+  tip: to pass '--search' as a value, use '-- --search'
+
+exit=2
+
+$ codex exec --sandbox read-only --search resume --help
+error: unexpected argument '--search' found
+
+  tip: to pass '--search' as a value, use '-- --search'
+
+exit=2
+
+$ codex --search exec --help
+Run Codex non-interactively
+
+Usage: codex exec [OPTIONS] [PROMPT]
+       codex exec [OPTIONS] <COMMAND> [ARGS]
+exit=0
+
+$ codex exec --sandbox read-only -c web_search="live" --skip-git-repo-check --json --help
+Run Codex non-interactively
+
+Usage: codex exec [OPTIONS] [PROMPT]
+       codex exec [OPTIONS] <COMMAND> [ARGS]
+exit=0
+
+$ codex exec --sandbox read-only -c web_search="live" --skip-git-repo-check --json resume --help
+Resume a previous session by id or pick the most recent with --last
+
+Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+
+exit=0
+

@@ -62,6 +62,12 @@ describe('buildParticipantPrompt', () => {
     expect(prompt.text).not.toContain('history.md');
   });
 
+  it('tells a CLI participant that the web is available and a web participant nothing about it', () => {
+    const intro = (text: string): string => text.slice(0, text.indexOf('<<<'));
+    expect(intro(buildParticipantPrompt(A, 'r1', history).text)).toMatch(/web/i);
+    expect(intro(buildParticipantPrompt(B, 'r1', history).text)).not.toMatch(/web/i);
+  });
+
   it('inlines a CLI history above the web limit instead of attaching it', () => {
     const big = [entry({ text: 'x'.repeat(WEB_INLINE_LIMIT + 1) })];
     const prompt = buildParticipantPrompt(A, 'r1', big);
