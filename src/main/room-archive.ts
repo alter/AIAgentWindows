@@ -1,15 +1,11 @@
 // room-archive.ts
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { MAX_RECORD_BYTES, isRoomId, parseRoomRecord, type RoomRecord, type RoomRecordStatus } from '../shared/room-model';
+import { MAX_RECORD_BYTES, isRoomId, parseRoomRecord, type RoomListItem, type RoomRecord } from '../shared/room-model';
 
 export const LIST_LIMIT = 200;
 const FIRST_PROMPT_CHARS = 120;
 const RECORD_SUFFIX = '.json';
-
-export type RoomListItem =
-  | { id: string; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string }
-  | { id: string; unreadable: true };
 
 export function recordPath(roomsDir: string, id: string): string {
   if (!isRoomId(id)) throw new Error('invalid room id');

@@ -10,8 +10,8 @@ import {
   type PtyExitEvent,
   type SiteStateEvent,
 } from '../shared/ipc';
-import type { RoomConfig, RoomEvent } from '../shared/room-model';
-import type { RoomSnapshot, RoomStartResult } from '../shared/room-view';
+import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
+import type { RoomOpenResult, RoomSnapshot, RoomStartResult } from '../shared/room-view';
 
 function subscribe<T>(channel: string, listener: (event: T) => void): () => void {
   const handler = (_event: unknown, payload: T): void => listener(payload);
@@ -33,8 +33,11 @@ const api: AppApi = {
   pathForFile: (file) => webUtils.getPathForFile(file),
   siteNav: (id, action) => ipcRenderer.invoke(INVOKE_CHANNELS.siteNav, { id, action }) as Promise<void>,
   roomState: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomState) as Promise<RoomSnapshot>,
+  roomList: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomList) as Promise<RoomListItem[]>,
+  roomOpen: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomOpen, { id }) as Promise<RoomOpenResult>,
   roomSelect: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomSelect) as Promise<void>,
-  roomStart: (config: RoomConfig) => ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, config) as Promise<RoomStartResult>,
+  roomStart: (config: RoomConfig, continueId?: string) =>
+    ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, continueId === undefined ? { config } : { config, continueId }) as Promise<RoomStartResult>,
   roomStop: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomStop) as Promise<void>,
   roomCarry: (id, what) => ipcRenderer.invoke(INVOKE_CHANNELS.roomCarry, { id, what }) as Promise<boolean>,
   roomCopyFinal: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomCopyFinal) as Promise<boolean>,

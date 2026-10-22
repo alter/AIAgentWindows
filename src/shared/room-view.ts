@@ -53,6 +53,8 @@ export interface RoomFormValues {
   debugSites?: boolean;
 }
 
+export type RoomOpenResult = { ok: true; snapshot: RoomSnapshot; form: RoomFormValues } | { ok: false; error: string };
+
 const MS_PER_MINUTE = 60_000;
 
 export interface ParticipantAvailability {

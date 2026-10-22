@@ -1,8 +1,8 @@
 // ipc.ts
 import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
 import type { OutputSnapshot } from './output-buffer';
-import { parseRoomConfig, type RoomConfig, type RoomEvent } from './room-model';
-import { CARRY_KINDS, type CarryWhat, type RoomSnapshot, type RoomStartResult } from './room-view';
+import { isRoomId, parseRoomConfig, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
+import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
 
 export const INVOKE_CHANNELS = {
   listAgents: 'agents:list',
@@ -15,6 +15,8 @@ export const INVOKE_CHANNELS = {
   ptyBacklog: 'pty:backlog',
   siteNav: 'site:nav',
   roomState: 'room:state',
+  roomList: 'room:list',
+  roomOpen: 'room:open',
   roomSelect: 'room:select',
   roomStart: 'room:start',
   roomStop: 'room:stop',
@@ -68,6 +70,11 @@ export interface SiteStateEvent {
   canGoForward: boolean;
 }
 
+export interface RoomStartRequest {
+  config: RoomConfig;
+  continueId?: string;
+}
+
 export interface InvokeRequests {
   [INVOKE_CHANNELS.listAgents]: undefined;
   [INVOKE_CHANNELS.addAgent]: { kind: AgentKind };
@@ -79,8 +86,10 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.ptyBacklog]: { id: string };
   [INVOKE_CHANNELS.siteNav]: { id: string; action: SiteAction };
   [INVOKE_CHANNELS.roomState]: undefined;
+  [INVOKE_CHANNELS.roomList]: undefined;
+  [INVOKE_CHANNELS.roomOpen]: { id: string };
   [INVOKE_CHANNELS.roomSelect]: undefined;
-  [INVOKE_CHANNELS.roomStart]: RoomConfig;
+  [INVOKE_CHANNELS.roomStart]: RoomStartRequest;
   [INVOKE_CHANNELS.roomStop]: undefined;
   [INVOKE_CHANNELS.roomCarry]: { id: string; what: CarryWhat };
   [INVOKE_CHANNELS.roomResume]: undefined;
@@ -107,8 +116,10 @@ export interface AppApi {
   pathForFile(file: File): string;
   siteNav(id: string, action: SiteAction): Promise<void>;
   roomState(): Promise<RoomSnapshot>;
+  roomList(): Promise<RoomListItem[]>;
+  roomOpen(id: string): Promise<RoomOpenResult>;
   roomSelect(): Promise<void>;
-  roomStart(config: RoomConfig): Promise<RoomStartResult>;
+  roomStart(config: RoomConfig, continueId?: string): Promise<RoomStartResult>;
   roomStop(): Promise<void>;
   roomCarry(id: string, what: CarryWhat): Promise<boolean>;
   roomResume(): Promise<void>;
@@ -144,6 +155,15 @@ function withId<T extends object>(payload: unknown, build: (record: Record<strin
   if (!isRecord(payload)) return null;
   const id = parseId(payload['id']);
   return id === null ? null : build(payload, id);
+}
+
+function parseRoomStart(payload: unknown): RoomStartRequest | null {
+  if (!isRecord(payload)) return null;
+  const parsed = parseRoomConfig(payload['config']);
+  if (!parsed.ok) return null;
+  if (!Object.hasOwn(payload, 'continueId')) return { config: parsed.config };
+  const continueId = payload['continueId'];
+  return isRoomId(continueId) ? { config: parsed.config, continueId } : null;
 }
 
 function noPayload(payload: unknown): undefined | null {
@@ -185,11 +205,11 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       return (SITE_ACTIONS as readonly unknown[]).includes(action) ? { id, action: action as SiteAction } : null;
     }),
   [INVOKE_CHANNELS.roomState]: noPayload,
+  [INVOKE_CHANNELS.roomList]: noPayload,
+  [INVOKE_CHANNELS.roomOpen]: (payload) =>
+    isRecord(payload) && isRoomId(payload['id']) ? { id: payload['id'] } : null,
   [INVOKE_CHANNELS.roomSelect]: noPayload,
-  [INVOKE_CHANNELS.roomStart]: (payload) => {
-    const parsed = parseRoomConfig(payload);
-    return parsed.ok ? parsed.config : null;
-  },
+  [INVOKE_CHANNELS.roomStart]: parseRoomStart,
   [INVOKE_CHANNELS.roomStop]: noPayload,
   [INVOKE_CHANNELS.roomCarry]: (payload) =>
     withId(payload, (record, id) => {

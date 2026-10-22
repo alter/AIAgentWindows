@@ -1,10 +1,22 @@
 // room-service.ts
 import path from 'node:path';
-import { Room, type DriverFactory } from './room';
+import { Room, type DriverFactory, type RoomContinuation } from './room';
 import type { OutputSnapshot } from '../shared/output-buffer';
-import type { RoomConfig, RoomEvent } from '../shared/room-model';
+import { listRecords, readRecord, stopInterrupted } from './room-archive';
+import { isRoomId, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
-import { applyRoomEvent, carryText, emptyRoomSnapshot, finalText, type CarryWhat, type RoomSnapshot, type RoomStartResult } from '../shared/room-view';
+import {
+  applyRoomEvent,
+  carryText,
+  emptyRoomSnapshot,
+  finalText,
+  formFromRecord,
+  snapshotFromRecord,
+  type CarryWhat,
+  type RoomOpenResult,
+  type RoomSnapshot,
+  type RoomStartResult,
+} from '../shared/room-view';
 
 export interface RoomServiceDeps {
   roomsDir: string;
@@ -39,15 +51,52 @@ export class RoomService {
     return this.snapshot;
   }
 
-  start(config: RoomConfig): RoomStartResult {
+  async init(): Promise<void> {
+    await stopInterrupted(this.deps.roomsDir).catch(() => []);
+    const listed = await this.list();
+    const latest = listed.find((item) => !item.unreadable);
+    if (latest !== undefined) await this.open(latest.id).catch(() => undefined);
+  }
+
+  async list(): Promise<RoomListItem[]> {
     try {
-      const run = this.room.start(config);
+      return await listRecords(this.deps.roomsDir);
+    } catch {
+      return [];
+    }
+  }
+
+  async open(id: string): Promise<RoomOpenResult> {
+    if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
+    if (!isRoomId(id)) return { ok: false, error: 'invalid room id' };
+    const record = await readRecord(this.deps.roomsDir, id);
+    if (record === null) return { ok: false, error: 'the room cannot be read' };
+    if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
+    this.snapshot = snapshotFromRecord(record, this.historyPath(id));
+    return { ok: true, snapshot: this.snapshot, form: formFromRecord(record) };
+  }
+
+  async start(config: RoomConfig, continueId?: string): Promise<RoomStartResult> {
+    try {
+      const from = continueId === undefined ? undefined : await this.continuation(continueId);
+      const run = this.room.start(config, from);
       void run.done.catch(() => undefined);
       const debugDir = config.debugSites && this.deps.debugRoot !== undefined ? path.join(this.deps.debugRoot, run.roomId) : null;
       return { ok: true, roomId: run.roomId, historyPath: run.historyPath, debugDir };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private historyPath(id: string): string {
+    return path.join(this.deps.roomsDir, `${id}.md`);
+  }
+
+  private async continuation(id: string): Promise<RoomContinuation> {
+    if (this.snapshot.roomId !== id) throw new Error('only the opened room can be continued');
+    const record = await readRecord(this.deps.roomsDir, id);
+    if (record === null) throw new Error('the room cannot be read');
+    return { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt };
   }
 
   stop(): void {

@@ -118,16 +118,29 @@ describe('room channels', () => {
     debugSites: false,
   };
 
-  it('accepts a valid room config and rejects an invalid one', () => {
-    expect(validateRequest(INVOKE_CHANNELS.roomStart, config)).toEqual({ ok: true, value: config });
-    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, rounds: 51 }).ok).toBe(false);
-    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, prompt: '' }).ok).toBe(false);
-    expect(validateRequest(INVOKE_CHANNELS.roomStart, { ...config, finalizerId: 'codex' }).ok).toBe(false);
+  it('accepts a valid room start and rejects an invalid one', () => {
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config })).toEqual({ ok: true, value: { config } });
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, continueId: 'room-1_a' })).toEqual({ ok: true, value: { config, continueId: 'room-1_a' } });
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config: { ...config, rounds: 51 } }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config: { ...config, prompt: '' } }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config: { ...config, finalizerId: 'codex' } }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, config).ok).toBe(false);
     expect(validateRequest(INVOKE_CHANNELS.roomStart, null).ok).toBe(false);
+    for (const continueId of ['../x', 'a/b', '', 7, null, 'x'.repeat(65)]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, continueId }).ok).toBe(false);
+    }
+  });
+
+  it('opens a room by a valid id only', () => {
+    expect(validateRequest(INVOKE_CHANNELS.roomOpen, { id: 'room-1_a' })).toEqual({ ok: true, value: { id: 'room-1_a' } });
+    for (const id of ['../x', 'a/b', 'a.b', '', 7, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomOpen, { id }).ok).toBe(false);
+    }
+    expect(validateRequest(INVOKE_CHANNELS.roomOpen, null).ok).toBe(false);
   });
 
   it('takes no payload for state, select and stop', () => {
-    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
+    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);
       expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
     }

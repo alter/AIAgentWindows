@@ -133,6 +133,7 @@ async function start(): Promise<void> {
     copy: (text) => clipboard.writeText(text),
   });
   room = roomService;
+  await roomService.init();
   registerIpc(active, roomService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(

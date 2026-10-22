@@ -67,6 +67,10 @@ export interface RoomRecord {
   entries: RoomEntry[];
   nonce: string;
 }
+export type RoomListItem =
+  | { id: string; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string }
+  | { id: string; unreadable: true };
+
 export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
 
 export interface RoomPlan {
