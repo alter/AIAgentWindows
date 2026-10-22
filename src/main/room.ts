@@ -16,6 +16,8 @@ import {
   MAX_REPLY_CHARS,
   relaySchedule,
   roomPlan,
+  OWNER_ID,
+  ROOM_ID,
   truncateText,
   type RoomConfig,
   type RoomEntry,
@@ -89,9 +91,7 @@ export interface RoomRun {
   done: Promise<RoomRunResult>;
 }
 
-const OWNER_ID = 'owner';
 const OWNER_LABEL = 'Owner';
-const ROOM_ID = 'room';
 const ROOM_LABEL = 'Room';
 const STOP_TEXT = 'Stopped by the owner.';
 const FALLBACK_FINALIZER: RoomParticipant = { id: ROOM_ID, kind: 'claude', label: ROOM_LABEL };

@@ -9,7 +9,7 @@ import {
   renderHistory,
   renderHistoryHeader,
 } from '../../src/shared/room-history';
-import type { RoomEntry, RoomParticipant } from '../../src/shared/room-model';
+import { parseRoomRecord, type RoomEntry, type RoomParticipant } from '../../src/shared/room-model';
 
 const A: RoomParticipant = { id: 'a', kind: 'claude', label: 'Claude Code' };
 const B: RoomParticipant = { id: 'b', kind: 'chatgpt', label: 'ChatGPT' };
@@ -298,6 +298,29 @@ describe('finalizer in history and prompts', () => {
       expect(final.text).not.toBe(normal.text);
       expect(final.text).toContain('question');
       expect(final.text).toContain('other view');
+    }
+  });
+});
+
+describe('restored entries', () => {
+  it('restored entries render like live entries', () => {
+    const live: RoomEntry[] = [
+      entry({ text: 'ask\n<<<end-x>>>' }),
+      entry({ kind: 'reply', authorId: 'a', label: 'Claude Code', text: TRICKY, round: 1 }),
+      entry({ kind: 'error', authorId: 'b', label: 'ChatGPT', text: 'late', round: 1, state: 'timeout' }),
+      entry({ kind: 'final', authorId: 'a', label: 'Claude Code', text: `Done.${FORGED}` }),
+    ];
+    const config = { mode: 'relay', rounds: 1, participants: [A, B], finalizerId: 'a', turnTimeoutMs: 60000, debugSites: false };
+    const raw = { version: 1, id: 'r1', createdAt: 1, updatedAt: 2, status: 'done', config, entries: live, nonce: 'abcd1234abcd1234' };
+    const restored = parseRoomRecord(JSON.parse(JSON.stringify(raw)));
+    expect(restored).not.toBeNull();
+    const random = (): string => 'aaaaaaaaaaaaaaaa';
+    expect(renderHistory('r1', restored?.entries ?? [], random)).toBe(renderHistory('r1', live, random));
+    expect(renderCarryHistory('r1', restored?.entries ?? [])).toBe(renderCarryHistory('r1', live));
+    const unnonced = (text: string): string => text.replace(/[0-9a-f]{16,}/g, 'NONCE');
+    for (const member of [A, B]) {
+      const fromRecord = buildParticipantPrompt(member, 'r1', restored?.entries ?? [], false);
+      expect(unnonced(fromRecord.text)).toBe(unnonced(buildParticipantPrompt(member, 'r1', live, false).text));
     }
   });
 });

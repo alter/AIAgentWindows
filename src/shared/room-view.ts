@@ -2,8 +2,11 @@
 import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
 import { renderCarryHistory } from './room-history';
 import {
+  OWNER_ID,
+  ROOM_ID,
   ROOM_PARTICIPANTS,
   defaultFinalizerId,
+  roomPlan,
   parseRoomConfig,
   type RoomConfigResult,
   type RoomEntry,
@@ -13,6 +16,7 @@ import {
   type RoomMode,
   type RoomParticipant,
   type RoomPlan,
+  type RoomRecord,
   type RoomStatus,
   type StepState,
 } from './room-model';
@@ -247,4 +251,47 @@ export function feedSections(entries: readonly RoomEntry[], plan: RoomPlan | nul
     const isFinal = (section: FeedSection): boolean => section.key.endsWith('final');
     return [...all.filter((section) => !isFinal(section)), ...all.filter(isFinal)];
   });
+}
+
+function settledState(entry: RoomEntry): StepState {
+  if (entry.kind !== 'error') return 'replied';
+  return entry.state === 'timeout' ? 'timeout' : 'failed';
+}
+
+function recordEvents(record: RoomRecord, historyPath: string): RoomEvent[] {
+  const lastPrompt = record.entries.map((entry) => entry.kind).lastIndexOf('prompt');
+  const previous = record.entries.slice(0, Math.max(0, lastPrompt));
+  const current = record.entries.slice(Math.max(0, lastPrompt));
+  const plan = roomPlan({ ...record.config, prompt: '' });
+  const base = plan.participants.length * plan.rounds + 1;
+  const events: RoomEvent[] = [{ type: 'started', roomId: record.id, historyPath, total: base, plan, previous }];
+  let completed = 0;
+  let total = base;
+  for (const entry of current) {
+    events.push({ type: 'entry', roomId: record.id, entry });
+    if (entry.authorId === ROOM_ID && entry.state !== 'stopped') total += 1;
+    if (entry.authorId === OWNER_ID || entry.authorId === ROOM_ID) continue;
+    completed += 1;
+    events.push({ type: 'progress', roomId: record.id, participantId: entry.authorId, state: 'running', completed: completed - 1, total });
+    events.push({ type: 'progress', roomId: record.id, participantId: entry.authorId, state: settledState(entry), completed, total });
+  }
+  events.push({ type: 'finished', roomId: record.id, status: record.status === 'running' ? 'stopped' : record.status });
+  return events;
+}
+
+export function snapshotFromRecord(record: RoomRecord, historyPath: string): RoomSnapshot {
+  return recordEvents(record, historyPath).reduce(applyRoomEvent, emptyRoomSnapshot());
+}
+
+export function formFromRecord(record: RoomRecord): RoomFormValues {
+  const { config } = record;
+  return {
+    prompt: '',
+    mode: config.mode,
+    rounds: String(config.rounds),
+    timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
+    checked: config.participants.map((participant) => participant.id),
+    finalizerId: config.finalizerId,
+    debugSites: config.debugSites,
+  };
 }

@@ -15,3 +15,6 @@ Received: "running"
 
 ## T02 write set
 `tests/integration/room.test.ts` added to WRITE-SET: the plan names it for the Room.start record and continuation tests, and the Room rig lives there.
+
+## T03 reverse control
+Tests written after the code, so red was shown by breaking the code in place and restoring (diff clean afterwards): dropping the running-to-stopped mapping of `snapshotFromRecord` and the fallback-final `total` count turned red `equals the live snapshot after a timeout, a failed finalizer and a fallback final`, `a stopped record keeps its replies and says Stopped`, `a record still marked running is shown as stopped, never as running` (tests/unit/room-view.test.ts: 3 failed, 125 passed). `restored entries render like live entries` guards existing renderHistory and buildParticipantPrompt against a record round trip; it was green at first run because the product code already fenced entries (it is a regression guard, not a new behaviour test).

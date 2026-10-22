@@ -1,8 +1,8 @@
 // room-view.test.ts
 import { describe, expect, it } from 'vitest';
 import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
-import type { RoomEntry, RoomEvent, RoomPlan } from '../../src/shared/room-model';
-import { ROOM_PARTICIPANTS } from '../../src/shared/room-model';
+import type { RoomEntry, RoomEvent, RoomPlan, RoomRecord, RoomRecordConfig } from '../../src/shared/room-model';
+import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
 import {
   applyRoomEvent,
   carryText,
@@ -10,10 +10,12 @@ import {
   entryState,
   feedSections,
   finalText,
+  formFromRecord,
   formToConfig,
   participantAvailability,
   resolveFinalizer,
   roomProgress,
+  snapshotFromRecord,
   type RoomFormValues,
 } from '../../src/shared/room-view';
 import { adapterFor } from '../../src/main/site-adapters/registry';
@@ -621,5 +623,119 @@ describe('finalText', () => {
     expect(finalText({ ...snapshot, entries: snapshot.entries.slice(0, 2) })).toBeNull();
     expect(finalText({ ...snapshot, entries: [{ ...turn('b', undefined, 'final'), text: '' }] })).toBeNull();
     expect(finalText(emptyRoomSnapshot())).toBeNull();
+  });
+});
+
+describe('snapshot from a record', () => {
+  const MS = 1_700_000_000_000;
+  const CONFIG: RoomRecordConfig = { mode: 'relay', rounds: 1, participants: PLAN.participants, finalizerId: 'a', turnTimeoutMs: 90_000, debugSites: false };
+
+  function record(entries: RoomEntry[], status: RoomRecord['status'], config = CONFIG): RoomRecord {
+    const parsed = parseRoomRecord(JSON.parse(JSON.stringify({ version: 1, id: 'r1', createdAt: MS, updatedAt: MS, status, config, entries, nonce: 'abcd1234abcd1234' })));
+    if (parsed === null) throw new Error('record does not parse');
+    return parsed;
+  }
+
+  const prompt = (text = 'ask'): RoomEntry => ({ authorId: 'owner', label: 'Owner', time: MS, kind: 'prompt', text });
+  const roomNote = (text: string, extra: Partial<RoomEntry> = {}): RoomEntry => ({ authorId: 'room', label: 'Room', time: MS, kind: 'error', text, ...extra });
+
+  function live(entries: RoomEntry[], status: 'done' | 'stopped' | 'failed', plan: RoomPlan, total: number): ReturnType<typeof emptyRoomSnapshot> {
+    const lastPrompt = entries.map((item) => item.kind).lastIndexOf('prompt');
+    const events: RoomEvent[] = [{ type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total, plan, previous: entries.slice(0, lastPrompt) }];
+    let completed = 0;
+    let all = total;
+    for (const item of entries.slice(lastPrompt)) {
+      if (item.authorId === 'room' && item.state !== 'stopped') all += 1;
+      if (item.authorId !== 'owner' && item.authorId !== 'room') events.push({ type: 'progress', roomId: 'r1', participantId: item.authorId, state: 'running', completed, total: all });
+      events.push({ type: 'entry', roomId: 'r1', entry: item });
+      if (item.authorId !== 'owner' && item.authorId !== 'room') {
+        completed += 1;
+        const state = item.kind !== 'error' ? 'replied' : item.state === 'timeout' ? 'timeout' : 'failed';
+        events.push({ type: 'progress', roomId: 'r1', participantId: item.authorId, state, completed, total: all });
+      }
+    }
+    events.push({ type: 'finished', roomId: 'r1', status });
+    return run(events);
+  }
+
+  const reply = (id: string, text: string, round?: number): RoomEntry => ({ authorId: id, label: id === 'a' ? 'Claude Code' : 'Codex', time: MS, kind: 'reply', text, ...(round === undefined ? {} : { round }) });
+  const final = (id: string, text: string): RoomEntry => ({ ...reply(id, text), kind: 'final' });
+
+  it('carries the id, history path, status as phase, entries and plan of the record', () => {
+    const entries = [prompt(), reply('a', 'one', 1), reply('b', 'two', 1), final('a', 'end')];
+    const snapshot = snapshotFromRecord(record(entries, 'done'), '/h/r1.md');
+    expect(snapshot).toMatchObject({ phase: 'done', roomId: 'r1', historyPath: '/h/r1.md', entries, plan: roomPlan({ ...CONFIG, prompt: '' }), paused: [], running: [] });
+  });
+
+  it('equals the live snapshot at the end of a finished relay with a final answer', () => {
+    const entries = [prompt(), reply('a', 'one', 1), reply('b', 'two', 1), final('a', 'end')];
+    expect(snapshotFromRecord(record(entries, 'done'), '/h/r1.md')).toEqual(live(entries, 'done', PLAN, 3));
+  });
+
+  it('equals the live snapshot after a timeout, a failed finalizer and a fallback final', () => {
+    const entries = [
+      prompt(),
+      reply('a', 'one', 1),
+      { ...reply('b', 'late', 1), kind: 'error' as const, state: 'timeout' as const },
+      { ...reply('a', 'broke'), kind: 'error' as const },
+      roomNote('Final by Codex (finalizer Claude Code failed)'),
+      final('b', 'saved'),
+    ];
+    const snapshot = snapshotFromRecord(record(entries, 'done'), '/h/r1.md');
+    expect(snapshot).toEqual(live(entries, 'done', PLAN, 3));
+    expect(roomProgress(snapshot)?.banner?.tone).toBe('warn');
+  });
+
+  it('equals the live snapshot of a broadcast over two rounds', () => {
+    const config = { ...CONFIG, mode: 'broadcast' as const, rounds: 2 };
+    const entries = [prompt(), reply('b', 'b1', 1), reply('a', 'a1', 1), reply('a', 'a2', 2), reply('b', 'b2', 2), final('a', 'end')];
+    expect(snapshotFromRecord(record(entries, 'done', config), '/h/r1.md')).toEqual(live(entries, 'done', { ...PLAN, mode: 'broadcast', rounds: 2 }, 5));
+  });
+
+  it('a stopped record keeps its replies and says Stopped', () => {
+    const entries = [prompt(), reply('a', 'one', 1), roomNote('Stopped by the owner.', { state: 'stopped' })];
+    const snapshot = snapshotFromRecord(record(entries, 'stopped'), '/h/r1.md');
+    expect(snapshot).toEqual(live(entries, 'stopped', PLAN, 3));
+    expect(roomProgress(snapshot)?.banner).toEqual({ tone: 'stopped', text: 'Stopped' });
+    expect(carryText(snapshot, 'final')).toBe('one');
+  });
+
+  it('a failed record says Failed', () => {
+    const snapshot = snapshotFromRecord(record([prompt()], 'failed'), '/h/r1.md');
+    expect(snapshot.phase).toBe('failed');
+    expect(roomProgress(snapshot)?.banner).toEqual({ tone: 'failed', text: 'Failed' });
+  });
+
+  it('a record still marked running is shown as stopped, never as running', () => {
+    expect(snapshotFromRecord(record([prompt(), reply('a', 'one', 1)], 'running'), '/h/r1.md').phase).toBe('stopped');
+  });
+
+  it('a continued room is shown like the live end of its second run', () => {
+    const first = [prompt('first'), reply('a', 'one', 1), reply('b', 'two', 1), final('a', 'end one')];
+    const second = [prompt('second'), reply('a', 'three', 1), reply('b', 'four', 1), final('a', 'end two')];
+    const entries = [...first, ...second];
+    const snapshot = snapshotFromRecord(record(entries, 'done'), '/h/r1.md');
+    expect(snapshot).toEqual(live(entries, 'done', PLAN, 3));
+    expect(feedSections(snapshot.entries, snapshot.plan).map((section) => section.key)).toEqual(['prompt', 'round-1', 'final', 'run2-prompt', 'run2-round-1', 'run2-final']);
+    expect(roomProgress(snapshot)?.banner).toEqual({ tone: 'done', text: 'Done \u2014 final answer from Claude Code' });
+    expect(carryText(snapshot, 'final')).toBe('end two');
+  });
+
+  it('a record without entries gives an empty feed', () => {
+    const snapshot = snapshotFromRecord(record([], 'stopped'), '/h/r1.md');
+    expect(snapshot.entries).toEqual([]);
+    expect(snapshot.phase).toBe('stopped');
+  });
+
+  it('prefills the settings of the last run and leaves the prompt empty', () => {
+    const form = formFromRecord(record([prompt()], 'done', { ...CONFIG, mode: 'broadcast', rounds: 3, debugSites: true }));
+    expect(form).toEqual({ prompt: '', mode: 'broadcast', rounds: '3', timeoutMinutes: '1.5', checked: ['a', 'b'], finalizerId: 'a', debugSites: true });
+  });
+
+  it('the prefilled settings turn back into the same config', () => {
+    const participants = ROOM_PARTICIPANTS.filter((item) => item.id === 'claude' || item.id === 'codex');
+    const config = { ...CONFIG, participants, finalizerId: 'codex', rounds: 2, turnTimeoutMs: 90_000 };
+    const result = formToConfig({ ...formFromRecord(record([prompt()], 'done', config)), prompt: 'again' });
+    expect(result).toEqual({ ok: true, config: { ...config, prompt: 'again' } });
   });
 });
