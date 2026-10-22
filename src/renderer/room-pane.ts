@@ -107,6 +107,7 @@ export class RoomPane {
 
   apply(event: RoomEvent): void {
     this.snapshot = applyRoomEvent(this.snapshot, event);
+    if (this.snapshot.roomId !== null) this.openedId = this.snapshot.roomId;
     this.renderFeed();
     this.renderState();
     if (event.type === 'finished') void this.refreshList();
@@ -136,7 +137,7 @@ export class RoomPane {
     this.rooms.addEventListener('change', () => {
       if (this.rooms.value !== '') void this.openRoom(this.rooms.value);
     });
-    this.newRoom.addEventListener('click', () => this.onNewRoom());
+    this.newRoom.addEventListener('click', () => void this.onNewRoom());
     row.append(field('Rooms', this.rooms), this.newRoom);
     return row;
   }
@@ -176,7 +177,11 @@ export class RoomPane {
     this.renderList();
   }
 
-  private onNewRoom(): void {
+  private async onNewRoom(): Promise<void> {
+    if (!(await api.roomNew())) {
+      this.message.textContent = 'A run is in progress: stop it first.';
+      return;
+    }
     this.openedId = null;
     this.debugDir = null;
     this.message.textContent = '';

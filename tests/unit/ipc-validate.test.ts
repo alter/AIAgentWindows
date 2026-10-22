@@ -140,7 +140,7 @@ describe('room channels', () => {
   });
 
   it('takes no payload for state, select and stop', () => {
-    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
+    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomNew, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);
       expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
     }

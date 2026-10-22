@@ -76,6 +76,12 @@ export class RoomService {
     return { ok: true, snapshot: this.snapshot, form: formFromRecord(record) };
   }
 
+  newRoom(): boolean {
+    if (this.room.isRunning()) return false;
+    this.snapshot = emptyRoomSnapshot();
+    return true;
+  }
+
   async start(config: RoomConfig, continueId?: string): Promise<RoomStartResult> {
     try {
       const from = continueId === undefined ? undefined : await this.continuation(continueId);

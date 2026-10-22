@@ -387,6 +387,44 @@ describe('room archive in the service', () => {
     expect((await listRecords(roomsDir())).length).toBe(1);
   });
 
+  it('continues the room a live run just finished in, without opening it from the list', async () => {
+    const { room, seen } = service(echoDriver());
+    const first = await room.start(config({ prompt: 'first prompt', participants: [CLAUDE] }));
+    await finished(seen);
+    const id = first.ok ? first.roomId : '';
+    const second = await room.start(config({ prompt: 'second prompt', participants: [CLAUDE] }), id);
+    expect(second.ok && second.roomId).toBe(id);
+    await vi.waitFor(() => expect(seen.filter((event) => event.type === 'finished').length).toBe(2));
+    const record = await readRecord(roomsDir(), id);
+    expect(record?.entries.filter((entry) => entry.kind === 'prompt').map((entry) => entry.text)).toEqual(['first prompt', 'second prompt']);
+    expect((await listRecords(roomsDir())).length).toBe(1);
+  });
+
+  it('new room clears the snapshot so a reload does not bring the old room back, and a continuation of it is refused', async () => {
+    const id = await savedRoom();
+    const { room } = service(echoDriver());
+    await room.open(id);
+    expect(room.newRoom()).toBe(true);
+    expect(room.state().roomId).toBeNull();
+    expect(room.state().entries).toEqual([]);
+    expect((await room.start(config(), id)).ok).toBe(false);
+  });
+
+  it('new room is refused while a run is in progress', async () => {
+    const hang: DriverFactory = async () => ({
+      turn: (request) => new Promise((resolve) => request.signal.addEventListener('abort', () => resolve(null))),
+      reset: async () => undefined,
+      dispose: () => undefined,
+    });
+    const { room, seen } = service(hang);
+    await room.start(config({ participants: [CLAUDE] }));
+    const before = room.state();
+    expect(room.newRoom()).toBe(false);
+    expect(room.state()).toBe(before);
+    room.stop();
+    await finished(seen);
+  });
+
   it('refuses a continuation that is not the opened room or has no record', async () => {
     const id = await savedRoom();
     const { room } = service(echoDriver());

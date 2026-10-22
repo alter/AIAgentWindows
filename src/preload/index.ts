@@ -35,6 +35,7 @@ const api: AppApi = {
   roomState: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomState) as Promise<RoomSnapshot>,
   roomList: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomList) as Promise<RoomListItem[]>,
   roomOpen: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomOpen, { id }) as Promise<RoomOpenResult>,
+  roomNew: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomNew) as Promise<boolean>,
   roomSelect: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomSelect) as Promise<void>,
   roomStart: (config: RoomConfig, continueId?: string) =>
     ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, continueId === undefined ? { config } : { config, continueId }) as Promise<RoomStartResult>,

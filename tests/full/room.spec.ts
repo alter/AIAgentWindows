@@ -402,6 +402,8 @@ test('a second run opens a new chat and its reply is complete although identical
     const firstFile = await historyFileOf(page);
     const loadsAfterFirst = loads;
     expect(firstReplyIn(firstFile)).toBe(SAME_ANSWER.join('\n'));
+    await field(page, 'new').click();
+    await field(page, 'prompt').fill('same question');
     await field(page, 'start').click();
     await expect(async () => {
       const file = await historyFileOf(page);
@@ -487,6 +489,34 @@ test('a finished room is listed, New room clears the feed and the list reopens i
     expect(await page.locator('.room-entry').count()).toBeGreaterThan(feedCount);
     expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(1);
     expect(before).toContain('History:');
+  } finally {
+    await app.close();
+  }
+});
+
+test('Start after a finished live run continues the same room and New room starts a fresh one', async () => {
+  const { app, page } = await open();
+  try {
+    await run(page, 'broadcast', 1, 'first question');
+    const firstFile = await historyFileOf(page);
+    const firstCount = await page.locator('.room-entry').count();
+    await expect(field(page, 'start')).toHaveText('Continue');
+    await field(page, 'prompt').fill('second question');
+    await field(page, 'start').click();
+    await expect(page.locator('.room-entry')).not.toHaveCount(firstCount);
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
+    expect(await historyFileOf(page)).toBe(firstFile);
+    const text = readFileSync(firstFile, 'utf8');
+    expect(text.indexOf('first question')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('first question')).toBeLessThan(text.indexOf('second question'));
+    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(1);
+    await field(page, 'new').click();
+    await expect(field(page, 'start')).toHaveText('Start');
+    await field(page, 'prompt').fill('third question');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
+    expect(await historyFileOf(page)).not.toBe(firstFile);
+    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(2);
   } finally {
     await app.close();
   }

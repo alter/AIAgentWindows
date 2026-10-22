@@ -17,6 +17,7 @@ export const INVOKE_CHANNELS = {
   roomState: 'room:state',
   roomList: 'room:list',
   roomOpen: 'room:open',
+  roomNew: 'room:new',
   roomSelect: 'room:select',
   roomStart: 'room:start',
   roomStop: 'room:stop',
@@ -88,6 +89,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomState]: undefined;
   [INVOKE_CHANNELS.roomList]: undefined;
   [INVOKE_CHANNELS.roomOpen]: { id: string };
+  [INVOKE_CHANNELS.roomNew]: undefined;
   [INVOKE_CHANNELS.roomSelect]: undefined;
   [INVOKE_CHANNELS.roomStart]: RoomStartRequest;
   [INVOKE_CHANNELS.roomStop]: undefined;
@@ -118,6 +120,7 @@ export interface AppApi {
   roomState(): Promise<RoomSnapshot>;
   roomList(): Promise<RoomListItem[]>;
   roomOpen(id: string): Promise<RoomOpenResult>;
+  roomNew(): Promise<boolean>;
   roomSelect(): Promise<void>;
   roomStart(config: RoomConfig, continueId?: string): Promise<RoomStartResult>;
   roomStop(): Promise<void>;
@@ -208,6 +211,7 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.roomList]: noPayload,
   [INVOKE_CHANNELS.roomOpen]: (payload) =>
     isRecord(payload) && isRoomId(payload['id']) ? { id: payload['id'] } : null,
+  [INVOKE_CHANNELS.roomNew]: noPayload,
   [INVOKE_CHANNELS.roomSelect]: noPayload,
   [INVOKE_CHANNELS.roomStart]: parseRoomStart,
   [INVOKE_CHANNELS.roomStop]: noPayload,
