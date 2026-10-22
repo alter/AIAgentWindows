@@ -16,6 +16,7 @@
       <button id="stop" type="button" aria-label="Stop generating" hidden>Stop</button>
       <input id="file" type="file" />
     </form>
+    <ol id="nav" tabindex="0"></ol>
     <aside id="extra" hidden><textarea id="extra-ta" aria-label="Feedback"></textarea></aside>
     <script>
       const query = new URLSearchParams(location.search);
@@ -42,6 +43,17 @@
         log = thread;
       }
       const history = document.querySelector('#history ul');
+      const navList = document.getElementById('nav');
+      const asked = [];
+      function renderNav() {
+        const clip = query.get('nav') === 'ellipsis';
+        navList.replaceChildren(...asked.map((entry) => {
+          const item = document.createElement('li');
+          const line = entry.replace(/\s+/g, ' ').trim();
+          item.textContent = clip ? line.slice(0, 40) + '\u2026' : line;
+          return item;
+        }));
+      }
       window.attachClicks = 0;
       window.micClicks = 0;
       window.submissions = 0;
@@ -89,6 +101,8 @@
         ce.replaceChildren(document.createElement('p'));
         refresh();
         if (!query.has('noecho')) add('user', query.has('oneline') ? [text.replace(/\s+/g, ' ')] : text.split('\n'));
+        asked.push(text);
+        if (query.has('nav') && asked.length >= 2) renderNav();
         const item = document.createElement('li');
         item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
         history.appendChild(item);
@@ -120,7 +134,7 @@
         const row = document.createElement('p');
         reply.appendChild(row);
         const fixed = query.get('reply');
-        const chunks = fixed === null ? ['ECHO: ' + text, ' part-2', ' part-3'] : fixed.split('|');
+        const chunks = fixed === null ? [(query.has('numbered') ? 'ECHO ' + window.submissions + ': ' : 'ECHO: ') + text, ' part-2', ' part-3'] : fixed.split('|');
         let index = 0;
         const step = () => {
           if (fixed === null) row.textContent += chunks[index];

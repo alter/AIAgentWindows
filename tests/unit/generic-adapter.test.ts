@@ -501,6 +501,34 @@ describe('generic adapter: the reply is anchored on the echo of the prompt', () 
   });
 });
 
+describe('generic adapter: a question navigator after the composer repeats every user message', () => {
+  const ROOM_PROMPT = 'Room so far, continue the discussion with a new point.\nKeep it short and concrete.';
+
+  async function twoRounds(search: string) {
+    const page = openPage(search);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    const options = { ...FAST, timeoutMs: 5000, trace: (fields: Record<string, unknown>) => traces.push(fields) };
+    const first = await runAdapterTurn(adapter, page.runner, ROOM_PROMPT, options);
+    const second = await runAdapterTurn(adapter, page.runner, ROOM_PROMPT, options).then(
+      (reply) => reply,
+      (error: unknown) => error,
+    );
+    return { first, second, traces };
+  }
+
+  it.each([
+    ['full', 3, 2],
+    ['ellipsis', 1, 0],
+  ])('reads the newest reply in the second round when the navigator holds the prompt (%s)', async (kind, hits, rank) => {
+    const { first, second, traces } = await twoRounds(`?nomain=1&nostop=1&numbered=1&nav=${kind}`);
+    expect(first).toContain('ECHO 1:');
+    expect(second).toContain('ECHO 2:');
+    expect(second).toBe(`ECHO 2: ${ROOM_PROMPT.replace(/\s+/g, ' ')} part-2 part-3`);
+    expect(traces[1]).toMatchObject({ outcome: 'reply', echoFound: true, keyHits: hits, anchorRank: rank });
+  });
+});
+
 describe('generic adapter: files and registry', () => {
   it('hands the file to the page-wide file input', async () => {
     const page = openPage();

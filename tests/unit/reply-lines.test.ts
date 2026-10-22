@@ -1,6 +1,6 @@
 // reply-lines.test.ts
 import { describe, expect, it } from 'vitest';
-import { anchorAfterEcho, extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
+import { anchorAfterEcho, echoTails, extractAnchoredReply, extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
 import { stripEntryMarkerLines } from '../../src/shared/room-history';
 
 const PROMPT = ['Intro line that is long enough', '<<<entry-abc author="Owner" kind=prompt>>>', 'Ask', '<<<end-abc>>>'].join('\n');
@@ -163,5 +163,62 @@ describe('anchorAfterEcho', () => {
   it('is null when the page does not show the start of the prompt', () => {
     expect(anchorAfterEcho('Sidebar title\nSomething else', ASK)).toBeNull();
     expect(anchorAfterEcho('anything', '   ')).toBeNull();
+  });
+});
+
+describe('echoTails', () => {
+  const ASK = 'You are DeepSeek in a room where several agents take turns.\nCompare the two designs.';
+
+  it('lists the tails from the last occurrence of the key to the first, one per line', () => {
+    const page = `${ASK}\nOne\n${ASK}\nTwo\n${ASK.replace(/\s+/g, ' ')}`;
+    expect(echoTails(page, ASK)).toEqual([ASK.replace(/\s+/g, ' '), `${ASK}\nTwo\n${ASK.replace(/\s+/g, ' ')}`, `${ASK}\nOne\n${ASK}\nTwo\n${ASK.replace(/\s+/g, ' ')}`]);
+  });
+
+  it('is empty without the key and gives one tail for a key mentioned only inside a line', () => {
+    expect(echoTails('nothing here', ASK)).toEqual([]);
+    expect(echoTails('Title\nYou said: hello there my friend\nAnswer', 'hello there my friend')).toEqual([
+      'You said: hello there my friend\nAnswer',
+    ]);
+  });
+});
+
+describe('anchored reply with a navigator that repeats the prompt', () => {
+  const ASK = 'You are DeepSeek in a room where several agents take turns.\nCompare the two designs.';
+  const ONE_LINE = ASK.replace(/\s+/g, ' ');
+  const ANSWER = 'The first design is simpler and the second scales better.';
+
+  it('anchors on the last occurrence that a reply follows, not on a navigator item after the reply', () => {
+    const page = [ASK, ANSWER, ONE_LINE, ONE_LINE].join('\n');
+    const found = extractAnchoredReply(page, '', ASK);
+    expect(found).toMatchObject({ reply: ANSWER, echoFound: true, keyHits: 3, anchorRank: 2 });
+  });
+
+  it('never puts a navigator item cut off with an ellipsis into the reply', () => {
+    const cut = `${ONE_LINE.slice(0, 60)}\u2026`;
+    const page = [ASK, ANSWER, cut, `${ONE_LINE.slice(0, 20)}...`].join('\n');
+    const found = extractAnchoredReply(page, '', ASK);
+    expect(found.reply).toBe(ANSWER);
+    expect(found.dropped.echo).toBe(4);
+  });
+
+  it('keeps a line that only ends with an ellipsis and is not the start of the prompt', () => {
+    expect(extractAnchoredReply(`${ASK}\nSo the answer is unclear but we could try...`, '', ASK).reply).toBe(
+      'So the answer is unclear but we could try...',
+    );
+  });
+
+  it('keeps the newest reply when an older identical echo with its reply is unseen too', () => {
+    const page = [ASK, 'Old reply to the same question text.', ASK, ANSWER, ONE_LINE].join('\n');
+    const found = extractAnchoredReply(page, '', ASK);
+    expect(found).toMatchObject({ reply: ANSWER, anchorRank: 1 });
+  });
+
+  it('uses the last occurrence and no reply when nothing follows any occurrence', () => {
+    const found = extractAnchoredReply(`${ASK}\n${ONE_LINE}`, '', ASK);
+    expect(found).toMatchObject({ reply: null, echoFound: true, keyHits: 2, anchorRank: 0 });
+  });
+
+  it('reports no hits and no rank without an echo', () => {
+    expect(extractAnchoredReply('Sidebar title\nSomething else', '', ASK)).toMatchObject({ echoFound: false, keyHits: 0, anchorRank: -1 });
   });
 });

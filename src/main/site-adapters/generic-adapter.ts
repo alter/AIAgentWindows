@@ -61,6 +61,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let submitted = false;
   let submittedAt = 0;
   let echoFound = false;
+  let keyHits = 0;
+  let anchorRank = -1;
   let visibleComposers = 0;
   let composerClearedMs = -1;
   let lastSeen: string | null = null;
@@ -89,6 +91,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     const found = extractAnchoredReply(value.text, before, prompt);
     drops = found.dropped;
     echoFound = found.echoFound;
+    keyHits = found.keyHits;
+    anchorRank = found.anchorRank;
     const now = Date.now();
     if (value.stop) stopSeen = true;
     textLenAtEnd = value.text.length;
@@ -136,6 +140,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       inserted = 0;
       submitPath = 'none';
       echoFound = false;
+      keyHits = 0;
+      anchorRank = -1;
       visibleComposers = 0;
       composerClearedMs = -1;
       drops = NO_DROPS;
@@ -203,6 +209,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         submit: submitPath,
         composerClearedMs,
         echoFound,
+        keyHits,
+        anchorRank,
         visibleComposers,
         firstGrowthMs,
         stopSeen,
