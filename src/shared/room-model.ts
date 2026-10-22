@@ -12,7 +12,12 @@ export const MAX_ID_CHARS = 128;
 export const MAX_REPLY_CHARS = 1_000_000;
 export const MAX_HISTORY_CHARS = 4_000_000;
 export const MAX_ERROR_CHARS = 500;
+export const MAX_RECORD_ENTRIES = 20000;
+export const MAX_RECORD_BYTES = 50 * 1024 * 1024;
 const TRUNCATION_RESERVE = 64;
+const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const ENTRY_KINDS: readonly RoomEntryKind[] = ['prompt', 'reply', 'final', 'error'];
+const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stopped', 'failed'];
 
 export type RoomMode = 'broadcast' | 'relay';
 export type RoomEntryKind = 'prompt' | 'reply' | 'final' | 'error';
@@ -42,6 +47,19 @@ export interface RoomEntry {
 }
 
 export type RoomStatus = 'done' | 'stopped' | 'failed';
+export type RoomRecordStatus = 'running' | RoomStatus;
+export type RoomRecordConfig = Omit<RoomConfig, 'prompt'>;
+
+export interface RoomRecord {
+  version: 1;
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  status: RoomRecordStatus;
+  config: RoomRecordConfig;
+  entries: RoomEntry[];
+  nonce: string;
+}
 export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
 
 export interface RoomPlan {
@@ -160,4 +178,51 @@ export function truncateText(text: string, limit: number): string {
   const last = text.charCodeAt(keep - 1);
   if (keep > 0 && last >= 0xd800 && last <= 0xdbff) keep -= 1;
   return `${text.slice(0, keep)}\n[truncated ${text.length - keep} chars]`;
+}
+
+export function isRoomId(value: unknown): value is string {
+  return typeof value === 'string' && ROOM_ID_PATTERN.test(value);
+}
+
+function isTimestamp(value: unknown): value is number {
+  return isInRange(value, 0, Number.MAX_SAFE_INTEGER);
+}
+
+function parseEntry(value: unknown): RoomEntry | null {
+  if (!isRecord(value)) return null;
+  const { authorId, label, time, kind, text } = value;
+  if (!isBoundedString(authorId, MAX_ID_CHARS) || !isBoundedString(label, MAX_ID_CHARS) || !isTimestamp(time)) return null;
+  if (typeof kind !== 'string' || !(ENTRY_KINDS as readonly string[]).includes(kind)) return null;
+  if (typeof text !== 'string' || text.length > MAX_REPLY_CHARS) return null;
+  return { authorId, label, time, kind: kind as RoomEntryKind, text };
+}
+
+function parseEntries(value: unknown): RoomEntry[] | null {
+  if (!Array.isArray(value) || value.length > MAX_RECORD_ENTRIES) return null;
+  const entries: RoomEntry[] = [];
+  for (const item of value) {
+    const entry = parseEntry(item);
+    if (!entry) return null;
+    entries.push(entry);
+  }
+  return entries;
+}
+
+function parseRecordConfig(value: unknown): RoomRecordConfig | null {
+  if (!isRecord(value)) return null;
+  const result = parseRoomConfig({ ...value, prompt: '-' });
+  if (!result.ok) return null;
+  const { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites } = result.config;
+  return { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites };
+}
+
+export function parseRoomRecord(value: unknown): RoomRecord | null {
+  if (!isRecord(value) || value['version'] !== 1) return null;
+  const { id, createdAt, updatedAt, status, nonce } = value;
+  if (!isRoomId(id) || !isRoomId(nonce) || !isTimestamp(createdAt) || !isTimestamp(updatedAt)) return null;
+  if (typeof status !== 'string' || !(RECORD_STATUSES as readonly string[]).includes(status)) return null;
+  const config = parseRecordConfig(value['config']);
+  const entries = parseEntries(value['entries']);
+  if (!config || !entries) return null;
+  return { version: 1, id, createdAt, updatedAt, status: status as RoomRecordStatus, config, entries, nonce };
 }
