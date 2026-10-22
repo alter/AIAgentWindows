@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -218,3 +218,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 17:20 T36 done: echo hits behind a file card (mid-line) are walked after the line-start hits, tail starts at the key; `hitsAtLineStart` in every turn trace; `turn-lines` record (lengths and flags only) on timeout and no-response; "N web pages" is a UI label; red first (reply-lines 11 failed on the old file, card+navigator round 2 timed out on the old code); vitest reply-lines+generic-adapter+site-adapters 127/127, fast tier 11/11 (FASTRUN-2026-10-22-171143140133), electron-smoke 25/25
 - 2026-10-22 coordinator: T36 verified (vitest reply-lines+generic-adapter+site-adapters 127/127, fast tier with shellcheck and gitleaks exit 0, electron-smoke 25/25 — this run); the inline file card is still a hypothesis for the real page, the next run's hitsAtLineStart/keyHits or a turn-lines record settles it. Paused on AC7.
 - 2026-10-22 20:30 T37 done: opt-in "Record site debug" (`debugSites`, default off) writes `<userData>/debug/sites/<runId>/<site>-<turn>/` (meta, prompt, before, snapshots per change, polls, events incl. own-origin network lifecycle via the shared debugger, net bodies, dom-end.html); sites.log gains only `debugDir`; decision rules factored into `decide.ts`; `npm run site-replay -- <dir>` replays them offline (exact on the scripted page, outcome+time printed beside the recorded); red proof by mutation (NOTES.md T37); vitest site-recorder 10 + site-replay 13 + site-network-tap 17 + shared, fast tier 11/11 (FASTRUN-2026-10-22-201114606027), electron-smoke 27/27, integrity 0 findings
+- 2026-10-22 coordinator: T37 verified (vitest site-recorder+site-replay+generic-adapter+site-network-tap 102/102, fast tier with shellcheck and gitleaks exit 0, electron-smoke 27/27, no debug/ in the repository — this run). T38 (detection redesign) is written only after the owner's first recording. Paused on AC7.
