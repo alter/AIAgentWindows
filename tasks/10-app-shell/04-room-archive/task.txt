@@ -39,6 +39,9 @@ WRITE-SET
   src/main/room-service.ts
   src/main/room-archive.ts
   src/main/ipc-handlers.ts
+  src/main/index.ts
+  tests/integration/room-wiring.test.ts
+  tests/unit/ipc-validate.test.ts
   src/preload/
   src/renderer/room-pane.ts
   tests/unit/room-archive.test.ts

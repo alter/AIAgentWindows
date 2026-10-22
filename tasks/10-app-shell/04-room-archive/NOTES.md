@@ -23,3 +23,6 @@ Tests written after the code, so red was shown by breaking the code in place and
 
 The worker's test was green on its first run. Mutation in `parseEntry` of `src/shared/room-model.ts`: `text` → `text.trim()`; `npx vitest run tests/unit/room-history.test.ts -t "restored entries"`: 1 failed, `AssertionError: expected '# Room r1 ...' to be '# Room r1 ...' // Object.is equality`. File restored from a copy, `git status` clean.
 
+
+## T04 write set
+src/main/index.ts (await roomService.init() before the window loads), tests/integration/room-wiring.test.ts (RoomService tests) and tests/unit/ipc-validate.test.ts (channel validation) added to WRITE-SET: the task line names init from index.ts and the service and IPC tests, which live in these files.
