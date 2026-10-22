@@ -34,6 +34,7 @@ WRITE-SET
   docs/tech/
   docs/PROJECT.md
   docs/EVIDENCE.md
+  docs/site-debug.md
   AGENTS.md
   package.json
   package-lock.json
