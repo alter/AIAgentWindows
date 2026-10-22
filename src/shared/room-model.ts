@@ -81,7 +81,7 @@ export interface PausedSession {
 }
 
 export type RoomEvent =
-  | { type: 'started'; roomId: string; historyPath: string; total: number; plan: RoomPlan }
+  | { type: 'started'; roomId: string; historyPath: string; total: number; plan: RoomPlan; previous?: RoomEntry[] }
   | { type: 'paused'; roomId: string; participantId: string; sessionId: string; note: string }
   | { type: 'resumed'; roomId: string; participantId: string }
   | { type: 'progress'; roomId: string; participantId: string; state: StepState; completed: number; total: number }

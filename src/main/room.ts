@@ -1,12 +1,12 @@
 // room.ts
 import { randomBytes } from 'node:crypto';
-import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
+import { access, appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { writeRecord } from './room-archive';
 import {
   buildParticipantPrompt,
   newNonce,
   renderEntryBlock,
-  renderHistory,
   renderHistoryHeader,
   type PromptPhase,
 } from '../shared/room-history';
@@ -23,6 +23,8 @@ import {
   type RoomEntryState,
   type RoomEvent,
   type RoomParticipant,
+  type RoomRecord,
+  type RoomRecordStatus,
   type RoomStatus,
   type StepState,
 } from '../shared/room-model';
@@ -72,6 +74,13 @@ export interface RoomRunResult {
   historyPath: string;
   status: RoomStatus;
   entries: RoomEntry[];
+}
+
+export interface RoomContinuation {
+  roomId: string;
+  entries: RoomEntry[];
+  nonce: string;
+  createdAt: number;
 }
 
 export interface RoomRun {
@@ -124,26 +133,49 @@ function fallbackFinalizers(run: RunState, lastRound: readonly RoomEntry[]): Roo
   return [...candidates.filter((participant) => participant.kind === 'claude'), ...candidates.filter((participant) => participant.kind !== 'claude')];
 }
 
+async function exists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type HistoryState = 'create' | 'reopen' | 'append';
+
 class RunState {
-  readonly entries: RoomEntry[] = [];
+  readonly entries: RoomEntry[];
+  readonly previous: RoomEntry[] | undefined;
   readonly controller = new AbortController();
   completed = 0;
-  chars = 0;
+  chars: number;
   total: number;
   readonly waiting = new Set<() => void>();
   readonly finalizer: RoomParticipant;
-  private nonce: string | null = null;
+  private readonly nonce: string;
+  private readonly createdAt: number;
+  private historyState: HistoryState;
   private writing: Promise<void> = Promise.resolve();
 
   constructor(
     readonly id: string,
     readonly historyPath: string,
+    private readonly roomsDir: string,
     readonly config: RoomConfig,
     total: number,
-    private readonly random: (() => string) | undefined,
+    random: (() => string) | undefined,
+    private readonly now: () => number,
+    from: RoomContinuation | undefined,
   ) {
     this.total = total;
     this.finalizer = config.participants.find((participant) => participant.id === config.finalizerId) ?? config.participants[0] ?? FALLBACK_FINALIZER;
+    this.entries = from === undefined ? [] : [...from.entries];
+    this.previous = from === undefined ? undefined : [...from.entries];
+    this.chars = this.entries.reduce((sum, entry) => sum + entry.text.length, 0);
+    this.nonce = from?.nonce ?? newNonce(random);
+    this.createdAt = from?.createdAt ?? now();
+    this.historyState = from === undefined ? 'create' : 'reopen';
   }
 
   get signal(): AbortSignal {
@@ -153,25 +185,43 @@ class RunState {
   add(entry: RoomEntry): void {
     this.entries.push(entry);
     this.chars += entry.text.length;
-    if (this.nonce !== null) {
-      const block = renderEntryBlock(this.nonce, entry);
-      this.enqueue(() => appendFile(this.historyPath, block, 'utf8'));
-      return;
-    }
-    const fresh = newNonce(this.random);
-    this.nonce = fresh;
-    const text = renderHistory(this.id, this.entries, () => fresh, this.finalizer.label);
-    this.enqueue(() => writeAtomic(this.historyPath, text));
+    const block = renderEntryBlock(this.nonce, entry);
+    const whole = this.historyState === 'append' ? '' : this.render(this.entries);
+    const state = this.historyState;
+    this.historyState = 'append';
+    this.enqueue(async () => {
+      if (state === 'create' || (state === 'reopen' && !(await exists(this.historyPath)))) await writeAtomic(this.historyPath, whole);
+      else await appendFile(this.historyPath, block, 'utf8');
+    });
+    const record = this.recordOf('running');
+    this.enqueue(() => writeRecord(this.roomsDir, record));
   }
 
   render(entries: readonly RoomEntry[]): string {
-    const nonce = this.nonce;
-    if (nonce === null) return renderHistory(this.id, entries, undefined, this.finalizer.label);
-    return renderHistoryHeader(this.id, nonce, this.finalizer.label) + entries.map((entry) => renderEntryBlock(nonce, entry)).join('');
+    return renderHistoryHeader(this.id, this.nonce, this.finalizer.label) + entries.map((entry) => renderEntryBlock(this.nonce, entry)).join('');
   }
 
   flushed(): Promise<void> {
     return this.writing;
+  }
+
+  async finish(status: RoomRecordStatus): Promise<void> {
+    await this.writing.catch(() => undefined);
+    await writeRecord(this.roomsDir, this.recordOf(status)).catch(() => undefined);
+  }
+
+  private recordOf(status: RoomRecordStatus): RoomRecord {
+    const { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites } = this.config;
+    return {
+      version: 1,
+      id: this.id,
+      createdAt: this.createdAt,
+      updatedAt: this.now(),
+      status,
+      config: { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites },
+      entries: [...this.entries],
+      nonce: this.nonce,
+    };
   }
 
   private enqueue(write: () => Promise<void>): void {
@@ -190,14 +240,14 @@ export class Room {
     return this.current !== null;
   }
 
-  start(config: RoomConfig): RoomRun {
+  start(config: RoomConfig, from?: RoomContinuation): RoomRun {
     if (this.current !== null) throw new Error('a room run is already in progress');
     const now = this.now();
-    const roomId = this.deps.newId?.() ?? defaultRoomId(now);
+    const roomId = from?.roomId ?? this.deps.newId?.() ?? defaultRoomId(now);
     const historyPath = path.join(this.deps.roomsDir, `${roomId}.md`);
     const turns = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length * config.rounds;
     const total = turns + 1;
-    const run = new RunState(roomId, historyPath, config, total, this.deps.newNonce);
+    const run = new RunState(roomId, historyPath, this.deps.roomsDir, config, total, this.deps.newNonce, () => this.now(), from);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
   }
@@ -231,7 +281,14 @@ export class Room {
   private async execute(run: RunState): Promise<RoomRunResult> {
     let status: RoomStatus = 'done';
     try {
-      this.emit({ type: 'started', roomId: run.id, historyPath: run.historyPath, total: run.total, plan: roomPlan(run.config) });
+      this.emit({
+        type: 'started',
+        roomId: run.id,
+        historyPath: run.historyPath,
+        total: run.total,
+        plan: roomPlan(run.config),
+        ...(run.previous === undefined ? {} : { previous: run.previous }),
+      });
       this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
@@ -245,6 +302,7 @@ export class Room {
     } catch {
       status = 'failed';
     } finally {
+      await run.finish(status);
       this.current = null;
       this.emit({ type: 'finished', roomId: run.id, status });
     }

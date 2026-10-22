@@ -93,7 +93,7 @@ function stoppedChips(chips: Record<string, ChipState>): Record<string, ChipStat
 
 export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSnapshot {
   if (event.type === 'started') {
-    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: [], running: [], paused: [], completed: 0, total: event.total, plan: event.plan, round: 1, chips: waitingChips(event.plan) };
+    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: event.previous ?? [], running: [], paused: [], completed: 0, total: event.total, plan: event.plan, round: 1, chips: waitingChips(event.plan) };
   }
   if (event.roomId !== snapshot.roomId) return snapshot;
   if (event.type === 'entry') return { ...snapshot, entries: [...snapshot.entries, event.entry] };
@@ -167,7 +167,8 @@ function finishedBanner(snapshot: RoomSnapshot, plan: RoomPlan, finalizerLabel: 
   if (snapshot.phase === 'stopped') return { tone: 'stopped', text: 'Stopped' };
   if (snapshot.phase === 'failed') return { tone: 'failed', text: 'Failed' };
   if (snapshot.phase !== 'done') return null;
-  const final = snapshot.entries.find((entry) => entry.kind === 'final');
+  const current = snapshot.entries.slice(snapshot.entries.map((entry) => entry.kind).lastIndexOf('prompt') + 1);
+  const final = current.find((entry) => entry.kind === 'final');
   if (final !== undefined && final.authorId !== plan.finalizerId) {
     return { tone: 'warn', text: `Done \u2014 final by ${final.label} (finalizer ${finalizerLabel} failed)` };
   }
@@ -226,15 +227,24 @@ function sectionOf(entry: RoomEntry, plan: RoomPlan | null): Pick<FeedSection, '
   return { key: `round-${entry.round}`, title: plan === null ? `Round ${entry.round}` : `Round ${entry.round}/${plan.rounds}` };
 }
 
+function runKey(run: number, key: string): string {
+  return run === 1 ? key : `run${run}-${key}`;
+}
+
 export function feedSections(entries: readonly RoomEntry[], plan: RoomPlan | null): FeedSection[] {
-  const sections = new Map<string, FeedSection>();
+  const runs: Array<Map<string, FeedSection>> = [];
+  let run = 1;
   entries.forEach((entry, index) => {
+    if (entry.kind === 'prompt' && runs[run - 1]?.has('prompt') === true) run += 1;
     const { key, title } = sectionOf(entry, plan);
-    const section = sections.get(key) ?? { key, title, entries: [] };
+    const sections = (runs[run - 1] ??= new Map<string, FeedSection>());
+    const section = sections.get(key) ?? { key: runKey(run, key), title, entries: [] };
     section.entries.push({ index, entry });
     sections.set(key, section);
   });
-  const all = [...sections.values()];
-  const final = all.filter((section) => section.key === 'final');
-  return [...all.filter((section) => section.key !== 'final'), ...final];
+  return runs.flatMap((sections) => {
+    const all = [...sections.values()];
+    const isFinal = (section: FeedSection): boolean => section.key.endsWith('final');
+    return [...all.filter((section) => !isFinal(section)), ...all.filter(isFinal)];
+  });
 }

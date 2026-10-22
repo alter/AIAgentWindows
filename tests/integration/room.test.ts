@@ -7,10 +7,11 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OwnerPause, Room, type DriverFactory, type ParticipantDriver, type RoomEvent, type TurnRequest } from '../../src/main/room';
 import { DEFAULT_ROOM_TIMING, createRoomDrivers } from '../../src/main/room-drivers';
+import { listRecords, readRecord } from '../../src/main/room-archive';
 import { createSelectorAdapter } from '../../src/main/site-adapters/selector-adapter';
 import type { NetSink, NetWatch, PageRunner, SiteAdapter, StreamSource } from '../../src/main/site-adapters/types';
 import { escapeBody, historyNonce } from '../../src/shared/room-history';
-import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, defaultFinalizerId, type RoomConfig, type RoomParticipant } from '../../src/shared/room-model';
+import { MAX_ERROR_CHARS, MAX_HISTORY_CHARS, MAX_REPLY_CHARS, defaultFinalizerId, type RoomConfig, type RoomEntry, type RoomParticipant, type RoomRecord } from '../../src/shared/room-model';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const FIXTURE = readFileSync(path.resolve(__dirname, '..', 'fixtures', 'sites', 'generic.html'), 'utf8');
@@ -1346,5 +1347,184 @@ describe('room entries carry their round', () => {
     const result = await t.room.start(config([A, B])).done;
     const emitted = t.events.flatMap((event) => (event.type === 'entry' ? [event.entry] : []));
     expect(emitted).toEqual(result.entries);
+  });
+});
+
+describe('room record', () => {
+  function recordOf(roomId: string): Promise<RoomRecord | null> {
+    return readRecord(roomsDir, roomId);
+  }
+
+  it('writes the record after every entry: running while the run lasts, the final status at the end', async () => {
+    const seen: Array<RoomRecord | null> = [];
+    const t = rig({
+      b: async (request) => {
+        seen.push(await recordOf(request.runId));
+        return 'reply b';
+      },
+    });
+    const run = t.room.start(config([A, B]));
+    const result = await run.done;
+    expect(seen[0]?.status).toBe('running');
+    expect(seen[0]?.entries.map((entry) => entry.authorId)).toEqual(['owner', 'a']);
+    const record = await recordOf(run.roomId);
+    expect(record?.status).toBe('done');
+    expect(record?.entries).toEqual(result.entries);
+    expect(record?.id).toBe(run.roomId);
+    expect(record?.config.participants.map((participant) => participant.id)).toEqual(['a', 'b']);
+    expect(record?.config).not.toHaveProperty('prompt');
+    expect(record?.nonce).toBe(historyNonce(await readFile(run.historyPath, 'utf8')));
+    expect(record?.createdAt).toBeLessThanOrEqual(record?.updatedAt ?? 0);
+  });
+
+  it('saves a stopped run as stopped with the stop note', async () => {
+    const waitForAbort: Behaviour = (request) =>
+      new Promise((_resolve, reject) => {
+        request.signal.addEventListener('abort', () => reject(new Error('aborted by driver')), { once: true });
+      });
+    const t = rig({ a: waitForAbort });
+    const run = t.room.start(config([A]));
+    await vi.waitFor(() => expect(t.trace).toEqual(['a']));
+    t.room.stop();
+    await run.done;
+    const record = await recordOf(run.roomId);
+    expect(record?.status).toBe('stopped');
+    expect(record?.entries[record.entries.length - 1]).toMatchObject({ authorId: 'room', state: 'stopped' });
+  });
+
+  it('writes the record before the finished event is emitted', async () => {
+    const statuses: Array<string | undefined> = [];
+    const room = new Room({
+      roomsDir,
+      driverFor: () => Promise.resolve({ turn: () => Promise.resolve('x'), reset: () => Promise.resolve(), dispose: () => undefined }),
+      emit: (event) => {
+        if (event.type === 'finished') statuses.push(recordStatusSync(event.roomId));
+      },
+    });
+    rooms.push(room);
+    await room.start(config([A])).done;
+    expect(statuses).toEqual(['done']);
+  });
+
+  function recordStatusSync(roomId: string): string | undefined {
+    try {
+      return (JSON.parse(readFileSync(path.join(roomsDir, `${roomId}.json`), 'utf8')) as { status?: string }).status;
+    } catch {
+      return undefined;
+    }
+  }
+
+  it('lists the run among the saved rooms', async () => {
+    const t = rig();
+    const run = t.room.start(config([A]));
+    await run.done;
+    const list = await listRecords(roomsDir);
+    expect(list.map((item) => item.id)).toEqual([run.roomId]);
+  });
+});
+
+describe('room continuation', () => {
+  async function firstRun(t: Rig): Promise<{ run: ReturnType<Room['start']>; record: RoomRecord }> {
+    const run = t.room.start(config([A, B], { prompt: 'first question' }));
+    await run.done;
+    const record = await readRecord(roomsDir, run.roomId);
+    if (record === null) throw new Error('no record');
+    return { run, record };
+  }
+
+  function from(record: RoomRecord): { roomId: string; entries: RoomEntry[]; nonce: string; createdAt: number } {
+    return { roomId: record.id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt };
+  }
+
+  it('keeps the id, the history file and the nonce, and appends the new entries after the old ones', async () => {
+    const t = rig();
+    const { run, record } = await firstRun(t);
+    const before = await readFile(run.historyPath, 'utf8');
+    const second = t.room.start(config([A, B], { prompt: 'second question' }), from(record));
+    expect(second.roomId).toBe(run.roomId);
+    expect(second.historyPath).toBe(run.historyPath);
+    const result = await second.done;
+    expect(result.entries.slice(0, record.entries.length)).toEqual(record.entries);
+    const after = await readFile(run.historyPath, 'utf8');
+    expect(after.startsWith(before)).toBe(true);
+    expect(historyNonce(after)).toBe(record.nonce);
+    expect(after.split('\n').filter((line) => line.startsWith('# Room '))).toHaveLength(1);
+    expect(ascending(positions(after, ['first question', 'second question']))).toBe(true);
+    const saved = await readRecord(roomsDir, run.roomId);
+    expect(saved?.entries).toEqual(result.entries);
+    expect(saved?.createdAt).toBe(record.createdAt);
+    expect(saved?.nonce).toBe(record.nonce);
+    expect(saved?.status).toBe('done');
+    const starts = after.split('\n').filter((line) => line.startsWith('<<<entry-'));
+    expect(starts).toHaveLength(result.entries.length);
+    expect(starts.every((line) => line.startsWith(`<<<entry-${record.nonce} `))).toBe(true);
+  });
+
+  it('numbers the rounds of the new run from 1 again', async () => {
+    const t = rig();
+    const { record } = await firstRun(t);
+    const result = await t.room.start(config([A, B], { prompt: 'second' }), from(record)).done;
+    const fresh = result.entries.slice(record.entries.length);
+    expect(fresh.map((entry) => `${entry.kind}:${entry.round ?? '-'}`)).toEqual(['prompt:-', 'reply:1', 'reply:1', 'final:-']);
+  });
+
+  it('gives a participant of the continued run the old replies and the new prompt in its prompt', async () => {
+    const t = rig();
+    const { record } = await firstRun(t);
+    await t.room.start(config([A, B], { prompt: 'second question' }), from(record)).done;
+    const request = t.drivers.get('a')?.requests[2];
+    expect(groupsInOrder(request?.text ?? '', [['first question'], ['reply a1'], ['reply b1'], ['second question']])).toBe(true);
+    expect(request?.historyText).toContain('reply a1');
+  });
+
+  it('announces the earlier entries in the started event', async () => {
+    const t = rig();
+    const { record } = await firstRun(t);
+    t.events.length = 0;
+    await t.room.start(config([A, B], { prompt: 'second' }), from(record)).done;
+    const started = t.events.find((event) => event.type === 'started');
+    expect(started).toMatchObject({ type: 'started', roomId: record.id, previous: record.entries });
+  });
+
+  it('a first run announces no earlier entries', async () => {
+    const t = rig();
+    await firstRun(t);
+    const started = t.events.find((event) => event.type === 'started');
+    expect(started).toMatchObject({ type: 'started' });
+    expect(started).not.toHaveProperty('previous');
+  });
+
+  it('rewrites the history file whole when it is gone', async () => {
+    const t = rig();
+    const { run, record } = await firstRun(t);
+    await rm(run.historyPath);
+    const result = await t.room.start(config([A, B], { prompt: 'second question' }), from(record)).done;
+    const text = await readFile(run.historyPath, 'utf8');
+    expect(historyNonce(text)).toBe(record.nonce);
+    expect(ascending(positions(text, ['first question', 'reply a1', 'reply b1', 'second question']))).toBe(true);
+    expect(text.split('\n').filter((line) => line.startsWith('<<<entry-'))).toHaveLength(result.entries.length);
+  });
+
+  it('counts the earlier entries against the history budget', async () => {
+    const t = rig();
+    const { record } = await firstRun(t);
+    const used = record.entries.reduce((sum, entry) => sum + entry.text.length, 0);
+    const small = new Room({
+      roomsDir,
+      maxHistoryChars: used + 10,
+      driverFor: () => Promise.resolve({ turn: () => Promise.resolve('x'.repeat(500)), reset: () => Promise.resolve(), dispose: () => undefined }),
+    });
+    rooms.push(small);
+    const result = await small.start(config([A], { prompt: 'q' }), from(record)).done;
+    const fresh = result.entries.slice(record.entries.length);
+    expect(fresh.reduce((sum, entry) => sum + entry.text.length, 0)).toBeLessThan(500);
+  });
+
+  it('refuses a continuation while a run is in progress', async () => {
+    const t = rig({ a: () => new Promise(() => undefined) });
+    const first = t.room.start(config([A]));
+    expect(() => t.room.start(config([A]), { roomId: first.roomId, entries: [], nonce: 'n', createdAt: 1 })).toThrow('already in progress');
+    t.room.stop();
+    await first.done;
   });
 });

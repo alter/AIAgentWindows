@@ -539,6 +539,69 @@ describe('feedSections', () => {
   });
 });
 
+describe('feedSections of a continued room', () => {
+  it('a new owner prompt starts a new group: its rounds and final do not merge with the earlier run', () => {
+    const entries = [
+      owner(),
+      turn('a', 1),
+      turn('b', 1),
+      turn('a', undefined, 'final'),
+      owner(),
+      turn('a', 1),
+      turn('b', 1),
+      turn('b', undefined, 'final'),
+    ];
+    const sections = feedSections(entries, TRIO);
+    expect(members(sections)).toEqual([
+      ['prompt', ['owner']],
+      ['round-1', ['a1', 'b1']],
+      ['final', ['a']],
+      ['run2-prompt', ['owner']],
+      ['run2-round-1', ['a1', 'b1']],
+      ['run2-final', ['b']],
+    ]);
+    expect(sections.flatMap((section) => section.entries.map((item) => item.index))).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(sections.map((section) => section.title)).toEqual(['Prompt', 'Round 1/2', 'Final result', 'Prompt', 'Round 1/2', 'Final result']);
+  });
+
+  it('a stopped continuation keeps its own untitled leftovers apart from the earlier run', () => {
+    const entries = [owner(), turn('a', undefined, 'error'), owner(), turn('a', 1), turn('room', undefined, 'error', { state: 'stopped' })];
+    expect(members(feedSections(entries, TRIO))).toEqual([
+      ['prompt', ['owner']],
+      ['rest', ['a']],
+      ['run2-prompt', ['owner']],
+      ['run2-round-1', ['a1']],
+      ['run2-rest', ['room']],
+    ]);
+  });
+
+  it('the third run is numbered run3 and entries before any prompt belong to the first run', () => {
+    const entries = [turn('a', 1), owner(), owner(), owner()];
+    expect(feedSections(entries, null).map((section) => section.key)).toEqual(['round-1', 'prompt', 'run2-prompt', 'run3-prompt']);
+  });
+});
+
+describe('a continued room in the snapshot', () => {
+  const FIRST: RoomEntry[] = [owner(), turn('a', 1), turn('a', undefined, 'final')];
+
+  it('the started event of a continuation keeps the earlier entries and adds the new ones after them', () => {
+    const started: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 3, plan: PLAN, previous: FIRST };
+    const added = applyRoomEvent(applyRoomEvent(emptyRoomSnapshot(), started), { type: 'entry', roomId: 'r1', entry: owner() });
+    expect(added.phase).toBe('running');
+    expect(added.entries).toEqual([...FIRST, owner()]);
+  });
+
+  it('the banner of a continued run looks at its own final entry, not the earlier one', () => {
+    const second: RoomEvent[] = [
+      { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 5, plan: TWO_ROUNDS, previous: [owner(), { ...turn('a', undefined, 'final'), label: 'Claude Code' }] },
+      { type: 'entry', roomId: 'r1', entry: owner() },
+      step('a', 'failed', 5),
+      { type: 'finished', roomId: 'r1', status: 'done' },
+    ];
+    expect(roomProgress(run(second))?.banner).toEqual({ tone: 'warn', text: 'Done \u2014 no final answer (Claude Code failed)' });
+  });
+});
+
 describe('entryState', () => {
   it('names the outcome of an entry', () => {
     expect(entryState(turn('a', 1))).toBe('replied');
