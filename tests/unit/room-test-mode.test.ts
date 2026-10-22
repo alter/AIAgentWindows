@@ -1,6 +1,6 @@
 // room-test-mode.test.ts
 import { describe, expect, it } from 'vitest';
-import { roomLoginShell, roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
+import { roomLoginShell, roomSiteOptions, roomTestMode, roomTimingOverride } from '../../src/shared/room-test-mode';
 
 const TEST_MODE = { AIAW_USER_DATA: '/tmp/profile', AIAW_ROOM_FAST: '1' };
 
@@ -29,6 +29,14 @@ describe('room test-mode override', () => {
     expect(roomLoginShell({ AIAW_ROOM_FAST: '1' })).toBe(true);
     expect(roomLoginShell({ AIAW_USER_DATA: '/tmp/profile' })).toBe(true);
     expect(roomLoginShell(TEST_MODE)).toBe(false);
+  });
+
+  it('shortens the quiet window that ends a web turn only in test mode', () => {
+    expect(roomSiteOptions({})).toBeUndefined();
+    expect(roomSiteOptions({ AIAW_ROOM_FAST: '1' })).toBeUndefined();
+    const options = roomSiteOptions(TEST_MODE);
+    expect(options?.quietMs).toBeGreaterThan(0);
+    expect(options?.quietMs).toBeLessThan(5000);
   });
 
   it('treats an empty AIAW_USER_DATA as normal mode', () => {

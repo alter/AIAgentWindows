@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
-import { roomLoginShell, roomTimingOverride } from '../shared/room-test-mode';
+import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { AgentController } from './agent-controller';
@@ -75,9 +75,10 @@ async function start(): Promise<void> {
   const state = await loadState(path.join(userData, 'agents.json'));
   const window = createWindow();
   mainWindow = window;
+  const siteLog = createSiteLogger(path.join(userData, 'logs', 'sites.log'));
   const siteViews = new SiteViews(window, (event) => {
     if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
-  }, process.env, createSiteLogger(path.join(userData, 'logs', 'sites.log')));
+  }, process.env, siteLog);
   sites = siteViews;
   controller = new AgentController(
     {
@@ -106,11 +107,12 @@ async function start(): Promise<void> {
     envFor: () => process.env,
     loginShell: roomLoginShell(process.env),
     timing: roomTimingOverride(process.env),
+    siteLog,
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,
       page: (agent) => siteViews.pageFor(agent.id, agent.kind),
       prepare: (agent, timeoutMs, signal) => siteViews.prepare(agent.id, agent.kind, timeoutMs, signal),
-      adapterFor,
+      adapterFor: (kind) => adapterFor(kind, roomSiteOptions(process.env)),
     }),
   });
   roomDrivers = drivers;

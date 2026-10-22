@@ -153,7 +153,7 @@ export function genericInsertScript(text: string): string {
       const proto = composer.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(composer, text);
       composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
-      return JSON.stringify({ ok: true, value: composer.value === text });
+      return JSON.stringify({ ok: true, value: composer.value === text, length: composer.value.length, kind: 'textarea' });
     }
     let done = false;
     if (typeof document.execCommand === 'function') {
@@ -177,7 +177,7 @@ export function genericInsertScript(text: string): string {
       composer.replaceChildren(...rows);
       composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
     }
-    return JSON.stringify({ ok: true, value: collapse(fieldText(composer)).trim() === collapse(text).trim() });`);
+    return JSON.stringify({ ok: true, value: collapse(fieldText(composer)).trim() === collapse(text).trim(), length: fieldText(composer).length, kind: 'editable' });`);
 }
 
 export function genericComposerScript(): string {
@@ -210,5 +210,8 @@ export function genericSendButtonScript(): string {
 export function genericStateScript(): string {
   return wrap(`
     const composer = findComposer();
-    return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer) } });`);
+    const accepting = composer !== null
+      && composer.getAttribute('aria-disabled') !== 'true'
+      && (collapse(fieldText(composer)).trim() === '' || chooseSendButton(composer) !== null);
+    return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer), accepting } });`);
 }

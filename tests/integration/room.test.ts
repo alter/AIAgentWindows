@@ -229,6 +229,18 @@ describe('room relay', () => {
     expect(t.created.filter((id) => id === 'b')).toHaveLength(3);
   });
 
+  it('never leaves an error entry without text', async () => {
+    const t = rig({
+      a: () => Promise.reject(new Error('')),
+      b: () => Promise.reject(''),
+      c: () => Promise.reject(Object.assign(new Error('  '), { code: 'x' })),
+    });
+    const result = await t.room.start(config([A, B, C], { finalizerId: 'c' })).done;
+    const errors = result.entries.filter((entry) => entry.kind === 'error');
+    expect(errors).toHaveLength(4);
+    for (const entry of errors) expect(entry.text.trim().length).toBeGreaterThan(0);
+  });
+
   it('passes the turn timeout and the history file to the driver for a long history', async () => {
     const t = rig();
     const run = t.room.start(config([C], { prompt: 'x'.repeat(13000), turnTimeoutMs: 4321 }));
@@ -854,6 +866,53 @@ describe('room with a web participant', () => {
     const result = await long.done;
     expect(result.entries[1]?.kind).toBe('reply');
     expect(attached).toEqual([[long.historyPath], [long.historyPath]]);
+  });
+});
+
+describe('room with a web participant: site log', () => {
+  it('writes one trace line per web turn to the site log under the site name', async () => {
+    const dom = new JSDOM(FIXTURE, { runScripts: 'dangerously', url: 'https://fixture.test/' });
+    const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
+    const adapter = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+    const lines: Array<[string, string, Readonly<Record<string, unknown>>]> = [];
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: () => ({ adapter, runner }),
+      timing: { pollMs: 20, settleMs: 40 },
+      siteLog: (site, event, fields) => lines.push([site, event, fields]),
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const result = await room.start(config([C], { prompt: 'trace me', turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('reply');
+    const turns = lines.filter(([, event]) => event === 'turn');
+    expect(turns.map(([site]) => site)).toEqual(['fixture', 'fixture']);
+    expect(turns[0]?.[2]).toMatchObject({ outcome: 'reply' });
+    expect(JSON.stringify(lines)).not.toContain('trace me');
+  });
+});
+
+describe('room with a web participant: site log of a page that is not ready', () => {
+  it('logs the failure before the prompt was inserted', async () => {
+    const runner: PageRunner = { run: () => Promise.resolve('') };
+    const adapter = createSelectorAdapter('fixture', { input: '#ta', submit: '#send', stop: '#stop', replies: '.msg.assistant' });
+    const lines: Array<[string, string, Readonly<Record<string, unknown>>]> = [];
+    const drivers = createRoomDrivers({
+      cwd: roomsDir,
+      sharedDir: dir,
+      platform: 'win32',
+      envFor: () => ({}),
+      siteFor: () => ({ adapter, runner, prepare: () => Promise.reject(new Error('fixture page not ready')) }),
+      siteLog: (site, event, fields) => lines.push([site, event, fields]),
+    });
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const result = await room.start(config([C], { turnTimeoutMs: 20000 })).done;
+    expect(result.entries[1]?.kind).toBe('error');
+    expect(lines[0]).toEqual(['fixture', 'turn', { outcome: 'failed', phase: 'ready', code: 'error' }]);
   });
 });
 

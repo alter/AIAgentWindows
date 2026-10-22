@@ -2,6 +2,7 @@
 import { stripEntryMarkerLines } from '../../shared/room-history';
 
 const MIN_ECHO_FRAGMENT = 12;
+export const MIN_ANSWER_CHARS = 20;
 
 function collapse(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -56,10 +57,62 @@ function withoutEcho(lines: readonly string[], prompt: string): string[] {
   });
 }
 
-export function extractReply(current: string, before: string, prompt: string): string | null {
+export interface ReplyDrops {
+  seen: number;
+  echo: number;
+  marker: number;
+  label: number;
+}
+
+export interface ExtractedReply {
+  reply: string | null;
+  dropped: ReplyDrops;
+}
+
+const UI_LABELS: readonly RegExp[] = [
+  /^(new chat|deep ?think(ing)?|smart search|regenerate|copy|share|like|dislike)$/i,
+  /^(thinking|reasoning|searching( the web)?|generating)[.…]*$/i,
+  /^thought for [^.]{1,24}$/i,
+];
+
+const DISCLAIMER = /ai-generated|for reference only|can make mistakes/i;
+const MAX_DISCLAIMER_CHARS = 60;
+
+export function isUiLabel(line: string): boolean {
+  const key = collapse(line);
+  return UI_LABELS.some((label) => label.test(key)) || (key.length <= MAX_DISCLAIMER_CHARS && DISCLAIMER.test(key));
+}
+
+function filled(lines: readonly string[]): number {
+  return lines.filter((line) => collapse(line) !== '').length;
+}
+
+export function extractReplyDetailed(current: string, before: string, prompt: string): ExtractedReply {
   const earlier = countLines(before.split('\n'));
   const left = new Map(earlier);
-  const fresh = withoutLines(current.split('\n'), (key) => takeOne(left, key));
-  const candidates = stripEntryMarkerLines(withoutEcho(fresh, prompt).join('\n')).split('\n');
-  return joined(withoutLines(candidates, (key) => earlier.has(key))) ?? joined(candidates);
+  const all = current.split('\n');
+  const fresh = withoutLines(all, (key) => takeOne(left, key));
+  const echoFree = withoutEcho(fresh, prompt);
+  const markerFree = stripEntryMarkerLines(echoFree.join('\n')).split('\n');
+  const candidates = withoutLines(markerFree, isUiLabel);
+  const novel = withoutLines(candidates, (key) => earlier.has(key));
+  const reply = joined(novel) ?? joined(candidates);
+  const kept = joined(novel) === null ? candidates : novel;
+  return {
+    reply,
+    dropped: {
+      seen: filled(all) - filled(fresh) + filled(candidates) - filled(kept),
+      echo: filled(fresh) - filled(echoFree),
+      marker: filled(echoFree) - filled(markerFree),
+      label: filled(markerFree) - filled(candidates),
+    },
+  };
+}
+
+export function extractReply(current: string, before: string, prompt: string): string | null {
+  return extractReplyDetailed(current, before, prompt).reply;
+}
+
+export function isAnswerStart(reply: string | null): boolean {
+  return reply !== null && collapse(reply).length >= MIN_ANSWER_CHARS;
 }

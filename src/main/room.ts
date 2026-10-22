@@ -90,8 +90,11 @@ function defaultRoomId(now: number): string {
   return `room-${stamp}-${randomBytes(3).toString('hex')}`;
 }
 
+const NO_ERROR_TEXT = 'The turn failed without an error message.';
+
 function errorText(error: unknown): string {
-  return truncateText(error instanceof Error ? error.message : String(error), MAX_ERROR_CHARS);
+  const message = error instanceof Error ? error.message : String(error);
+  return truncateText(message.trim() === '' ? NO_ERROR_TEXT : message, MAX_ERROR_CHARS);
 }
 
 function isTimeout(error: unknown): boolean {

@@ -258,7 +258,7 @@ setTimeout(() => {
     send.disabled = true;
     say('user', text);
     stop.hidden = false;
-    setTimeout(() => say('assistant', 'LATE-REPLY'), 60);
+    setTimeout(() => say('assistant', 'LATE-REPLY from the late chat page'), 60);
     setTimeout(() => { stop.hidden = true; }, 90);
   };
   ta.addEventListener('input', () => { send.disabled = ta.value === ''; });

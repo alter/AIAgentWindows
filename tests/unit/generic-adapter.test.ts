@@ -180,19 +180,19 @@ describe('generic adapter: turn', () => {
   });
 
   it('answers a second turn with the same fixed labels on the page', async () => {
-    const page = openPage(`?labels=1&reply=${encodeURIComponent('Only this')}`);
+    const page = openPage(`?labels=1&reply=${encodeURIComponent('Only this answer remains')}`);
     const adapter = createGenericAdapter('fixture', OPTIONS);
-    expect(await runAdapterTurn(adapter, page.runner, 'one', FAST)).toBe('Only this');
-    expect(await runAdapterTurn(adapter, page.runner, 'two', FAST)).toBe('Only this');
+    expect(await runAdapterTurn(adapter, page.runner, 'one', FAST)).toBe('Only this answer remains');
+    expect(await runAdapterTurn(adapter, page.runner, 'two', FAST)).toBe('Only this answer remains');
   });
 
   it('returns an identical repeated answer when the prompt carries the earlier answer and no stop button was seen', async () => {
-    const page = openPage(`?labels=1&nostop=1&reply=${encodeURIComponent('Same answer')}`);
+    const page = openPage(`?labels=1&nostop=1&reply=${encodeURIComponent('Same answer, repeated verbatim')}`);
     const adapter = createGenericAdapter('fixture', OPTIONS);
-    expect(await runAdapterTurn(adapter, page.runner, 'first question', FAST)).toBe('Same answer');
-    const history = 'Earlier in the room:\nSame answer\nContinue the discussion.';
-    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer');
-    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer');
+    expect(await runAdapterTurn(adapter, page.runner, 'first question', FAST)).toBe('Same answer, repeated verbatim');
+    const history = 'Earlier in the room:\nSame answer, repeated verbatim\nContinue the discussion.';
+    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer, repeated verbatim');
+    expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer, repeated verbatim');
   });
 
   it('returns reply markup as text', async () => {
@@ -238,6 +238,131 @@ describe('generic adapter: turn', () => {
     const adapter = createGenericAdapter('fixture', OPTIONS);
     expect(await adapter.lastReply(page.runner)).toBeNull();
     expect(await adapter.isGenerating(page.runner)).toBe(false);
+  });
+});
+
+const STREAMED_URL = encodeURIComponent('First streamed answer line|Second streamed answer line');
+const STREAMED = 'First streamed answer line\nSecond streamed answer line';
+
+describe('generic adapter: slow starts, busy pages, locked composers', () => {
+  it('waits out a silent thinking phase on a page whose labels change on submit and has no stop button', async () => {
+    const page = openPage(`?nostop=1&sidebar=1&think=350&reply=${STREAMED_URL}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'question', FAST)).toBe(STREAMED);
+  });
+
+  it('does not take a short unknown text that appears on submit for the start of an answer', async () => {
+    const page = openPage(`?nostop=1&tag=Queued&think=350&reply=${STREAMED_URL}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'question', FAST)).toContain(STREAMED);
+  });
+
+  it('does not take a label that appears on submit for the start of an answer', async () => {
+    const page = openPage('?sidebar=1&silent=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, startGraceMs: 250 })).rejects.toMatchObject({
+      code: 'no-response',
+    });
+  });
+
+  it('waits until a generation that is still running has been quiet before inserting', async () => {
+    const page = openPage('?nostop=1&busy=600');
+    const adapter = createGenericAdapter('fixture', { ...OPTIONS, quietMs: 400 });
+    const traces: Array<Record<string, unknown>> = [];
+    const reply = await runAdapterTurn(adapter, page.runner, 'next question', { ...FAST, timeoutMs: 8000, trace: (fields) => traces.push(fields) });
+    expect(reply).toBe('ECHO: next question part-2 part-3');
+    expect(page.win['ignored']).toBe(0);
+    expect(page.win['submissions']).toBe(1);
+    expect(Number(traces[0]?.['idleWaitMs'])).toBeGreaterThanOrEqual(500);
+  });
+
+  it('does not wait again for a page that has not changed since its last turn ended', async () => {
+    const page = openPage('?nostop=1');
+    const adapter = createGenericAdapter('fixture', { ...OPTIONS, quietMs: 600 });
+    const traces: Array<Record<string, unknown>> = [];
+    const options = { ...FAST, timeoutMs: 8000, trace: (fields: Record<string, unknown>) => traces.push(fields) };
+    await runAdapterTurn(adapter, page.runner, 'one', options);
+    await runAdapterTurn(adapter, page.runner, 'two', options);
+    expect(Number(traces[0]?.['idleWaitMs'])).toBeGreaterThanOrEqual(500);
+    expect(Number(traces[1]?.['idleWaitMs'])).toBeLessThan(200);
+  });
+
+  it('fails with a timeout when the page never gets quiet', async () => {
+    const page = openPage('?nostop=1&busy=100000');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, timeoutMs: 400 })).rejects.toMatchObject({ code: 'timeout' });
+    expect(page.win['submissions']).toBe(0);
+  });
+
+  it('stops waiting for a quiet page when the turn is stopped', async () => {
+    const page = openPage('?nostop=1&busy=100000');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const stop = new AbortController();
+    setTimeout(() => stop.abort(), 100);
+    await expect(runAdapterTurn(adapter, page.runner, 'hi', { ...FAST, signal: stop.signal })).rejects.toMatchObject({ code: 'aborted' });
+  });
+
+  it('does not finish in a quiet gap while the composer is locked', async () => {
+    const page = openPage(`?nostop=1&lock=1&gap=400&reply=${STREAMED_URL}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'question', FAST)).toBe(STREAMED);
+  });
+
+  it('keeps the composer lock out of the idle check of the next turn', async () => {
+    const page = openPage(`?nostop=1&lock=1&reply=${STREAMED_URL}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'one', FAST)).toBe(STREAMED);
+    expect(await runAdapterTurn(adapter, page.runner, 'two', FAST)).toBe(STREAMED);
+  });
+});
+
+describe('generic adapter: turn trace', () => {
+  async function traced(search: string, prompt: string, options = FAST) {
+    const page = openPage(search);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    const outcome = await runAdapterTurn(adapter, page.runner, prompt, { ...options, trace: (fields) => traces.push(fields) }).then(
+      (reply) => reply,
+      (error: unknown) => error,
+    );
+    return { traces, outcome };
+  }
+
+  it('reports one line of numbers and names per turn, with no page text', async () => {
+    const { traces, outcome } = await traced('', 'secret prompt text');
+    expect(outcome).toBe('ECHO: secret prompt text part-2 part-3');
+    expect(traces).toHaveLength(1);
+    expect(traces[0]).toMatchObject({
+      outcome: 'reply',
+      composer: 'textarea',
+      inserted: 18,
+      submit: 'enter',
+      stopSeen: true,
+      replyChars: 'ECHO: secret prompt text part-2 part-3'.length,
+      droppedEcho: 1,
+    });
+    expect(Number(traces[0]?.['firstGrowthMs'])).toBeGreaterThan(0);
+    expect(Number(traces[0]?.['ms'])).toBeGreaterThan(0);
+    expect(typeof traces[0]?.['turn']).toBe('string');
+    const text = JSON.stringify(traces);
+    expect(text).not.toContain('secret');
+    expect(text).not.toContain('ECHO');
+  });
+
+  it('names the composer kind and the submit path', async () => {
+    const { traces } = await traced('?composer=editable&noenter=1&exec=1&nostop=1', 'x y z');
+    expect(traces[0]).toMatchObject({ composer: 'editable', submit: 'button', stopSeen: false });
+  });
+
+  it('counts the lines dropped as labels', async () => {
+    const { traces } = await traced(`?sidebar=1&nostop=1&reply=${STREAMED_URL}`, 'question');
+    expect(traces[0]).toMatchObject({ outcome: 'reply', droppedLabel: 2 });
+  });
+
+  it('reports a failed turn with its error code and no first growth', async () => {
+    const { traces, outcome } = await traced('?silent=1', 'hi', { ...FAST, startGraceMs: 250 });
+    expect(outcome).toMatchObject({ code: 'no-response' });
+    expect(traces[0]).toMatchObject({ outcome: 'failed', code: 'no-response', firstGrowthMs: -1, replyChars: 0 });
   });
 });
 

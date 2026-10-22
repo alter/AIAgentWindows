@@ -84,24 +84,67 @@
         const item = document.createElement('li');
         item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
         history.appendChild(item);
+        if (query.has('sidebar')) {
+          const tag = document.createElement('div');
+          tag.innerHTML = '<span>New chat</span><p>AI-generated, for reference only</p>';
+          log.appendChild(tag);
+        }
+        if (query.has('tag')) {
+          const note = document.createElement('div');
+          note.textContent = query.get('tag');
+          log.appendChild(note);
+        }
         if (query.has('silent')) return;
+        const think = Number(query.get('think') || 0);
+        if (think > 0) setTimeout(stream, think, text);
+        else stream(text);
+      }
+      function stream(text) {
+        const gap = Number(query.get('gap') || 0);
+        const lock = query.has('lock');
         const stopVisible = !query.has('nostop');
         if (stopVisible) stop.hidden = false;
+        if (lock) { ta.disabled = true; ce.removeAttribute('contenteditable'); }
         const reply = add('assistant', []);
         const row = document.createElement('p');
         reply.appendChild(row);
         const fixed = query.get('reply');
         const chunks = fixed === null ? ['ECHO: ' + text, ' part-2', ' part-3'] : fixed.split('|');
         let index = 0;
-        const timer = setInterval(() => {
+        const step = () => {
           if (fixed === null) row.textContent += chunks[index];
           else reply.appendChild(Object.assign(document.createElement('p'), { textContent: chunks[index] }));
           index += 1;
-          if (index < chunks.length) return;
-          if (query.has('stall')) { row.textContent += ' ' + Date.now(); return; }
-          clearInterval(timer);
+          if (index < chunks.length) {
+            setTimeout(step, gap > 0 && index === 1 ? gap : 40);
+            return;
+          }
+          if (query.has('stall')) {
+            const tick = () => { row.textContent += ' ' + Date.now(); setTimeout(tick, 40); };
+            tick();
+            return;
+          }
           stop.hidden = true;
-        }, 40);
+          if (lock) { ta.disabled = false; ce.setAttribute('contenteditable', 'true'); }
+        };
+        setTimeout(step, 40);
+      }
+      if (query.has('busy')) {
+        const until = Date.now() + Number(query.get('busy'));
+        window.ignored = 0;
+        const running = add('assistant', []);
+        let count = 0;
+        const grow = () => {
+          count += 1;
+          running.appendChild(Object.assign(document.createElement('p'), { textContent: 'Earlier answer still streaming, chunk ' + count }));
+          if (Date.now() < until) setTimeout(grow, 40);
+        };
+        grow();
+        const original = submit;
+        submit = function () {
+          if (Date.now() < until) { window.ignored += 1; return; }
+          original();
+        };
       }
       for (const [id, key] of [['ta', 'ta'], ['ce', 'ce']]) {
         const el = document.getElementById(id);

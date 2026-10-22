@@ -9,7 +9,8 @@ import type { RoomParticipant } from '../shared/room-model';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
 import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
-import type { PageRunner, SiteAdapter } from './site-adapters/types';
+import type { SiteLogger } from './site-log-file';
+import { SiteAdapterError, type PageRunner, type SiteAdapter } from './site-adapters/types';
 import { waitUntilReady } from './site-adapters/ready';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
@@ -43,6 +44,7 @@ export interface RoomDriverDeps {
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
   siteFor(participant: RoomParticipant): SiteSeat | null;
   timing?: Partial<RoomTiming>;
+  siteLog?: SiteLogger;
 }
 
 class FolderNames {
@@ -126,15 +128,26 @@ class SiteDriver implements ParticipantDriver {
   constructor(
     private readonly seat: SiteSeat,
     private readonly timing: RoomTiming,
+    private readonly log: SiteLogger,
   ) {}
 
+  private async ready(request: TurnRequest): Promise<void> {
+    try {
+      await this.seat.prepare?.(this.timing.readyMs, request.signal);
+      await waitUntilReady(this.seat.adapter, this.seat.runner, {
+        timeoutMs: this.timing.readyMs,
+        pollMs: this.timing.readyPollMs,
+        signal: request.signal,
+      });
+    } catch (error) {
+      const code = error instanceof SiteAdapterError ? error.code : 'error';
+      this.log(this.seat.adapter.site, 'turn', { outcome: 'failed', phase: 'ready', code });
+      throw error;
+    }
+  }
+
   async turn(request: TurnRequest): Promise<string | null> {
-    await this.seat.prepare?.(this.timing.readyMs, request.signal);
-    await waitUntilReady(this.seat.adapter, this.seat.runner, {
-      timeoutMs: this.timing.readyMs,
-      pollMs: this.timing.readyPollMs,
-      signal: request.signal,
-    });
+    await this.ready(request);
     if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
     const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
       ...DEFAULT_TURN_OPTIONS,
@@ -142,6 +155,7 @@ class SiteDriver implements ParticipantDriver {
       settleMs: this.timing.settleMs,
       timeoutMs: request.timeoutMs,
       signal: request.signal,
+      trace: (fields) => this.log(this.seat.adapter.site, 'turn', fields),
     });
     const shown = stripEntryMarkerLines(reply).trim();
     return shown === '' ? null : shown;
@@ -182,7 +196,7 @@ export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
     if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
-    return new SiteDriver(seat, timing);
+    return new SiteDriver(seat, timing, deps.siteLog ?? (() => undefined));
   };
   return {
     factory,

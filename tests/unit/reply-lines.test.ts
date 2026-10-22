@@ -1,6 +1,6 @@
 // reply-lines.test.ts
 import { describe, expect, it } from 'vitest';
-import { extractReply } from '../../src/main/site-adapters/reply-lines';
+import { extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
 import { stripEntryMarkerLines } from '../../src/shared/room-history';
 
 const PROMPT = ['Intro line that is long enough', '<<<entry-abc author="Owner" kind=prompt>>>', 'Ask', '<<<end-abc>>>'].join('\n');
@@ -76,5 +76,54 @@ describe('stripEntryMarkerLines', () => {
 
   it('leaves text without markers unchanged', () => {
     expect(stripEntryMarkerLines('a <<< b\n<<<>>>')).toBe('a <<< b\n<<<>>>');
+  });
+});
+
+describe('UI labels', () => {
+  it.each(['New chat', 'AI-generated, for reference only', 'Deep thinking', 'Smart Search', 'Thought for 3 seconds', 'Thinking...', 'ChatGPT can make mistakes. Check important info.'])(
+    'knows %s',
+    (line) => {
+      expect(isUiLabel(line)).toBe(true);
+    },
+  );
+
+  it.each([
+    'New chat ideas for the room',
+    'Thinking about the design, the first option is simpler',
+    'Language models can make mistakes in arithmetic, so the final figure should be recomputed by hand before it goes anywhere.',
+    'Copy the file first',
+  ])('keeps the answer line %s', (line) => {
+    expect(isUiLabel(line)).toBe(false);
+  });
+
+  it('removes label lines from the reply', () => {
+    expect(extractReply('New chat\nThe real answer begins here\nAI-generated, for reference only', '', 'p')).toBe('The real answer begins here');
+    expect(extractReply('New chat\nAI-generated, for reference only', '', 'p')).toBeNull();
+  });
+});
+
+describe('extractReplyDetailed', () => {
+  it('counts the lines dropped as seen before, as the prompt echo, as markers and as labels', () => {
+    const before = 'Older line one\nOlder line two';
+    const now = [
+      'Older line one',
+      'Older line two',
+      PROMPT,
+      '<<<entry-zzz author="X">>>',
+      'New chat',
+      'AI-generated, for reference only',
+      'The answer text',
+    ].join('\n');
+    const found = extractReplyDetailed(now, before, PROMPT);
+    expect(found.reply).toBe('The answer text');
+    expect(found.dropped).toEqual({ seen: 2, echo: 4, marker: 1, label: 2 });
+  });
+
+  it('counts lines dropped as seen when the repeated-answer fallback keeps them', () => {
+    const prompt = 'Room so far:\nSame answer\nContinue.';
+    const before = 'Question one\nSame answer';
+    const found = extractReplyDetailed(`${before}\n${prompt}\nSame answer`, before, prompt);
+    expect(found.reply).toBe('Same answer');
+    expect(found.dropped.seen).toBe(2);
   });
 });

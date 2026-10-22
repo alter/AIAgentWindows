@@ -1,4 +1,6 @@
 // types.ts
+import type { SiteLogValue } from '../../shared/site-log';
+
 export interface PageRunner {
   run(code: string): Promise<unknown>;
   setInputFiles?(selector: string, paths: string[]): Promise<void>;
@@ -20,6 +22,8 @@ export interface SiteAdapter {
   lastReply(runner: PageRunner): Promise<string | null>;
   attachFile(runner: PageRunner, path: string): Promise<void>;
   composerReady?(runner: PageRunner): Promise<boolean>;
+  isIdle?(runner: PageRunner): Promise<boolean>;
+  trace?(): Readonly<Record<string, SiteLogValue>>;
 }
 
 export type SiteAdapterErrorCode =
