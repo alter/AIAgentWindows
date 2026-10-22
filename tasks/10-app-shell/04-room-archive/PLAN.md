@@ -51,3 +51,4 @@ As tasks/10-app-shell/02-room/PLAN.md (Electron 44.6.0, TypeScript 6.0.3, vitest
 ## Log
 - 2026-10-23 02:03 T00 done: branch room at dea6d3e; fast tier 11 commands exit 0 (coverage 760/760, 100 %), electron-smoke 27/27 in 92 s; load average 1.8 before, 4.3 after
 - 2026-10-23 02:10 T01 done: RoomRecord, parseRoomRecord, isRoomId in room-model.ts; src/main/room-archive.ts (recordPath, writeRecord atomic, readRecord, listRecords, stopInterrupted); 29 tests in room-archive.test.ts red first (module missing), reverse control red kept in NOTES.md; fast tier 11 commands exit 0, coverage 100 %
+- 2026-10-23 coordinator: T01 verified (vitest room-archive+room-model 54/54, coverage gate 789/789 100 %, tsc and eslint exit 0 — this run)

@@ -246,3 +246,17 @@ What this says about the tests (not fixed here, a /test-audit item): the real-ti
 
 Gate result: the coverage gate is run once more only after the 1-minute load average is back under the core count, and that run is the one recorded in the Log.
 
+## AC7 — owner's run after T38 and T39 (2026-10-22 21:59-22:08, recorded)
+
+History `<shared>/rooms/room-20261022-215925-1c1787.md` (142,799 bytes), debug `<userData>/debug/sites/room-20261022-215925-1c1787/` (local only). Relay Claude Code → Codex → DeepSeek, 5 rounds, final by Claude Code: 15 replies and the final, no error, no timeout. Owner: "deepseek теперь нормально отвечает".
+
+| DeepSeek turn | outcome | turn ms | stream | stream end ms | reply chars | keyHits / anchorRank |
+|---|---|---|---|---|---|---|
+| b4f856 | reply | 24,747 | ended | 15,684 | 6,424 | 1 / 0 |
+| 7d282a | reply | 20,245 | ended | 11,940 | 4,364 | 3 / 2 |
+| 9b18af | reply | 17,722 | ended | 9,610 | 4,105 | 4 / 3 |
+| 23477e | reply | 17,206 | ended | 8,932 | 3,831 | 5 / 4 |
+| 40ef48 | reply | 18,697 | ended | 10,335 | 4,416 | 6 / 5 |
+
+T38 holds on the real page: from round 2 the anchor is the latest echo (rank = hits - 1), the navigator copies before it are skipped. T39 holds: every turn saw the completion stream end, and the turn finished after it. Not covered by this run: ChatGPT and Grok (not participants), so AC7 stays open for them.
+
