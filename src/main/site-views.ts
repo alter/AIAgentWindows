@@ -9,10 +9,13 @@ import {
   permissionAllowed,
   permissionCheckAllowed,
   popupAllowed,
+  OWNER_USER_AGENT,
   siteStartUrl,
-  userAgentFor,
+  userAgentOverride,
+  type UserAgentOverride,
 } from '../shared/site-policy';
 import { SiteAdapterError } from './site-adapters/types';
+import { applyOwnerUserAgent } from './site-user-agent';
 import type { SiteLogger } from './site-log-file';
 
 interface SiteEntry {
@@ -142,6 +145,7 @@ export class SiteViews {
         },
       };
     });
+    void applyOwnerUserAgent(contents, this.userAgent(), (message) => this.log(kind, 'user-agent-override-failed', { message }));
     const loaded = new Promise<void>((resolve) => contents.once('did-finish-load', () => resolve()));
     const refresh = (): void => {
       if (this.visibleId === id) this.publish(id, view);
@@ -163,7 +167,7 @@ export class SiteViews {
 
   private configureSession(partition: string, kind: SiteKind): void {
     const ses = session.fromPartition(partition);
-    ses.setUserAgent(userAgentFor(kind, ses.getUserAgent()));
+    ses.setUserAgent(OWNER_USER_AGENT);
     const agentOrigin = originOf(siteStartUrl(kind, this.env)) ?? '';
     ses.setPermissionRequestHandler((_contents, permission, callback, details) => {
       const allowed = permissionAllowed(agentOrigin, permission, details.requestingUrl);
@@ -174,6 +178,14 @@ export class SiteViews {
       const allowed = permissionCheckAllowed(agentOrigin, permission, requestingOrigin);
       this.log(kind, 'check', { permission, origin: requestingOrigin, allowed });
       return allowed;
+    });
+  }
+
+  private userAgent(): UserAgentOverride {
+    return userAgentOverride({
+      chromeVersion: process.versions.chrome,
+      platformVersion: process.getSystemVersion(),
+      arch: process.arch,
     });
   }
 

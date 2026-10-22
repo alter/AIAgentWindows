@@ -14,12 +14,17 @@ interface Fixture {
   server: Server;
   url: string;
   userAgents: string[];
+  clientHints: string[];
 }
 
 function startFixtureServer(): Promise<Fixture> {
   const userAgents: string[] = [];
+  const clientHints: string[] = [];
   const server = createServer((request, response) => {
     userAgents.push(String(request.headers['user-agent']));
+    for (const [name, value] of Object.entries(request.headers)) {
+      if (name.startsWith('sec-ch-ua')) clientHints.push(`${name}: ${String(value)}`);
+    }
     response.setHeader('content-type', 'text/html; charset=utf-8');
     if (request.url === '/frame-parent') {
       const port = String(request.headers.host).split(':')[1] ?? '';
@@ -31,7 +36,7 @@ function startFixtureServer(): Promise<Fixture> {
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const { port } = server.address() as AddressInfo;
-      resolve({ server, url: `http://127.0.0.1:${port}/`, userAgents });
+      resolve({ server, url: `http://127.0.0.1:${port}/`, userAgents, clientHints });
     });
   });
 }
@@ -286,6 +291,89 @@ test('a DeepSeek agent shows a visible view without the Electron token and Home 
 
     await page.locator('.nav-button[data-action="home"]').click();
     await expect(page.locator('.nav-address')).toHaveText(fixture.url);
+  } finally {
+    await app.close();
+    fixture.server.close();
+  }
+});
+
+const OWNER_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+
+interface IdentityReport {
+  ua: string;
+  brands: string[];
+  fullVersions: string[];
+  platform: string;
+  workerUa: string;
+}
+
+const IDENTITY_SCRIPT = `(async () => {
+  const data = navigator.userAgentData;
+  const high = await data.getHighEntropyValues(['fullVersionList', 'platformVersion']);
+  const workerUa = await new Promise((resolve) => {
+    const worker = new Worker(URL.createObjectURL(new Blob(['postMessage(navigator.userAgent)'])));
+    worker.onmessage = (event) => resolve(event.data);
+  });
+  return {
+    ua: navigator.userAgent,
+    brands: data.brands.map((item) => item.brand + ' ' + item.version),
+    fullVersions: high.fullVersionList.map((item) => item.brand + ' ' + item.version),
+    platform: data.platform,
+    workerUa,
+  };
+})()`;
+
+function identityOf(app: ElectronApplication, url: string): Promise<IdentityReport> {
+  return app.evaluate(
+    ({ webContents }, [pageUrl, script]) => {
+      const contents = webContents.getAllWebContents().find((item) => item.getURL() === pageUrl);
+      if (contents === undefined) throw new Error(`no page at ${pageUrl}`);
+      return contents.executeJavaScript(script as string) as Promise<IdentityReport>;
+    },
+    [url, IDENTITY_SCRIPT],
+  );
+}
+
+test('every site view and its popup present the owner user agent and consistent client hints', async () => {
+  const fixture = await startFixtureServer();
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const kinds = ['chatgpt', 'grok', 'deepseek'];
+  const urlOf = (kind: string): string => `${fixture.url}${kind}`;
+  const env = Object.fromEntries(kinds.map((kind) => [`AIAW_SITE_URL_${kind.toUpperCase()}`, urlOf(kind)]));
+  const app = await launch(userData, folder, env);
+  try {
+    const page = await app.firstWindow();
+    for (const [index, kind] of kinds.entries()) {
+      await addAgent(page, kind);
+      await expect(page.locator('.agent-item')).toHaveCount(index + 1);
+      await expect(page.locator('.nav-address')).toHaveText(urlOf(kind));
+      const report = await identityOf(app, urlOf(kind));
+      expect(report.ua).toBe(OWNER_USER_AGENT);
+      expect(report.workerUa).toBe(OWNER_USER_AGENT);
+      expect(report.brands).toContain('Google Chrome 152');
+      expect(report.brands).toContain('Chromium 152');
+      expect(report.fullVersions.filter((item) => item.startsWith('Google Chrome ') || item.startsWith('Chromium '))).toHaveLength(2);
+      expect(report.fullVersions.every((item) => !item.startsWith('Chromium ') || item.includes('152.0.'))).toBe(true);
+      expect(report.fullVersions.some((item) => item.startsWith('Google Chrome 152.0.'))).toBe(true);
+      expect(report.platform).toBe('macOS');
+    }
+
+    await app.evaluate(({ webContents }, url) => {
+      const contents = webContents.getAllWebContents().find((item) => item.getURL() === url);
+      void contents?.executeJavaScript(`window.open(${JSON.stringify(url + '-popup')})`);
+    }, urlOf('grok'));
+    await expect
+      .poll(() => app.evaluate(({ webContents }, url) => webContents.getAllWebContents().some((item) => item.getURL() === url), urlOf('grok-popup')))
+      .toBe(true);
+    const popup = await identityOf(app, urlOf('grok-popup'));
+    expect(popup.ua).toBe(OWNER_USER_AGENT);
+    expect(popup.brands).toContain('Google Chrome 152');
+
+    expect(fixture.userAgents.length).toBeGreaterThan(0);
+    for (const userAgent of fixture.userAgents) expect(userAgent).toBe(OWNER_USER_AGENT);
+    for (const hint of fixture.clientHints.filter((item) => item.startsWith('sec-ch-ua:'))) expect(hint).toContain('"Google Chrome";v="152"');
   } finally {
     await app.close();
     fixture.server.close();

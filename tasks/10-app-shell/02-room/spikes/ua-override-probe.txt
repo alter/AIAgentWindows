@@ -1,0 +1,16 @@
+T33 probe, Electron 44.6.0 on macOS, 2026-10-22. Script: tasks/10-app-shell/02-room/spikes/ua-override-probe.js (arguments: ses | cdp [blank]; needs k.pem and c.pem, a throwaway self-signed pair for CN=localhost, next to it; throwaway userData, hidden windows, a local https fixture only). The probe's claimed version was 155; the owner changed it to 152 afterwards, the mechanism is the same.
+
+1. ses.setUserAgent(UA) before the window is created (plain request headers + page JS):
+   page UA = the string given (Chrome/155.0.0.0 in the probe), also in an iframe and a dedicated worker; navigator.userAgentData.brands stays [Not?A_Brand 24, Chromium 152], fullVersionList Chromium 152.0.7977.130 (the engine's), page and iframe and worker.
+   Set after the window exists (first run of the probe, setup order wrong): UA still the Electron default. The product sets it before creating the view.
+
+2. debugger.attach('1.3') + Emulation.setUserAgentOverride{userAgent,userAgentMetadata}:
+   - sent before any navigation: the command does not return until the renderer exists (8 s timeout in the probe; it was applied to the following load anyway).
+   - sent after loadURL('about:blank'): returns {} at once.
+   Page, iframe and worker all report the override: UA, brands [Not?A_Brand, Chromium, Google Chrome], fullVersionList for both brands. Navigations on the same webContents keep it.
+
+3. Request headers received by the fixture server (names starting sec-ch), http://localhost and https://localhost, Accept-CH: sec-ch-ua-full-version-list, sec-ch-ua-platform-version sent by the server, modes ses and cdp:
+   none. Electron 44.6.0 sends no Sec-CH-UA* request header in either mode (headers: [] on every request, main frame and iframe). The plan's wording 'Sec-CH-UA* headers still say Chromium 152' was an inference from W15, not an observation.
+
+cdp + blank, https, raw tail:
+"headers":[{"url":"/","h":[]},{"url":"/sub","h":[]},{"url":"/?again","h":[]},{"url":"/sub","h":[]}]}

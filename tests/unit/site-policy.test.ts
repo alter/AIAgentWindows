@@ -7,30 +7,39 @@ import {
   permissionCheckAllowed,
   popupAllowed,
   SENSITIVE_PERMISSIONS,
+  OWNER_USER_AGENT,
   siteStartUrl,
-  userAgentFor,
+  userAgentOverride,
 } from '../../src/shared/site-policy';
 import { formatSiteLog } from '../../src/shared/site-log';
 
-const DEFAULT_UA =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) aiagentwindows/0.1.0 Chrome/150.0.0.0 Electron/44.6.0 Safari/537.36';
+const ENGINE = { chromeVersion: '152.0.7977.130', platformVersion: '15.4.1', arch: 'arm64' };
 
-describe('userAgentFor', () => {
-  it('removes the Electron token for DeepSeek and keeps the rest', () => {
-    const ua = userAgentFor('deepseek', DEFAULT_UA);
-    expect(ua).not.toContain('Electron/');
-    expect(ua).toContain('Chrome/150.0.0.0');
-    expect(ua).toContain('Safari/537.36');
-    expect(ua).not.toContain('  ');
+describe('OWNER_USER_AGENT', () => {
+  it('is the Chrome 152 macOS string without an Electron or app token', () => {
+    expect(OWNER_USER_AGENT).toContain('Chrome/152.0.0.0');
+    expect(OWNER_USER_AGENT).not.toContain('Electron/');
+    expect(OWNER_USER_AGENT).not.toContain('aiagentwindows');
+    expect(OWNER_USER_AGENT).toContain('Macintosh');
+  });
+});
+
+describe('userAgentOverride', () => {
+  it('carries the owner user agent and Chrome 152 brands with the engine full version for both', () => {
+    const { userAgent, userAgentMetadata: meta } = userAgentOverride(ENGINE);
+    expect(userAgent).toBe(OWNER_USER_AGENT);
+    expect(meta.brands.map((entry) => entry.brand)).toEqual(['Not?A_Brand', 'Chromium', 'Google Chrome']);
+    expect(meta.brands.filter((entry) => entry.brand !== 'Not?A_Brand').map((entry) => entry.version)).toEqual(['152', '152']);
+    expect(meta.fullVersionList.filter((entry) => entry.brand !== 'Not?A_Brand')).toEqual([
+      { brand: 'Chromium', version: '152.0.7977.130' },
+      { brand: 'Google Chrome', version: '152.0.7977.130' },
+    ]);
   });
 
-  it('keeps the default user agent for ChatGPT and Grok', () => {
-    expect(userAgentFor('chatgpt', DEFAULT_UA)).toBe(DEFAULT_UA);
-    expect(userAgentFor('grok', DEFAULT_UA)).toBe(DEFAULT_UA);
-  });
-
-  it('leaves a user agent without the token unchanged for DeepSeek', () => {
-    expect(userAgentFor('deepseek', 'Mozilla/5.0 Chrome/150.0.0.0')).toBe('Mozilla/5.0 Chrome/150.0.0.0');
+  it('describes the host platform from the engine info', () => {
+    const arm = userAgentOverride(ENGINE).userAgentMetadata;
+    expect(arm).toMatchObject({ platform: 'macOS', platformVersion: '15.4.1', architecture: 'arm', bitness: '64', mobile: false });
+    expect(userAgentOverride({ ...ENGINE, arch: 'x64' }).userAgentMetadata.architecture).toBe('x86');
   });
 });
 
