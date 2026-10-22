@@ -9,8 +9,8 @@ A room survives the application. Every room is a JSON record next to its markdow
 
 ## Acceptance criteria
 - [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
-- [ ] AC2 Record round trip: `npx vitest run tests/unit/room-archive.test.ts` exit 0 — a record written after each entry parses back into the same entries; a record with status running loads as stopped; an unreadable file is listed as unreadable and left byte-identical; an id with a path separator or outside `[A-Za-z0-9_-]{1,64}` is refused
-- [ ] AC3 Reverse control: skipping the running→stopped rewrite makes `tests/unit/room-archive.test.ts::a running record is loaded as stopped` red (red output kept in NOTES.md)
+- [x] AC2 Record round trip: `npx vitest run tests/unit/room-archive.test.ts` exit 0 — a record written after each entry parses back into the same entries; a record with status running loads as stopped; an unreadable file is listed as unreadable and left byte-identical; an id with a path separator or outside `[A-Za-z0-9_-]{1,64}` is refused
+- [x] AC3 Reverse control: skipping the running→stopped rewrite makes `tests/unit/room-archive.test.ts::a running record is loaded as stopped` red (red output kept in NOTES.md)
 - [ ] AC4 Restored entries are rendered and prompted like live ones: `tests/unit/room-history.test.ts::restored entries render like live entries` and the room-view snapshot rebuild tests exit 0
 - [ ] AC5 Smoke: electron-smoke exit 0, including run → app restart with the same AIAW_USER_DATA → room reopened from the list with its entries → continuation run whose entries land after the old ones in the same `<shared>/rooms/<id>.md` and `<id>.json`, Carry result enabled on the reopened room — windows hidden
 - [!] AC6 HUMAN (excluded from /run): the owner runs a Room, quits the app mid-run, starts it, finds the room as stopped with its replies, continues it with a new prompt and records the result in NOTES.md
@@ -52,3 +52,4 @@ As tasks/10-app-shell/02-room/PLAN.md (Electron 44.6.0, TypeScript 6.0.3, vitest
 - 2026-10-23 02:03 T00 done: branch room at dea6d3e; fast tier 11 commands exit 0 (coverage 760/760, 100 %), electron-smoke 27/27 in 92 s; load average 1.8 before, 4.3 after
 - 2026-10-23 02:10 T01 done: RoomRecord, parseRoomRecord, isRoomId in room-model.ts; src/main/room-archive.ts (recordPath, writeRecord atomic, readRecord, listRecords, stopInterrupted); 29 tests in room-archive.test.ts red first (module missing), reverse control red kept in NOTES.md; fast tier 11 commands exit 0, coverage 100 %
 - 2026-10-23 coordinator: T01 verified (vitest room-archive+room-model 54/54, coverage gate 789/789 100 %, tsc and eslint exit 0 — this run)
+- 2026-10-23 coordinator: AC2 and AC3 met by T01 (room-archive tests for round trip, running→stopped, unreadable untouched, id refusal pass; reverse control red in NOTES.md 'T01 reverse control')
