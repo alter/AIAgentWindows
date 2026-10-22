@@ -3,6 +3,7 @@ import type { SiteLogValue } from '../../shared/site-log';
 
 export interface PageRunner {
   run(code: string): Promise<unknown>;
+  sendEnter?(): Promise<void>;
   setInputFiles?(selector: string, paths: string[]): Promise<void>;
 }
 
@@ -33,6 +34,7 @@ export type SiteAdapterErrorCode =
   | 'page-error'
   | 'page-gone'
   | 'no-response'
+  | 'not-submitted'
   | 'timeout'
   | 'not-ready'
   | 'aborted';

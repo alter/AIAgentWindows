@@ -3,24 +3,28 @@ import { MAX_REPLY_CHARS } from '../../shared/room-model';
 import type { SiteLogValue } from '../../shared/site-log';
 import {
   genericComposerScript,
+  genericComposerStateScript,
   genericEnterScript,
+  genericFocusScript,
   genericInsertScript,
   genericSendButtonScript,
   genericStateScript,
 } from './generic-scripts';
 import { callPage } from './page-call';
-import { extractReplyDetailed, isAnswerStart, type ReplyDrops } from './reply-lines';
+import { extractAnchoredReply, isAnswerStart, type ReplyDrops } from './reply-lines';
 import { SiteAdapterError, type PageRunner, type SiteAdapter } from './types';
 
 export interface GenericOptions {
   quietMs: number;
-  submitCheckMs: number;
+  confirmMs: number;
+  confirmPollMs: number;
   maxReplyChars: number;
 }
 
 export const DEFAULT_GENERIC_OPTIONS: GenericOptions = {
   quietMs: 5000,
-  submitCheckMs: 400,
+  confirmMs: 1500,
+  confirmPollMs: 50,
   maxReplyChars: MAX_REPLY_CHARS,
 };
 
@@ -30,6 +34,11 @@ interface PageSnapshot {
   stop: boolean;
   text: string;
   accepting: boolean;
+}
+
+interface ComposerState {
+  empty: boolean;
+  visible: number;
 }
 
 interface PageState {
@@ -50,6 +59,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let before = '';
   let submitted = false;
   let submittedAt = 0;
+  let echoFound = false;
+  let visibleComposers = 0;
+  let composerClearedMs = -1;
   let lastSeen: string | null = null;
   let changedAt = 0;
   let started = false;
@@ -70,8 +82,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   async function readState(runner: PageRunner): Promise<PageState> {
     if (!submitted || prompt === null) return { stop: false, accepting: false, text: '', reply: null };
     const value = await snapshot(runner);
-    const found = extractReplyDetailed(value.text, before, prompt);
+    const found = extractAnchoredReply(value.text, before, prompt);
     drops = found.dropped;
+    echoFound = found.echoFound;
     const now = Date.now();
     if (value.stop) stopSeen = true;
     const text = started || isAnswerStart(found.reply) ? found.reply : null;
@@ -91,6 +104,20 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     };
   }
 
+  async function confirmCleared(runner: PageRunner, since: number): Promise<boolean> {
+    const begun = Date.now();
+    for (;;) {
+      const state = (await callPage(runner, genericComposerStateScript())).value as ComposerState;
+      visibleComposers = state.visible;
+      if (state.empty) {
+        composerClearedMs = Date.now() - since;
+        return true;
+      }
+      if (Date.now() - begun >= options.confirmMs) return false;
+      await sleep(options.confirmPollMs);
+    }
+  }
+
   return {
     site,
     async insertText(runner, text) {
@@ -102,11 +129,15 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       composerKind = 'none';
       inserted = 0;
       submitPath = 'none';
+      echoFound = false;
+      visibleComposers = 0;
+      composerClearedMs = -1;
       drops = NO_DROPS;
       idleText = null;
       const reply = await callPage(runner, genericInsertScript(text));
       composerKind = reply.kind ?? 'none';
       inserted = reply.length ?? 0;
+      visibleComposers = reply.count ?? 0;
       if (reply.value !== true) throw new SiteAdapterError('page-error', 'the composer did not keep the inserted text');
       prompt = text;
     },
@@ -115,9 +146,21 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
       before = typeof entered.value === 'string' ? entered.value : '';
       submitted = true;
       submittedAt = Date.now();
-      await sleep(options.submitCheckMs);
+      submitPath = 'enter';
+      if (await confirmCleared(runner, submittedAt)) return;
       const sent = await callPage(runner, genericSendButtonScript());
-      submitPath = sent.value === 'clicked' ? 'button' : 'enter';
+      if (sent.value === 'clicked') {
+        submitPath = 'button';
+        if (await confirmCleared(runner, submittedAt)) return;
+      }
+      if (runner.sendEnter !== undefined) {
+        await callPage(runner, genericFocusScript());
+        await runner.sendEnter();
+        submitPath = 'trusted';
+        if (await confirmCleared(runner, submittedAt)) return;
+      }
+      submitPath = 'unconfirmed';
+      throw new SiteAdapterError('not-submitted', `${site} did not accept the prompt: the composer stayed full`);
     },
     async isGenerating(runner) {
       const state = await readState(runner);
@@ -145,6 +188,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         composer: composerKind,
         inserted,
         submit: submitPath,
+        composerClearedMs,
+        echoFound,
+        visibleComposers,
         firstGrowthMs,
         stopSeen,
         quietForMs: started ? Date.now() - changedAt : -1,

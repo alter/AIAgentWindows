@@ -48,6 +48,12 @@ export interface RoomDriverDeps {
   siteLog?: SiteLogger;
 }
 
+function withoutMarkers(reply: string | null): string | null {
+  if (reply === null) return null;
+  const shown = stripEntryMarkerLines(reply).trim();
+  return shown === '' ? null : shown;
+}
+
 class FolderNames {
   private readonly names = new Map<string, string>();
   private readonly counts = new Map<string, number>();
@@ -107,7 +113,7 @@ class CliDriver implements ParticipantDriver {
       });
       const id = session.id ?? result.sessionId;
       this.session = id === null ? null : { id, started: true };
-      return result.reply;
+      return withoutMarkers(result.reply);
     } catch (error) {
       this.session = null;
       throw error;
@@ -164,8 +170,7 @@ class SiteDriver implements ParticipantDriver {
       signal: request.signal,
       trace: (fields) => this.log(this.seat.adapter.site, 'turn', fields),
     });
-    const shown = stripEntryMarkerLines(reply).trim();
-    return shown === '' ? null : shown;
+    return withoutMarkers(reply);
   }
 
   async reset(): Promise<void> {

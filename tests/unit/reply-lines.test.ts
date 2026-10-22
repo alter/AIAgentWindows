@@ -1,6 +1,6 @@
 // reply-lines.test.ts
 import { describe, expect, it } from 'vitest';
-import { extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
+import { anchorAfterEcho, extractReply, extractReplyDetailed, isUiLabel } from '../../src/main/site-adapters/reply-lines';
 import { stripEntryMarkerLines } from '../../src/shared/room-history';
 
 const PROMPT = ['Intro line that is long enough', '<<<entry-abc author="Owner" kind=prompt>>>', 'Ask', '<<<end-abc>>>'].join('\n');
@@ -125,5 +125,43 @@ describe('extractReplyDetailed', () => {
     const found = extractReplyDetailed(`${before}\n${prompt}\nSame answer`, before, prompt);
     expect(found.reply).toBe('Same answer');
     expect(found.dropped.seen).toBe(2);
+  });
+});
+
+describe('anchorAfterEcho', () => {
+  const ASK = 'You are DeepSeek in a room where several agents take turns.\nCompare the two designs.';
+
+  it('keeps only the text from the last line that holds the start of the prompt', () => {
+    const page = `Sidebar title written later\nOlder chat\n${ASK}\nAnswer line`;
+    expect(anchorAfterEcho(page, ASK)).toBe(`${ASK}\nAnswer line`);
+  });
+
+  it('takes the newest echo when an earlier turn of the page started with the same text', () => {
+    const page = `${ASK}\nFirst answer\n${ASK}\nSecond answer`;
+    expect(anchorAfterEcho(page, ASK)).toBe(`${ASK}\nSecond answer`);
+  });
+
+  it('finds an echo collapsed into one line and an echo whose first line is short', () => {
+    expect(anchorAfterEcho(`Title\n${ASK.replace(/\s+/g, ' ')}\nAnswer`, ASK)).toBe(`${ASK.replace(/\s+/g, ' ')}\nAnswer`);
+    const short = 'Hi\nthere friend, how are you doing today';
+    expect(anchorAfterEcho('Title\nHi\nthere friend, how are you doing today\nAnswer', short)).toBe(
+      'Hi\nthere friend, how are you doing today\nAnswer',
+    );
+  });
+
+  it('prefers the line that starts with the prompt over a later reply line that quotes it', () => {
+    const page = `Old title\n${ASK}\nMy answer begins here\nAs you wrote: ${ASK.replace(/\s+/g, ' ')}`;
+    expect(anchorAfterEcho(page, ASK)).toBe(`${ASK}\nMy answer begins here\nAs you wrote: ${ASK.replace(/\s+/g, ' ')}`);
+  });
+
+  it('falls back to the last mention when no line starts with the prompt', () => {
+    expect(anchorAfterEcho('Title\nYou said: hello there my friend\nAnswer', 'hello there my friend')).toBe(
+      'You said: hello there my friend\nAnswer',
+    );
+  });
+
+  it('is null when the page does not show the start of the prompt', () => {
+    expect(anchorAfterEcho('Sidebar title\nSomething else', ASK)).toBeNull();
+    expect(anchorAfterEcho('anything', '   ')).toBeNull();
   });
 });

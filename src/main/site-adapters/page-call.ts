@@ -8,6 +8,7 @@ export interface PageReply {
   value?: unknown;
   length?: number;
   kind?: string;
+  count?: number;
 }
 
 const CODES = new Set(['input-missing', 'submit-unavailable']);

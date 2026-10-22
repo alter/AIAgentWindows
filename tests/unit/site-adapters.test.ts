@@ -155,4 +155,19 @@ describe('isolated world runner', () => {
     };
     await expect(createIsolatedRunner(contents).run('1')).rejects.toMatchObject({ code: 'page-gone' });
   });
+
+  it('sends a trusted Enter to the focused page and only when the contents can send input events', async () => {
+    const events: string[] = [];
+    const base = { executeJavaScriptInIsolatedWorld: () => Promise.resolve(null), isDestroyed: () => false };
+    expect(createIsolatedRunner(base).sendEnter).toBeUndefined();
+    const contents = {
+      ...base,
+      focus: () => events.push('focus'),
+      sendInputEvent: (event: { type: string; keyCode: string }) => events.push(`${event.type}:${event.keyCode}`),
+    };
+    await createIsolatedRunner(contents).sendEnter?.();
+    expect(events).toEqual(['focus', 'keyDown:Enter', 'char:\r', 'keyUp:Enter']);
+    const gone = createIsolatedRunner({ ...contents, isDestroyed: () => true });
+    await expect(gone.sendEnter?.()).rejects.toMatchObject({ code: 'page-gone' });
+  });
 });

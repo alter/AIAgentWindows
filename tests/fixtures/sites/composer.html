@@ -16,6 +16,7 @@
       <button id="stop" type="button" aria-label="Stop generating" hidden>Stop</button>
       <input id="file" type="file" />
     </form>
+    <aside id="extra" hidden><textarea id="extra-ta" aria-label="Feedback"></textarea></aside>
     <script>
       const query = new URLSearchParams(location.search);
       const composerKind = query.get('composer') === 'editable' ? 'editable' : 'textarea';
@@ -23,6 +24,13 @@
       const ce = document.getElementById('ce');
       const send = document.getElementById('send');
       const stop = document.getElementById('stop');
+      if (query.has('nomain')) {
+        const plain = document.createElement('div');
+        plain.id = 'log';
+        plain.innerHTML = document.getElementById('log').innerHTML;
+        document.getElementById('log').replaceWith(plain);
+      }
+      if (query.has('second')) document.getElementById('extra').hidden = false;
       let log = document.getElementById('log');
       if (query.has('labels')) {
         const thread = document.createElement('div');
@@ -84,6 +92,9 @@
         const item = document.createElement('li');
         item.textContent = 'Chat ' + window.submissions + ' about ' + text.slice(0, 5);
         history.appendChild(item);
+        if (query.has('title')) {
+          setTimeout(() => { item.textContent = 'Sculpture drawing style title'; }, 60);
+        }
         if (query.has('sidebar')) {
           const tag = document.createElement('div');
           tag.innerHTML = '<span>New chat</span><p>AI-generated, for reference only</p>';
@@ -152,12 +163,13 @@
         el.addEventListener('keydown', (event) => {
           if (query.has('noenter')) return;
           if (event.key === 'Enter' && !event.shiftKey) {
+            if (query.has('trustedonly') && window.trustedKey !== true) return;
             event.preventDefault();
             submit();
           }
         });
       }
-      send.addEventListener('click', submit);
+      send.addEventListener('click', () => { if (!query.has('trustedonly')) submit(); });
       document.getElementById('attach').addEventListener('click', () => { window.attachClicks += 1; });
       document.getElementById('mic').addEventListener('click', () => { window.micClicks += 1; });
     </script>

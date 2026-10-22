@@ -12,6 +12,8 @@ export interface DebuggerLike {
 export interface IsolatedContents {
   executeJavaScriptInIsolatedWorld(worldId: number, scripts: Array<{ code: string }>): Promise<unknown>;
   isDestroyed(): boolean;
+  focus?(): void;
+  sendInputEvent?(event: { type: 'keyDown' | 'char' | 'keyUp'; keyCode: string }): void;
   debugger?: DebuggerLike;
 }
 
@@ -31,6 +33,17 @@ export function createIsolatedRunner(contents: IsolatedContents): PageRunner {
       return contents.executeJavaScriptInIsolatedWorld(ADAPTER_WORLD_ID, [{ code }]);
     },
   };
+  const send = contents.sendInputEvent;
+  if (send !== undefined) {
+    runner.sendEnter = () => {
+      if (contents.isDestroyed()) return Promise.reject(new SiteAdapterError('page-gone', 'the page is closed'));
+      contents.focus?.();
+      send.call(contents, { type: 'keyDown', keyCode: 'Enter' });
+      send.call(contents, { type: 'char', keyCode: '\r' });
+      send.call(contents, { type: 'keyUp', keyCode: 'Enter' });
+      return Promise.resolve();
+    };
+  }
   const cdp = contents.debugger;
   if (cdp === undefined) return runner;
   runner.setInputFiles = async (selector, paths) => {

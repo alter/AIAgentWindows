@@ -11,7 +11,7 @@ import { SITE_KINDS_WITH_ADAPTER } from '../../src/shared/agents';
 const FIXTURE = readFileSync(new URL('../fixtures/sites/composer.html', import.meta.url), 'utf8');
 const MARKUP = '<img src=x onerror="window.pwned=1"><b>bold</b>\nsecond & line';
 const FAST = { timeoutMs: 4000, pollMs: 10, settleMs: 30, startGraceMs: 600 };
-const OPTIONS = { quietMs: 130, submitCheckMs: 40, maxReplyChars: 1_000_000 };
+const OPTIONS = { quietMs: 130, confirmMs: 300, confirmPollMs: 10, maxReplyChars: 1_000_000 };
 
 type Page = { dom: JSDOM; runner: PageRunner; win: JSDOM['window'] & Record<string, number> };
 const opened: JSDOM[] = [];
@@ -21,6 +21,21 @@ function openPage(search = ''): Page {
   opened.push(dom);
   const runner: PageRunner = { run: (code) => Promise.resolve(dom.window.eval(code)) };
   return { dom, runner, win: dom.window as Page['win'] };
+}
+
+function withTrustedEnter(page: Page): { runner: PageRunner; sent: () => number } {
+  let count = 0;
+  const runner: PageRunner = {
+    ...page.runner,
+    sendEnter: () => {
+      count += 1;
+      (page.dom.window as unknown as { trustedKey: boolean }).trustedKey = true;
+      const target = page.dom.window.document.activeElement ?? page.dom.window.document.body;
+      target.dispatchEvent(new page.dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      return Promise.resolve();
+    },
+  };
+  return { runner, sent: () => count };
 }
 
 afterEach(() => {
@@ -112,20 +127,61 @@ describe('generic adapter: submit', () => {
 
   it('does not click the button again when the page was only slow to accept Enter', async () => {
     const page = openPage();
-    const adapter = createGenericAdapter('fixture', { ...OPTIONS, submitCheckMs: 5 });
+    const adapter = createGenericAdapter('fixture', { ...OPTIONS, confirmMs: 5 });
     await adapter.insertText(page.runner, 'once');
     await adapter.submit(page.runner);
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(page.win['submissions']).toBe(1);
   });
 
-  it('fails with a typed error when neither Enter nor an enabled button submits', async () => {
+  it('fails as not-submitted when neither Enter, an enabled button nor a trusted Enter submits', async () => {
     const page = openPage('?noenter=1&sendoff=1');
     const adapter = createGenericAdapter('fixture', OPTIONS);
     await adapter.insertText(page.runner, 'hello');
-    await expect(adapter.submit(page.runner)).rejects.toMatchObject({ code: 'submit-unavailable' });
+    await expect(adapter.submit(page.runner)).rejects.toMatchObject({ code: 'not-submitted' });
     expect(page.win['submissions']).toBe(0);
     expect(page.win['attachClicks']).toBe(0);
+  });
+
+  it('presses a trusted Enter on the focused composer when the page ignores both a synthetic Enter and the send button', async () => {
+    const page = openPage('?trustedonly=1');
+    const trusted = withTrustedEnter(page);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await adapter.insertText(trusted.runner, 'hello');
+    await adapter.submit(trusted.runner);
+    expect(trusted.sent()).toBe(1);
+    expect(page.win['submissions']).toBe(1);
+    expect(adapter.trace?.()).toMatchObject({ submit: 'trusted' });
+  });
+
+  it('fails as not-submitted when even a trusted Enter leaves the composer full', async () => {
+    const page = openPage('?noenter=1&sendoff=1');
+    const trusted = withTrustedEnter(page);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await adapter.insertText(trusted.runner, 'hello');
+    await expect(adapter.submit(trusted.runner)).rejects.toMatchObject({ code: 'not-submitted' });
+    expect(trusted.sent()).toBe(1);
+  });
+
+  it('never presses the trusted Enter or the button after a confirmed submission', async () => {
+    const page = openPage();
+    const trusted = withTrustedEnter(page);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await adapter.insertText(trusted.runner, 'hello');
+    await adapter.submit(trusted.runner);
+    expect(trusted.sent()).toBe(0);
+    expect(page.win['submissions']).toBe(1);
+  });
+
+  it('submits through the composer it filled when a second composer sits elsewhere on the page', async () => {
+    const page = openPage('?second=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await adapter.insertText(page.runner, 'hello');
+    expect(page.dom.window.document.querySelector<HTMLTextAreaElement>('#extra-ta')?.value).toBe('');
+    expect(page.dom.window.document.querySelector<HTMLTextAreaElement>('#ta')?.value).toBe('hello');
+    await adapter.submit(page.runner);
+    expect(page.win['submissions']).toBe(1);
+    expect(adapter.trace?.()).toMatchObject({ visibleComposers: 2 });
   });
 });
 
@@ -363,6 +419,46 @@ describe('generic adapter: turn trace', () => {
     const { traces, outcome } = await traced('?silent=1', 'hi', { ...FAST, startGraceMs: 250 });
     expect(outcome).toMatchObject({ code: 'no-response' });
     expect(traces[0]).toMatchObject({ outcome: 'failed', code: 'no-response', firstGrowthMs: -1, replyChars: 0 });
+  });
+});
+
+describe('generic adapter: the reply is anchored on the echo of the prompt', () => {
+  const FIRST = 'First streamed answer line that is long enough';
+  const URL_REPLY = encodeURIComponent(`${FIRST}|Second streamed answer line`);
+
+  it('does not take a sidebar title written after the submit for the answer', async () => {
+    const page = openPage(`?nomain=1&nostop=1&title=1&think=500&reply=${URL_REPLY}`);
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    expect(await runAdapterTurn(adapter, page.runner, 'question about sculptors', { ...FAST, timeoutMs: 8000 })).toBe(
+      `${FIRST}\nSecond streamed answer line`,
+    );
+  });
+
+  it('reads nothing while the page has no echo of the prompt, whatever else changes', async () => {
+    const page = openPage('?nomain=1&nostop=1&title=1&silent=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    await expect(runAdapterTurn(adapter, page.runner, 'question about sculptors', { ...FAST, startGraceMs: 400 })).rejects.toMatchObject({
+      code: 'no-response',
+    });
+  });
+
+  it('reports whether the echo was found and how many composers are visible', async () => {
+    const page = openPage('?second=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    await runAdapterTurn(adapter, page.runner, 'question', { ...FAST, trace: (fields) => traces.push(fields) });
+    expect(traces[0]).toMatchObject({ echoFound: true, visibleComposers: 2, submit: 'enter' });
+    expect(Number(traces[0]?.['composerClearedMs'])).toBeGreaterThanOrEqual(0);
+  });
+
+  it('reports a submission that was never confirmed as not-submitted with no cleared time', async () => {
+    const page = openPage('?noenter=1&sendoff=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const traces: Array<Record<string, unknown>> = [];
+    await expect(runAdapterTurn(adapter, page.runner, 'question', { ...FAST, trace: (fields) => traces.push(fields) })).rejects.toMatchObject({
+      code: 'not-submitted',
+    });
+    expect(traces[0]).toMatchObject({ outcome: 'failed', code: 'not-submitted', composerClearedMs: -1, echoFound: false });
   });
 });
 

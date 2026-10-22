@@ -35,12 +35,33 @@ function isEditable(el) {
   return flag === '' || flag === 'true' || flag === 'plaintext-only';
 }
 
-function findComposer() {
-  const found = Array.from(document.querySelectorAll('textarea, [contenteditable], [role="textbox"]'))
+function visibleComposers() {
+  return Array.from(document.querySelectorAll('textarea, [contenteditable], [role="textbox"]'))
     .filter((el) => isEditable(el) && visible(el));
+}
+
+function sendCandidates(composer, all) {
+  const others = all.filter((el) => el !== composer && !el.contains(composer) && !composer.contains(el));
+  let scope = composer.parentElement;
+  for (let depth = 0; scope && depth < 6; depth += 1) {
+    if (others.some((el) => scope.contains(el))) return [];
+    const candidates = Array.from(scope.querySelectorAll('button, [role="button"]')).filter((el) => {
+      const name = accessibleName(el);
+      return !hidden(el) && !STOP_NAME.test(name) && !OTHER_NAME.test(name);
+    });
+    if (candidates.length > 0) return candidates;
+    scope = scope.parentElement;
+  }
+  return [];
+}
+
+function findComposer() {
+  const found = visibleComposers();
+  const withSend = found.filter((el) => sendCandidates(el, found).length > 0);
+  const pool = withSend.length > 0 ? withSend : found;
   let best = null;
   let bestBottom = -Infinity;
-  for (const el of found) {
+  for (const el of pool) {
     const bottom = hasLayout() ? el.getBoundingClientRect().bottom : 0;
     if (bottom >= bestBottom) {
       best = el;
@@ -116,20 +137,10 @@ function stopShown() {
 }
 
 function chooseSendButton(composer) {
-  let scope = composer.parentElement;
-  for (let depth = 0; scope && depth < 6; depth += 1) {
-    const candidates = Array.from(scope.querySelectorAll('button, [role="button"]')).filter((el) => {
-      const name = accessibleName(el);
-      return !hidden(el) && !STOP_NAME.test(name) && !OTHER_NAME.test(name);
-    });
-    if (candidates.length > 0) {
-      const enabled = candidates.filter((el) => !disabledButton(el));
-      if (enabled.length === 0) return null;
-      return enabled.find((el) => el.type === 'submit' || SEND_NAME.test(accessibleName(el))) || enabled[enabled.length - 1];
-    }
-    scope = scope.parentElement;
-  }
-  return null;
+  const candidates = sendCandidates(composer, visibleComposers());
+  const enabled = candidates.filter((el) => !disabledButton(el));
+  if (enabled.length === 0) return null;
+  return enabled.find((el) => el.type === 'submit' || SEND_NAME.test(accessibleName(el))) || enabled[enabled.length - 1];
 }
 `;
 
@@ -153,7 +164,7 @@ export function genericInsertScript(text: string): string {
       const proto = composer.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(composer, text);
       composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
-      return JSON.stringify({ ok: true, value: composer.value === text, length: composer.value.length, kind: 'textarea' });
+      return JSON.stringify({ ok: true, value: composer.value === text, length: composer.value.length, kind: 'textarea', count: visibleComposers().length });
     }
     let done = false;
     if (typeof document.execCommand === 'function') {
@@ -177,7 +188,7 @@ export function genericInsertScript(text: string): string {
       composer.replaceChildren(...rows);
       composer.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
     }
-    return JSON.stringify({ ok: true, value: collapse(fieldText(composer)).trim() === collapse(text).trim(), length: fieldText(composer).length, kind: 'editable' });`);
+    return JSON.stringify({ ok: true, value: collapse(fieldText(composer)).trim() === collapse(text).trim(), length: fieldText(composer).length, kind: 'editable', count: visibleComposers().length });`);
 }
 
 export function genericComposerScript(): string {
@@ -202,9 +213,24 @@ export function genericSendButtonScript(): string {
     const composer = findComposer();
     if (!composer || collapse(fieldText(composer)).trim() === '') return JSON.stringify({ ok: true, value: 'sent' });
     const button = chooseSendButton(composer);
-    if (!button) return JSON.stringify({ ok: false, error: 'submit-unavailable' });
+    if (!button) return JSON.stringify({ ok: true, value: 'unavailable' });
     button.click();
     return JSON.stringify({ ok: true, value: 'clicked' });`);
+}
+
+export function genericComposerStateScript(): string {
+  return wrap(`
+    const composer = findComposer();
+    const empty = composer === null || collapse(fieldText(composer)).trim() === '';
+    return JSON.stringify({ ok: true, value: { empty, visible: visibleComposers().length } });`);
+}
+
+export function genericFocusScript(): string {
+  return wrap(`
+    const composer = findComposer();
+    if (!composer) return JSON.stringify({ ok: false, error: 'input-missing' });
+    composer.focus();
+    return JSON.stringify({ ok: true, value: true });`);
 }
 
 export function genericStateScript(): string {

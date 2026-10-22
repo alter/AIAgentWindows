@@ -3,6 +3,7 @@ import { stripEntryMarkerLines } from '../../shared/room-history';
 
 const MIN_ECHO_FRAGMENT = 12;
 export const MIN_ANSWER_CHARS = 20;
+const ECHO_KEY_CHARS = 48;
 
 function collapse(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
@@ -87,11 +88,38 @@ function filled(lines: readonly string[]): number {
   return lines.filter((line) => collapse(line) !== '').length;
 }
 
-export function extractReplyDetailed(current: string, before: string, prompt: string): ExtractedReply {
+export interface AnchoredReply extends ExtractedReply {
+  echoFound: boolean;
+}
+
+export function anchorAfterEcho(text: string, prompt: string): string | null {
+  const key = collapse(prompt).slice(0, ECHO_KEY_CHARS).trimEnd();
+  if (key === '') return null;
+  const lines = text.split('\n');
+  const starts: number[] = [];
+  let joined = '';
+  for (const line of lines) {
+    starts.push(joined.length);
+    joined += `${collapse(line)} `;
+  }
+  const lineStarts = new Set(starts);
+  const last = joined.lastIndexOf(key);
+  let at = last;
+  while (at > 0 && !lineStarts.has(at)) at = joined.lastIndexOf(key, at - 1);
+  if (at === -1 || !lineStarts.has(at)) at = last;
+  if (at === -1) return null;
+  let index = starts.length - 1;
+  while (index > 0 && (starts[index] ?? 0) > at) index -= 1;
+  return lines.slice(index).join('\n');
+}
+
+function extract(current: string, before: string, prompt: string, anchored: boolean): AnchoredReply {
   const earlier = countLines(before.split('\n'));
   const left = new Map(earlier);
   const all = current.split('\n');
-  const fresh = withoutLines(all, (key) => takeOne(left, key));
+  const unseen = withoutLines(all, (key) => takeOne(left, key));
+  const tail = anchored ? anchorAfterEcho(unseen.join('\n'), prompt) : unseen.join('\n');
+  const fresh = tail === null ? [] : tail.split('\n');
   const echoFree = withoutEcho(fresh, prompt);
   const markerFree = stripEntryMarkerLines(echoFree.join('\n')).split('\n');
   const candidates = withoutLines(markerFree, isUiLabel);
@@ -100,13 +128,23 @@ export function extractReplyDetailed(current: string, before: string, prompt: st
   const kept = joined(novel) === null ? candidates : novel;
   return {
     reply,
+    echoFound: tail !== null,
     dropped: {
-      seen: filled(all) - filled(fresh) + filled(candidates) - filled(kept),
+      seen: filled(all) - filled(unseen) + filled(candidates) - filled(kept),
       echo: filled(fresh) - filled(echoFree),
       marker: filled(echoFree) - filled(markerFree),
       label: filled(markerFree) - filled(candidates),
     },
   };
+}
+
+export function extractReplyDetailed(current: string, before: string, prompt: string): ExtractedReply {
+  const { reply, dropped } = extract(current, before, prompt, false);
+  return { reply, dropped };
+}
+
+export function extractAnchoredReply(current: string, before: string, prompt: string): AnchoredReply {
+  return extract(current, before, prompt, true);
 }
 
 export function extractReply(current: string, before: string, prompt: string): string | null {
