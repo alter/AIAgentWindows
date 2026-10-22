@@ -1,10 +1,40 @@
 // types.ts
 import type { SiteLogValue } from '../../shared/site-log';
 
+export interface NetSink {
+  event(name: string, fields?: Readonly<Record<string, SiteLogValue>>): void;
+  saveBody(text: string): Promise<string | null>;
+}
+
+export interface NetWatch {
+  stop(): Promise<void>;
+}
+
 export interface PageRunner {
   run(code: string): Promise<unknown>;
   sendEnter?(): Promise<void>;
   setInputFiles?(selector: string, paths: string[]): Promise<void>;
+  watchNetwork?(sink: NetSink): Promise<NetWatch>;
+}
+
+export interface PollDrops {
+  seen: number;
+  echo: number;
+  marker: number;
+  label: number;
+}
+
+export interface PollProbe {
+  before: string;
+  text: string;
+  stop: boolean;
+  accepting: boolean;
+  reply: string | null;
+  started: boolean;
+  drops: PollDrops;
+  keyHits: number;
+  anchorRank: number;
+  hitsAtLineStart: number;
 }
 
 export interface SelectorSet {
@@ -27,6 +57,9 @@ export interface SiteAdapter {
   echoSeen?(): boolean;
   trace?(): Readonly<Record<string, SiteLogValue>>;
   lineReport?(): Readonly<Record<string, SiteLogValue>> | null;
+  probe?(): PollProbe | null;
+  settings?(): Readonly<Record<string, number>>;
+  domDump?(runner: PageRunner): Promise<string>;
 }
 
 export type SiteAdapterErrorCode =

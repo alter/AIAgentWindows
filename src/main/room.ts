@@ -35,6 +35,7 @@ export interface TurnRequest {
   historyText: string | null;
   timeoutMs: number;
   signal: AbortSignal;
+  debugSites: boolean;
 }
 
 export interface ParticipantDriver {
@@ -327,6 +328,7 @@ export class Room {
         historyText: prompt.placeHistory ? run.render(seen) : null,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,
+        debugSites: run.config.debugSites,
       };
       for (;;) {
         const first = driver.turn(request);

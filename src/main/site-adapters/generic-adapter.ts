@@ -3,6 +3,7 @@ import { MAX_REPLY_CHARS } from '../../shared/room-model';
 import type { SiteLogValue } from '../../shared/site-log';
 import {
   genericComposerScript,
+  genericDomScript,
   genericComposerStateScript,
   genericEnterScript,
   genericFocusScript,
@@ -11,8 +12,9 @@ import {
   genericStateScript,
 } from './generic-scripts';
 import { callPage } from './page-call';
-import { describeLines, extractAnchoredReply, isAnswerStart, type ReplyDrops } from './reply-lines';
-import { SiteAdapterError, type PageRunner, type SiteAdapter } from './types';
+import { freshTrack, judgeGenerating, observe, type ReplyTrack } from './decide';
+import { describeLines, type ReplyDrops } from './reply-lines';
+import { SiteAdapterError, type PageRunner, type PollProbe, type SiteAdapter } from './types';
 
 export interface GenericOptions {
   quietMs: number;
@@ -67,10 +69,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   let lastText = '';
   let visibleComposers = 0;
   let composerClearedMs = -1;
-  let lastSeen: string | null = null;
-  let changedAt = 0;
-  let started = false;
-  let firstGrowthMs = -1;
+  let track: ReplyTrack = freshTrack();
+  let lastProbe: PollProbe | null = null;
   let stopSeen = false;
   let composerKind = 'none';
   let inserted = 0;
@@ -90,32 +90,31 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
   async function readState(runner: PageRunner): Promise<PageState> {
     if (!submitted || prompt === null) return { stop: false, accepting: false, text: '', reply: null };
     const value = await snapshot(runner);
-    const found = extractAnchoredReply(value.text, before, prompt);
-    drops = found.dropped;
-    echoFound = found.echoFound;
-    keyHits = found.keyHits;
-    anchorRank = found.anchorRank;
-    hitsAtLineStart = found.hitsAtLineStart;
-    lastText = value.text;
     const now = Date.now();
+    const seen = observe(track, value, before, prompt, now, now - submittedAt, options.maxReplyChars);
+    track = seen.track;
+    drops = seen.drops;
+    echoFound = seen.echoFound;
+    keyHits = seen.keyHits;
+    anchorRank = seen.anchorRank;
+    hitsAtLineStart = seen.hitsAtLineStart;
+    lastText = value.text;
     if (value.stop) stopSeen = true;
     textLenAtEnd = value.text.length;
     frames = typeof value.frames === 'number' ? value.frames : -1;
-    const text = started || isAnswerStart(found.reply) ? found.reply : null;
-    if (text !== null && !started) {
-      started = true;
-      firstGrowthMs = now - submittedAt;
-    }
-    if (text !== lastSeen) {
-      lastSeen = text;
-      changedAt = now;
-    }
-    return {
+    lastProbe = {
+      before,
+      text: value.text,
       stop: value.stop,
       accepting: value.accepting,
-      text: value.text,
-      reply: text === null ? null : text.slice(0, options.maxReplyChars),
+      reply: seen.reply,
+      started: track.started,
+      drops,
+      keyHits,
+      anchorRank,
+      hitsAtLineStart,
     };
+    return { stop: value.stop, accepting: value.accepting, text: value.text, reply: seen.reply };
   }
 
   async function confirmCleared(runner: PageRunner, since: number): Promise<boolean> {
@@ -136,9 +135,8 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     site,
     async insertText(runner, text) {
       submitted = false;
-      lastSeen = null;
-      started = false;
-      firstGrowthMs = -1;
+      track = freshTrack();
+      lastProbe = null;
       stopSeen = false;
       composerKind = 'none';
       inserted = 0;
@@ -186,11 +184,9 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     },
     async isGenerating(runner) {
       const state = await readState(runner);
-      if (state.stop) return true;
-      if (!started) return false;
-      const generating = Date.now() - changedAt < options.quietMs || !state.accepting;
-      if (!generating) settledText = state.text;
-      return generating;
+      const verdict = judgeGenerating(track, state, Date.now(), options.quietMs);
+      if (verdict.settledText !== null) settledText = verdict.settledText;
+      return verdict.generating;
     },
     async lastReply(runner) {
       return (await readState(runner)).reply;
@@ -219,12 +215,12 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
         anchorRank,
         hitsAtLineStart,
         visibleComposers,
-        firstGrowthMs,
+        firstGrowthMs: track.firstGrowthMs,
         stopSeen,
         frames,
         textLenBefore,
         textLenAtEnd,
-        quietForMs: started ? Date.now() - changedAt : -1,
+        quietForMs: track.started ? Date.now() - track.changedAt : -1,
         droppedSeen: drops.seen,
         droppedEcho: drops.echo,
         droppedMarker: drops.marker,
@@ -234,6 +230,15 @@ export function createGenericAdapter(site: string, options: GenericOptions = DEF
     lineReport(): Readonly<Record<string, SiteLogValue>> | null {
       if (!submitted || prompt === null) return null;
       return { ...describeLines(lastText, before, prompt) };
+    },
+    probe() {
+      return lastProbe;
+    },
+    settings() {
+      return { quietMs: options.quietMs, maxReplyChars: options.maxReplyChars };
+    },
+    async domDump(runner) {
+      return String((await callPage(runner, genericDomScript())).value ?? '');
     },
     async composerReady(runner) {
       try {

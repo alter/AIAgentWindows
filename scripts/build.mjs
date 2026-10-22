@@ -31,6 +31,13 @@ await Promise.all([
   }),
   build({
     ...common,
+    entryPoints: [at('src/main/site-adapters/replay.ts')],
+    outfile: at('dist/scripts/replay.js'),
+    platform: 'node',
+    format: 'cjs',
+  }),
+  build({
+    ...common,
     entryPoints: [at('src/preload/index.ts')],
     outfile: at('dist/preload/index.js'),
     platform: 'node',

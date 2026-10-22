@@ -36,6 +36,12 @@ Pinned 2026-10-21: newest release at least two weeks old (44.6.0 published 2026-
 - `BrowserWindow.getAllWindows()` lists the newest window first; once the parking window exists, index 0 is the parking window, not the main window — find the main window by its `file:` URL.
 - Playwright's Electron loader already appends both switches to every launched app, so the smoke cannot show them missing (W27).
 
+## Site debug recording through the shared debugger (T37, 2026-10-22)
+
+- `webContents.debugger` emits `message` with `(event, method, params, sessionId)` for every CDP event of an enabled domain and `removeListener` takes the same listener back — https://github.com/electron/electron/blob/v44.6.0/docs/api/debugger.md
+- CDP `Network.enable` / `Network.disable` switch the Network domain on and off for the session; `Network.requestWillBeSent`, `responseReceived` (`response.mimeType`, `response.status`), `loadingFinished` (`encodedDataLength`, `timestamp` in monotonic seconds) and `loadingFailed` (`errorText`) carry the lifecycle; `Network.getResponseBody` returns `{ body, base64Encoded }` and fails for a resource whose body Chromium did not keep (a streamed response may be one) — https://chromedevtools.github.io/devtools-protocol/tot/Network/
+- The recorder enables the Network domain only for the length of one turn, on the debugger the user-agent override already attached, and never detaches it: `Emulation.setUserAgentOverride` belongs to the Emulation domain and survives `Network.disable`.
+
 ## Main-process and IPC APIs used by the app shell (studied for T01, 2026-10-21)
 
 - `WebContentsView` extends `View`, is main-process only and unusable before `app` emits `ready`; `new WebContentsView({ webPreferences, webContents })` — `webContents` adopts an existing one, which may sit in only one view at a time; the page is `view.webContents`; built-in classes cannot be subclassed — https://github.com/electron/electron/blob/v44.6.0/docs/api/web-contents-view.md#L40-L56

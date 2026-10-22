@@ -40,6 +40,7 @@ export class RoomPane {
   private readonly rounds = el('input');
   private readonly timeout = el('input');
   private readonly finalizer = el('select');
+  private readonly debugSites = el('input');
   private readonly start = el('button', 'room-button', 'Start');
   private readonly stop = el('button', 'room-button stop', 'Stop');
   private readonly progress = el('div', 'room-progress');
@@ -62,6 +63,7 @@ export class RoomPane {
   });
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
   private shown = 0;
+  private debugDir: string | null = null;
 
   constructor() {
     this.element.hidden = true;
@@ -166,12 +168,14 @@ export class RoomPane {
     this.timeout.value = DEFAULT_TIMEOUT_MINUTES;
     this.timeout.dataset['room'] = 'timeout';
     this.finalizer.dataset['room'] = 'finalizer';
+    this.debugSites.type = 'checkbox';
+    this.debugSites.dataset['room'] = 'debug-sites';
     this.start.type = 'button';
     this.start.dataset['room'] = 'start';
     this.stop.type = 'button';
     this.stop.dataset['room'] = 'stop';
     const settings = el('div', 'room-row');
-    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), field('Finalizer', this.finalizer), this.start, this.stop);
+    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), field('Finalizer', this.finalizer), labeled('Record site debug', this.debugSites), this.start, this.stop);
     const carry = el('div', 'room-row');
     this.target.dataset['room'] = 'carry-target';
     this.carryFinal.type = 'button';
@@ -213,13 +217,17 @@ export class RoomPane {
       timeoutMinutes: this.timeout.value,
       checked: this.checkedIds(),
       finalizerId: this.finalizer.value,
+      debugSites: this.debugSites.checked,
     });
     if (!result.ok) {
       this.message.textContent = result.error;
       return;
     }
+    this.debugDir = null;
     const started = await api.roomStart(result.config);
     if (!started.ok) this.message.textContent = started.error;
+    else this.debugDir = started.debugDir;
+    this.renderState();
   }
 
   private async onCarry(what: CarryWhat): Promise<void> {
@@ -296,6 +304,7 @@ export class RoomPane {
     this.timeout.disabled = busy;
     this.rounds.disabled = busy;
     this.finalizer.disabled = busy;
+    this.debugSites.disabled = busy;
     for (const participant of ROOM_PARTICIPANTS) {
       const input = this.boxes.get(participant.id);
       if (input !== undefined) input.disabled = busy || !participantAvailability(participant).available;
@@ -304,7 +313,7 @@ export class RoomPane {
     this.carryFinal.disabled = !canCarry;
     this.carryHistory.disabled = !canCarry;
     const names = ROOM_PARTICIPANTS.filter((item) => running.includes(item.id)).map((item) => item.label);
-    const where = historyPath === null ? '' : ` History: ${historyPath}`;
+    const where = (historyPath === null ? '' : ` History: ${historyPath}`) + (this.debugDir === null ? '' : ` Debug: ${this.debugDir}`);
     this.status.textContent =
       phase === 'idle' ? 'Idle.' : `${busy ? (paused.length > 0 ? 'Waiting for you' : `Running ${names.join(', ')}`) : phase} (${completed}/${total}).${where}`;
   }

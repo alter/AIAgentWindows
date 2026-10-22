@@ -30,6 +30,7 @@ export interface RoomConfig {
   participants: RoomParticipant[];
   finalizerId: string;
   turnTimeoutMs: number;
+  debugSites: boolean;
 }
 
 export interface RoomEntry {
@@ -148,7 +149,9 @@ export function parseRoomConfig(value: unknown): RoomConfigResult {
   if (typeof finalizerId !== 'string' || !parsed.some((participant) => participant.id === finalizerId)) {
     return { ok: false, error: 'finalizer must be one of the participants' };
   }
-  return { ok: true, config: { prompt, mode, rounds, participants: parsed, finalizerId, turnTimeoutMs } };
+  const debugSites = value['debugSites'] === undefined ? false : value['debugSites'];
+  if (typeof debugSites !== 'boolean') return { ok: false, error: 'debugSites must be true or false' };
+  return { ok: true, config: { prompt, mode, rounds, participants: parsed, finalizerId, turnTimeoutMs, debugSites } };
 }
 
 export function truncateText(text: string, limit: number): string {

@@ -1,4 +1,5 @@
 // isolated-runner.ts
+import { watchNetwork, type NetDebugger } from './network-tap';
 import { SiteAdapterError, type PageRunner } from './types';
 
 export const ADAPTER_WORLD_ID = 1001;
@@ -7,11 +8,18 @@ export interface DebuggerLike {
   isAttached(): boolean;
   attach(protocolVersion?: string): void;
   sendCommand(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  on?: NetDebugger['on'];
+  removeListener?: NetDebugger['removeListener'];
+}
+
+function canWatch(cdp: DebuggerLike): cdp is NetDebugger {
+  return cdp.on !== undefined && cdp.removeListener !== undefined;
 }
 
 export interface IsolatedContents {
   executeJavaScriptInIsolatedWorld(worldId: number, scripts: Array<{ code: string }>): Promise<unknown>;
   isDestroyed(): boolean;
+  getURL?(): string;
   focus?(): void;
   sendInputEvent?(event: { type: 'keyDown' | 'char' | 'keyUp'; keyCode: string }): void;
   debugger?: DebuggerLike;
@@ -46,6 +54,9 @@ export function createIsolatedRunner(contents: IsolatedContents): PageRunner {
   }
   const cdp = contents.debugger;
   if (cdp === undefined) return runner;
+  if (canWatch(cdp)) {
+    runner.watchNetwork = (sink) => watchNetwork(cdp, contents.getURL?.() ?? null, sink);
+  }
   runner.setInputFiles = async (selector, paths) => {
     if (contents.isDestroyed()) throw new SiteAdapterError('page-gone', 'the page is closed');
     if (!cdp.isAttached()) cdp.attach('1.3');

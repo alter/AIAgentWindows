@@ -218,6 +218,13 @@ describe('formToConfig', () => {
     expect(result.ok && result.config.participants.length).toBe(1);
   });
 
+  it('passes the debug recording switch on and keeps it off by default', () => {
+    const plain = formToConfig(form);
+    expect(plain.ok && plain.config.debugSites).toBe(false);
+    const on = formToConfig({ ...form, debugSites: true });
+    expect(on.ok && on.config.debugSites).toBe(true);
+  });
+
   it('broadcast takes the rounds field like relay does', () => {
     const result = formToConfig({ ...form, mode: 'broadcast', rounds: '4' });
     expect(result.ok && result.config.rounds).toBe(4);

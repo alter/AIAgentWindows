@@ -36,7 +36,7 @@ export interface RoomSnapshot {
   chips: Record<string, ChipState>;
 }
 
-export type RoomStartResult = { ok: true; roomId: string; historyPath: string } | { ok: false; error: string };
+export type RoomStartResult = { ok: true; roomId: string; historyPath: string; debugDir: string | null } | { ok: false; error: string };
 
 export interface RoomFormValues {
   prompt: string;
@@ -45,6 +45,7 @@ export interface RoomFormValues {
   timeoutMinutes: string;
   checked: readonly string[];
   finalizerId?: string;
+  debugSites?: boolean;
 }
 
 const MS_PER_MINUTE = 60_000;
@@ -132,6 +133,7 @@ export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKin
     participants,
     finalizerId: resolveFinalizer(form.checked, form.finalizerId ?? ''),
     turnTimeoutMs: Math.round(minutes * MS_PER_MINUTE),
+    debugSites: form.debugSites ?? false,
   });
 }
 

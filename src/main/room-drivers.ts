@@ -1,17 +1,19 @@
 // room-drivers.ts
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomTurnSpawn } from '../shared/cli-args';
 import { PARTICIPANT_HISTORY_FILE, stripEntryMarkerLines } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
+import type { SiteLogValue } from '../shared/site-log';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
 import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
 import type { SiteLogger } from './site-log-file';
-import { SiteAdapterError, type PageRunner, type SiteAdapter } from './site-adapters/types';
+import { SiteAdapterError, type NetWatch, type PageRunner, type SiteAdapter } from './site-adapters/types';
 import { waitUntilReady } from './site-adapters/ready';
+import { createTurnRecorder, type TurnRecorder } from './site-adapters/recorder';
 import { DEFAULT_TURN_OPTIONS, runAdapterTurn } from './site-adapters/turn';
 
 export interface RoomTiming {
@@ -46,6 +48,7 @@ export interface RoomDriverDeps {
   siteFor(participant: RoomParticipant): SiteSeat | null;
   timing?: Partial<RoomTiming>;
   siteLog?: SiteLogger;
+  debugRoot?: string;
 }
 
 function withoutMarkers(reply: string | null): string | null {
@@ -138,20 +141,34 @@ class SiteDriver implements ParticipantDriver {
     private readonly seat: SiteSeat,
     private readonly timing: RoomTiming,
     private readonly log: SiteLogger,
+    private readonly debugRoot: string | null,
   ) {}
 
-  private async ready(request: TurnRequest): Promise<void> {
+  private async phase(rec: TurnRecorder | null, name: string, work: () => Promise<void>): Promise<void> {
+    const begun = Date.now();
+    try {
+      await work();
+    } finally {
+      rec?.event('ready', { phase: name, ms: Date.now() - begun });
+    }
+  }
+
+  private async ready(request: TurnRequest, rec: TurnRecorder | null): Promise<void> {
     try {
       if (this.chatRunId !== request.runId) {
-        await this.seat.newChat?.(this.timing.readyMs, request.signal);
+        const { newChat } = this.seat;
+        if (newChat !== undefined) await this.phase(rec, 'new-chat', () => newChat(this.timing.readyMs, request.signal));
         this.chatRunId = request.runId;
       }
-      await this.seat.prepare?.(this.timing.readyMs, request.signal);
-      await waitUntilReady(this.seat.adapter, this.seat.runner, {
-        timeoutMs: this.timing.readyMs,
-        pollMs: this.timing.readyPollMs,
-        signal: request.signal,
-      });
+      const { prepare } = this.seat;
+      if (prepare !== undefined) await this.phase(rec, 'prepare', () => prepare(this.timing.readyMs, request.signal));
+      await this.phase(rec, 'composer', () =>
+        waitUntilReady(this.seat.adapter, this.seat.runner, {
+          timeoutMs: this.timing.readyMs,
+          pollMs: this.timing.readyPollMs,
+          signal: request.signal,
+        }),
+      );
     } catch (error) {
       const code = error instanceof SiteAdapterError ? error.code : 'error';
       this.log(this.seat.adapter.site, 'turn', { outcome: 'failed', phase: 'ready', code });
@@ -159,19 +176,85 @@ class SiteDriver implements ParticipantDriver {
     }
   }
 
-  async turn(request: TurnRequest): Promise<string | null> {
-    await this.ready(request);
-    if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
-    const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
-      ...DEFAULT_TURN_OPTIONS,
-      pollMs: this.timing.pollMs,
-      settleMs: this.timing.settleMs,
-      timeoutMs: request.timeoutMs,
-      signal: request.signal,
-      trace: (fields) => this.log(this.seat.adapter.site, 'turn', fields),
-      diagnose: (fields) => this.log(this.seat.adapter.site, 'turn-lines', fields),
+  private open(request: TurnRequest, turn: string): TurnRecorder | null {
+    if (!request.debugSites || this.debugRoot === null) return null;
+    const { adapter } = this.seat;
+    return createTurnRecorder({
+      root: this.debugRoot,
+      runId: request.runId,
+      site: adapter.site,
+      turn,
+      prompt: request.text,
+      timing: {
+        pollMs: this.timing.pollMs,
+        settleMs: this.timing.settleMs,
+        startGraceMs: DEFAULT_TURN_OPTIONS.startGraceMs,
+        timeoutMs: request.timeoutMs,
+        ...adapter.settings?.(),
+      },
+      onFail: (code) => this.log(adapter.site, 'recorder-failed', { code }),
     });
-    return withoutMarkers(reply);
+  }
+
+  private async watch(rec: TurnRecorder | null): Promise<NetWatch | null> {
+    if (rec === null || this.seat.runner.watchNetwork === undefined) return null;
+    try {
+      return await this.seat.runner.watchNetwork(rec);
+    } catch (error) {
+      rec.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
+  }
+
+  private async close(rec: TurnRecorder, watch: NetWatch | null, outcome: string, code: string, trace: Readonly<Record<string, SiteLogValue>>): Promise<void> {
+    try {
+      await watch?.stop();
+    } catch (error) {
+      rec.event('net-failed', { error: error instanceof Error ? error.message : String(error) });
+    }
+    let dom: string | null = null;
+    try {
+      dom = (await this.seat.adapter.domDump?.(this.seat.runner)) ?? null;
+    } catch (error) {
+      rec.event('dom-failed', { code: error instanceof SiteAdapterError ? error.code : 'error' });
+    }
+    await rec.finish({ outcome, code, trace, dom });
+  }
+
+  async turn(request: TurnRequest): Promise<string | null> {
+    const turn = randomBytes(3).toString('hex');
+    const rec = this.open(request, turn);
+    let watch: NetWatch | null = null;
+    let outcome = 'failed';
+    let code = 'error';
+    let trace: Readonly<Record<string, SiteLogValue>> = {};
+    try {
+      await this.ready(request, rec);
+      if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
+      watch = await this.watch(rec);
+      const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
+        ...DEFAULT_TURN_OPTIONS,
+        pollMs: this.timing.pollMs,
+        settleMs: this.timing.settleMs,
+        timeoutMs: request.timeoutMs,
+        signal: request.signal,
+        turnId: turn,
+        tap: rec ?? undefined,
+        trace: (fields) => {
+          trace = fields;
+          this.log(this.seat.adapter.site, 'turn', rec === null ? fields : { ...fields, debugDir: rec.dir });
+        },
+        diagnose: (fields) => this.log(this.seat.adapter.site, 'turn-lines', fields),
+      });
+      outcome = 'reply';
+      code = '';
+      return withoutMarkers(reply);
+    } catch (error) {
+      code = error instanceof SiteAdapterError ? error.code : 'error';
+      throw error;
+    } finally {
+      if (rec !== null) await this.close(rec, watch, outcome, code, trace);
+    }
   }
 
   async reset(): Promise<void> {
@@ -209,7 +292,7 @@ export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
     if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
-    return new SiteDriver(seat, timing, deps.siteLog ?? (() => undefined));
+    return new SiteDriver(seat, timing, deps.siteLog ?? (() => undefined), deps.debugRoot ?? null);
   };
   return {
     factory,

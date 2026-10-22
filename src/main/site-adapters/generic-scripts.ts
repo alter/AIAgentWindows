@@ -259,3 +259,8 @@ export function genericStateScript(): string {
       && (collapse(fieldText(composer)).trim() === '' || chooseSendButton(composer) !== null);
     return JSON.stringify({ ok: true, value: { stop: stopShown(), text: conversationText(composer), accepting, frames: frameState().n } });`);
 }
+
+export function genericDomScript(): string {
+  return wrap(`
+    return JSON.stringify({ ok: true, value: conversationRoot().outerHTML });`);
+}

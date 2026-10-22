@@ -34,7 +34,7 @@ afterEach(async () => {
 });
 
 function config(participants: RoomParticipant[], overrides: Partial<RoomConfig> = {}): RoomConfig {
-  return { prompt: 'the question', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 5000, finalizerId: defaultFinalizerId(participants), ...overrides };
+  return { prompt: 'the question', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 5000, finalizerId: defaultFinalizerId(participants), debugSites: false, ...overrides };
 }
 
 type Behaviour = (request: TurnRequest, call: number) => Promise<string | null>;

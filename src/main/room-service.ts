@@ -1,4 +1,5 @@
 // room-service.ts
+import path from 'node:path';
 import { Room, type DriverFactory } from './room';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import type { RoomConfig, RoomEvent } from '../shared/room-model';
@@ -7,6 +8,7 @@ import { applyRoomEvent, carryText, emptyRoomSnapshot, type CarryWhat, type Room
 
 export interface RoomServiceDeps {
   roomsDir: string;
+  debugRoot?: string;
   driverFor: DriverFactory;
   emit(event: RoomEvent): void;
   terminal: RoomTerminals;
@@ -40,7 +42,8 @@ export class RoomService {
     try {
       const run = this.room.start(config);
       void run.done.catch(() => undefined);
-      return { ok: true, roomId: run.roomId, historyPath: run.historyPath };
+      const debugDir = config.debugSites && this.deps.debugRoot !== undefined ? path.join(this.deps.debugRoot, run.roomId) : null;
+      return { ok: true, roomId: run.roomId, historyPath: run.historyPath, debugDir };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) };
     }

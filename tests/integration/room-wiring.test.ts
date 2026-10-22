@@ -103,10 +103,11 @@ describe('carry into a working session', () => {
   });
 });
 
-function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [], terminal: RoomTerminals = noTerminal()): { room: RoomService; seen: RoomEvent[] } {
+function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [], terminal: RoomTerminals = noTerminal(), debugRoot?: string): { room: RoomService; seen: RoomEvent[] } {
   const seen: RoomEvent[] = [];
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
+    debugRoot,
     driverFor,
     terminal,
     emit: (event) => seen.push(event),
@@ -147,7 +148,7 @@ function echoDriver(): DriverFactory {
 }
 
 function config(overrides: Partial<RoomConfig> = {}): RoomConfig {
-  return { prompt: 'the question', mode: 'relay', rounds: 1, participants: [CLAUDE, CODEX], turnTimeoutMs: 5000, finalizerId: CLAUDE.id, ...overrides };
+  return { prompt: 'the question', mode: 'relay', rounds: 1, participants: [CLAUDE, CODEX], turnTimeoutMs: 5000, finalizerId: CLAUDE.id, debugSites: false, ...overrides };
 }
 
 async function finished(seen: RoomEvent[]): Promise<void> {
@@ -166,6 +167,34 @@ describe('room service', () => {
     expect(state.entries.map((entry) => entry.label)).toEqual(['Owner', 'Claude Code', 'Codex', 'Claude Code']);
     const history = await readFile(state.historyPath ?? '', 'utf8');
     expect(history.indexOf('reply of Claude Code')).toBeLessThan(history.indexOf('reply of Codex'));
+  });
+
+  it('names the debug directory of the run only when the switch is on and a debug root is configured, and hands the switch to every turn', async () => {
+    const debugRoot = path.join(dir, 'debug', 'sites');
+    const switches: boolean[] = [];
+    const watching: DriverFactory = async () => ({
+      turn: async (request) => {
+        switches.push(request.debugSites);
+        return 'reply';
+      },
+      reset: async () => undefined,
+      dispose: () => undefined,
+    });
+    const on = service(watching, [], noTerminal(), debugRoot);
+    const started = on.room.start(config({ participants: [CLAUDE], debugSites: true }));
+    await finished(on.seen);
+    expect(started.ok && started.debugDir).toBe(path.join(debugRoot, started.ok ? started.roomId : ''));
+    expect(new Set(switches)).toEqual(new Set([true]));
+    switches.length = 0;
+    const off = service(watching, [], noTerminal(), debugRoot);
+    const quiet = off.room.start(config({ participants: [CLAUDE] }));
+    await finished(off.seen);
+    expect(quiet.ok && quiet.debugDir).toBeNull();
+    expect(new Set(switches)).toEqual(new Set([false]));
+    const bare = service(watching);
+    const nowhere = bare.room.start(config({ participants: [CLAUDE], debugSites: true }));
+    await finished(bare.seen);
+    expect(nowhere.ok && nowhere.debugDir).toBeNull();
   });
 
   it('refuses a second start while running and stops the run on request', async () => {

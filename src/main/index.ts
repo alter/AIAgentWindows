@@ -102,6 +102,7 @@ async function start(): Promise<void> {
   const active = controller;
   await active.restore();
   const roomsDir = path.join(sharedDir, 'rooms');
+  const debugRoot = path.join(userData, 'debug', 'sites');
   const drivers = createRoomDrivers({
     cwd: roomsDir,
     sharedDir,
@@ -110,6 +111,7 @@ async function start(): Promise<void> {
     loginShell: roomLoginShell(process.env),
     timing: roomTimingOverride(process.env),
     siteLog,
+    debugRoot,
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,
       page: (agent) => siteViews.pageFor(agent.id, agent.kind),
@@ -121,6 +123,7 @@ async function start(): Promise<void> {
   roomDrivers = drivers;
   const roomService = new RoomService({
     roomsDir,
+    debugRoot,
     driverFor: drivers.factory,
     terminal: drivers.terminal,
     emit: (event) => {

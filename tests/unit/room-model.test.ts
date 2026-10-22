@@ -90,6 +90,14 @@ describe('parseRoomConfig', () => {
     expect(parseRoomConfig({ ...valid, turnTimeoutMs: 1000 }).ok).toBe(true);
   });
 
+  it('defaults debugSites to false, keeps true and refuses anything that is not a boolean', () => {
+    const plain = parseRoomConfig(valid);
+    expect(plain.ok && plain.config.debugSites).toBe(false);
+    const on = parseRoomConfig({ ...valid, debugSites: true });
+    expect(on.ok && on.config.debugSites).toBe(true);
+    for (const debugSites of ['yes', 1, null]) expect(parseRoomConfig({ ...valid, debugSites }).ok).toBe(false);
+  });
+
   it('rejects non-objects', () => {
     expect(parseRoomConfig(null).ok).toBe(false);
     expect(parseRoomConfig('x').ok).toBe(false);

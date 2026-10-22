@@ -9,7 +9,8 @@
     "start": "electron .",
     "test": "vitest run tests/unit tests/integration",
     "postinstall": "node scripts/postinstall.mjs",
-    "capture-sites": "node scripts/capture-sites.mjs"
+    "capture-sites": "node scripts/capture-sites.mjs",
+    "site-replay": "node scripts/site-replay.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",

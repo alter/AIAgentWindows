@@ -115,6 +115,7 @@ describe('room channels', () => {
     participants: [{ id: 'claude', kind: 'claude', label: 'Claude Code' }],
     finalizerId: 'claude',
     turnTimeoutMs: 600000,
+    debugSites: false,
   };
 
   it('accepts a valid room config and rejects an invalid one', () => {
