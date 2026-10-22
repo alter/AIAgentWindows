@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -202,3 +202,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 12:20 T32a done: stub-print refuses to run without the session directory env (exit 3), red first (2 of 3 new tests in stub-print.test.ts failed: stub exited 0 and wrote stub-sessions into its cwd), the same fast tier run leaves no untracked file outside reports/ and the plan dir
 - 2026-10-22 coordinator: T32, T32a verified (targeted suites, fast tier, electron-smoke — this run); repository root clean after the suites. Paused on AC7.
 - 2026-10-22 12:40 T33 done: every site view and its popups present the owner UA (Chrome 152, D8 reworded, owner changed 155 -> 152) and Google Chrome/Chromium 152 client hints with the engine's 152.0.7977.130; mechanism = `ses.setUserAgent` + CDP `Emulation.setUserAgentOverride` with `userAgentMetadata` through `webContents.debugger` on the view and, via `did-create-window`, on popups (probe: spikes/ua-override-probe.txt, EVIDENCE W22-W24, docs/tech/electron@44.6.0.md, DECISIONS D1); finding: Electron 44.6.0 sends no `Sec-CH-UA*` header at all (W23), so no header rewriting; red first (unit 3 tests failed, smoke failed on the Electron-token UA), reverse control (popup listener removed) red then restored; vitest site-policy+site-user-agent 27/27, fast tier 11/11 (FASTRUN-2026-10-22-123406175815), electron-smoke 22/22 hidden
+- 2026-10-22 coordinator: T33 verified (vitest site-policy+site-user-agent 27/27, fast tier exit 0, electron-smoke 22/22, shellcheck and gitleaks exit 0 — this run); open risk noted: Electron 44.6.0 sends no Sec-CH-UA* request headers (W23) while Chrome 152 does on https, unchanged by T33. Paused on AC7.
