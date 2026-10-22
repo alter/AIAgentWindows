@@ -4,7 +4,7 @@ type:feature
 priority:P1
 status:todo
 verify:pending
-depends:10-app-shell/02-room
+depends:10-app-shell/04-room-archive
 milestone:M2
 format:2
 capability:Room: broadcast and relay rounds over agents

@@ -72,4 +72,4 @@ ROLE
   ARCH, APP, QA, HUMAN
 
 DEPENDS
-  10-app-shell/02-room
+  10-app-shell/04-room-archive

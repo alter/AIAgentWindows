@@ -1,0 +1,79 @@
+TASK: room archive — saved rooms the owner can reopen and continue
+
+GOAL
+  A room survives the application: every room is a record on disk next to its
+  markdown history, the Room pane lists the saved rooms, an opened room shows
+  its feed, participants and settings, allows "Carry result" and a new run in
+  the same room with the whole earlier history in the participants' context.
+  Owner's request of 2026-10-22: closing the app currently loses the room
+  (docs/PROJECT.md §3, Room row). Serves no gate.
+
+CONTEXT
+  tasks/10-app-shell/02-room/task.txt
+  tasks/10-app-shell/02-room/PLAN.md (Decisions, Assumptions)
+  src/main/room.ts (RunState, Room.execute, history writes)
+  src/main/room-service.ts (in-memory RoomSnapshot, the only room state today)
+  src/shared/room-view.ts (RoomSnapshot, applyRoomEvent, carryText)
+  src/shared/room-history.ts (renderHistory, buildParticipantPrompt)
+  src/main/state-file.ts (how the app persists its own state)
+  docs/tech/electron@44.6.0.md
+
+SCOPE
+  + S1 room record: <shared>/rooms/<id>.json with config (participants, mode, rounds, finalizer, timeout), entries, status, created and updated times; written atomically after every entry and status change; the markdown history stays as it is for participants and people
+  + S2 room list in the Room pane: saved rooms newest first with id, time, status and the first line of the first prompt; opening one rebuilds the RoomSnapshot from the record (feed, chips, participants, settings prefilled) and enables "Carry result"
+  + S3 continue a room: a new prompt in an opened room starts a run with the same room id, appends to the same record and history file, and the participants receive the whole earlier history through the existing prompt builder; participant sessions are fresh (a CLI session is not kept across app starts)
+  + S4 interrupted run: a record found with status running at app start is saved as stopped before anything else; nothing is relaunched by the app
+  + S5 on app start the Room pane opens the most recent room; a Room with no records opens empty as today
+  + S6 a record that fails to parse is listed as unreadable and skipped, never deletes or rewrites the file
+  − deleting or renaming rooms — later, on request
+  − resuming the CLI sessions of a continued room (claude --resume, codex exec resume) — not needed while the prompt carries the whole history; a later task if the context grows too large
+  − relaunching the remaining turns of an interrupted run — owner's decision 2026-10-22: save as stopped, continue by hand
+  indivisible: the record is written by the run, read by the service and rendered by the pane in one shape
+
+WRITE-SET
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/room-history.ts
+  src/shared/ipc.ts
+  src/main/room.ts
+  src/main/room-service.ts
+  src/main/room-archive.ts
+  src/main/ipc-handlers.ts
+  src/preload/
+  src/renderer/room-pane.ts
+  tests/unit/room-archive.test.ts
+  tests/unit/room-view.test.ts
+  tests/unit/room-history.test.ts
+  tests/full/room.spec.ts
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/04-room-archive/
+
+DATA
+  room.record: dir=in; type=JSON object read back from <shared>/rooms/<id>.json, written by this app; size=0..50 MB per file; null=yes; interpretable=yes; source=https://ecma-international.org/publications-and-standards/standards/ecma-404/
+  room.openId: dir=in; type=string chosen from the room list in the renderer; size=1..64 chars [A-Za-z0-9_-]; null=no; interpretable=no; validated=tests/unit/room-archive.test.ts::rejects an id with a path separator or outside the allowed characters; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink room-feed: consumes room.record; protection=restored entries rendered with textContent only, the same path as live entries; test=tests/full/room.spec.ts::markup in a reply is shown as text
+  sink participant-prompt: consumes room.record; protection=restored entries go through renderHistory with escapeBody and nonce markers exactly like live entries; test=tests/unit/room-history.test.ts::restored entries render like live entries
+  sink record-path: consumes room.openId; protection=the id is validated and joined under roomsDir only, a path outside roomsDir is refused; test=tests/unit/room-archive.test.ts::refuses an id that escapes the rooms directory
+
+OUTCOME
+  A smoke run of two stub participants, an app restart (new main process with
+  the same AIAW_USER_DATA), the room reopened from the list with its entries,
+  then a continuation run whose new entries land in the same
+  <shared>/rooms/<id>.md and .json after the old ones; every task of
+  tasks/10-app-shell/04-room-archive/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] reverse control: skip the status rewrite of S4 → tests/unit/room-archive.test.ts::a running record is loaded as stopped
+  3. [fast] tests/unit/room-archive.test.ts: a record written after each entry parses back into the same entries; an unreadable file is listed as unreadable and left untouched
+  4. [full] electron-smoke: run, restart, reopen, continue; entries of both runs in order in the history file and the record; the Carry result button enabled on the reopened room
+  5. [fast] HUMAN: the owner runs a Room, quits the app mid-run, starts it, finds the room as stopped with its replies, continues it with a new prompt and records the result in NOTES.md
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/02-room
