@@ -26,3 +26,5 @@ The worker's test was green on its first run. Mutation in `parseEntry` of `src/s
 
 ## T04 write set
 src/main/index.ts (await roomService.init() before the window loads), tests/integration/room-wiring.test.ts (RoomService tests) and tests/unit/ipc-validate.test.ts (channel validation) added to WRITE-SET: the task line names init from index.ts and the service and IPC tests, which live in these files.
+
+T05 write set gains src/renderer/room-feed.ts (RoomFeed.reload rebuilds the feed from an opened snapshot) and src/renderer/styles.css (room list width).

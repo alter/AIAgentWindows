@@ -44,6 +44,8 @@ WRITE-SET
   tests/unit/ipc-validate.test.ts
   src/preload/
   src/renderer/room-pane.ts
+  src/renderer/room-feed.ts
+  src/renderer/styles.css
   tests/unit/room-archive.test.ts
   tests/integration/room.test.ts
   tests/unit/room-view.test.ts
