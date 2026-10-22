@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-21
 ---
 # Room — broadcast and relay rounds over CLI and web agents
@@ -185,3 +185,4 @@ As tasks/10-app-shell/01-app-skeleton/PLAN.md (Electron 44.6.0, node-pty 1.1.0, 
 - 2026-10-22 04:55 T29 done: generic adapter reworked (start needs 20+ chars of new non-label text, finish needs start + 5 s quiet + composer accepting + no stop, `isIdle` wait before insert, `trace` per turn into logs/sites.log via `RoomDriverDeps.siteLog`, error text never empty, test-mode `roomSiteOptions` quietMs 400); red first (7 of the new generic-adapter tests failed on the old adapter: silent thinking with label change, label on submit, busy page, locked composer, 4 trace tests), reverse controls red then restored (errorText fallback, composer-accepting term, idle wait, disclaimer label, 20-char start gate); vitest generic-adapter+reply-lines+room.test+room-test-mode 129/129, electron-smoke 20/20 hidden (a first full smoke run at load average 99 from another project timed out 4 tests at 60 s, unrelated ones included; rerun at load 36 green), fast tier 11/11 (FASTRUN-2026-10-22-044826566998), integrity 0 findings
 - 2026-10-22 coordinator: T29 verified (adapter+reply-lines+room 124, fast tier rc=0, electron-smoke 20/20 hidden at load 9). T29's worker re-ran the smoke once after a run under another project's load (~99) — a changed condition, recorded. Owner's screenshots 04:26 → T30 new chat per run.
 - 2026-10-22 05:05 T30 done: `TurnRequest.runId`; `SiteSeat.newChat` (SiteViews.newChat: `loadURL(siteStartUrl)` on an existing view, or the creation load for a view not yet open, bounded by readyMs and the abort signal); `SiteDriver` calls it once per run before the participant's first turn (then composer wait as before), a failed load is an error entry and nothing is inserted; red first (integration: 2 new tests failed before the code; smoke on a fixture that remembers its chat: the server's load count did not rise on run 2 with newChat disabled, the reply text itself was already complete after T28/T29); vitest room+room-view+room-wiring 103/103, fast tier 11/11 (FASTRUN-2026-10-22-050133947756), electron-smoke 21/21 hidden at load 5
+- 2026-10-22 coordinator: T30 verified (room integration, fast tier, electron-smoke — results in this commit's run). Paused on AC7.
