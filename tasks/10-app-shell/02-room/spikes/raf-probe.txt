@@ -1,0 +1,16 @@
+T34 probe, Electron 44.6.0 on macOS, 2026-10-22, coordinator. Scripts: spikes/raf-hidden-probe.js (argument shown|hidden; env OP opacity, EDGE pixels left on screen, NOOCC=1 adds the switches disable-backgrounding-occluded-windows and disable-renderer-backgrounding), spikes/raf-park-probe.js (env NOOCC). Throwaway userData, data: pages only, no real site. Each page counts requestAnimationFrame callbacks, a 100 ms interval and a MessageChannel ping-pong; 3 s per measurement; every view has backgroundThrottling false.
+
+1. Without the switches, window shown inactive (opacity 0, 0.02 and 1; 12 px and 320 px on screen): raf 0 for every view, the visible one included; timers ~23, MessageChannel ~20; visibilityState "visible". The probe window is treated as occluded, so nothing renders. This matches an app window that is covered, minimized or on another Space.
+
+2. With the switches, window shown inactive or never shown, same numbers in both modes:
+   visible view                       raf 121, timer 28, vis visible
+   setVisible(false) view             raf 0,   timer 28, vis visible
+   bounds outside the window          raf 0
+   zero-size bounds                   raf 0
+   view added with index 0            raf 121 (it is still drawn above the window's own page: index 0 is not under the app UI)
+
+3. Parking (raf-park-probe.js): the view was loaded in the main window, then moved with removeChildView/addChildView into a second BrowserWindow that is never shown (show:false), setVisible(true), and then moved back.
+   with switches:    in main raf 66 / 2 s; parked raf +157 / 3 s; back +37 / 1 s; ResizeObserver and IntersectionObserver fired; loads 1 (no reload); viewport stayed 300x300
+   without switches: raf 0 everywhere, ResizeObserver 0, IntersectionObserver 0
+
+Conclusion: a site view hidden with setVisible(false), as the Room does for every site view while the Room is shown, gets no animation frames, no ResizeObserver and no IntersectionObserver callbacks, while its timers run and its page reports "visible". A page that renders streamed text in a frame callback does not change its DOM until it is shown. Unproven so far: that chat.deepseek.com renders this way. The logs/sites.log turns of 2026-10-22 07:56-09:02 (no new line at all after submit, not even the echo, while the owner saw the reply being written) are consistent with it. The T34 trace field `frames` is meant to settle it.
