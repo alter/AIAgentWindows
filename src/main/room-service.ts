@@ -4,7 +4,7 @@ import { Room, type DriverFactory } from './room';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import type { RoomConfig, RoomEvent } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
-import { applyRoomEvent, carryText, emptyRoomSnapshot, type CarryWhat, type RoomSnapshot, type RoomStartResult } from '../shared/room-view';
+import { applyRoomEvent, carryText, emptyRoomSnapshot, finalText, type CarryWhat, type RoomSnapshot, type RoomStartResult } from '../shared/room-view';
 
 export interface RoomServiceDeps {
   roomsDir: string;
@@ -13,6 +13,7 @@ export interface RoomServiceDeps {
   emit(event: RoomEvent): void;
   terminal: RoomTerminals;
   paste(agentId: string, text: string): boolean;
+  copy(text: string): void;
   now?(): number;
   newId?(): string;
 }
@@ -76,6 +77,13 @@ export class RoomService {
   carry(agentId: string, what: CarryWhat): boolean {
     const text = carryText(this.snapshot, what);
     return text === null ? false : this.deps.paste(agentId, text);
+  }
+
+  copyFinal(): boolean {
+    const text = finalText(this.snapshot);
+    if (text === null) return false;
+    this.deps.copy(text);
+    return true;
   }
 
   shutdown(): Promise<void> {

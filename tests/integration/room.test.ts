@@ -1288,3 +1288,63 @@ describe('room finalizer', () => {
     expect(t.trace).toEqual(['a']);
   });
 });
+
+describe('room entries carry their round', () => {
+  const rounds = (entries: ReadonlyArray<{ authorId: string; kind: string; round?: number }>): string[] =>
+    entries.map((entry) => `${entry.authorId}:${entry.kind}:${entry.round ?? '-'}`);
+
+  it('a relay numbers the turns of every pass 1..N; the prompt and the final carry none', async () => {
+    const t = rig();
+    const result = await t.room.start(config([A, B, C], { rounds: 2 })).done;
+    expect(rounds(result.entries)).toEqual([
+      'owner:prompt:-',
+      'a:reply:1',
+      'b:reply:1',
+      'c:reply:1',
+      'a:reply:2',
+      'b:reply:2',
+      'c:reply:2',
+      'a:final:-',
+    ]);
+  });
+
+  it('a broadcast numbers every participant of a pass with that pass', async () => {
+    const t = rig();
+    const result = await t.room.start(config([A, B], { mode: 'broadcast', rounds: 2 })).done;
+    const replies = result.entries.filter((entry) => entry.kind === 'reply');
+    expect(replies.map((entry) => entry.round).sort()).toEqual([1, 1, 2, 2]);
+    expect(result.entries.filter((entry) => entry.kind !== 'reply').every((entry) => entry.round === undefined)).toBe(true);
+  });
+
+  it('an error of a round turn carries the round and the timeout state; final-phase errors carry no round', async () => {
+    const late = (): Promise<string | null> => Promise.reject(Object.assign(new Error('late'), { code: 'timeout' }));
+    const t = rig({ a: late });
+    const result = await t.room.start(config([A, B])).done;
+    expect(rounds(result.entries)).toEqual(['owner:prompt:-', 'a:error:1', 'b:reply:1', 'a:error:-', 'room:error:-', 'b:final:-']);
+    expect(result.entries[1]?.state).toBe('timeout');
+    expect(result.entries[3]?.state).toBe('timeout');
+    expect(result.entries[4]?.state).toBeUndefined();
+  });
+
+  it('a failure that is not a timeout has no state, and the stop note is marked stopped', async () => {
+    const waitForAbort: Behaviour = (request) =>
+      new Promise((_resolve, reject) => {
+        request.signal.addEventListener('abort', () => reject(new Error('aborted by driver')), { once: true });
+      });
+    const t = rig({ a: () => Promise.reject(new Error('broken')), b: waitForAbort });
+    const run = t.room.start(config([A, B, C], { rounds: 2 }));
+    while (!t.trace.includes('b')) await new Promise((resolve) => setTimeout(resolve, 5));
+    t.room.stop();
+    const result = await run.done;
+    expect(result.entries[1]).toMatchObject({ authorId: 'a', kind: 'error', round: 1 });
+    expect(result.entries[1]?.state).toBeUndefined();
+    expect(result.entries[result.entries.length - 1]).toMatchObject({ authorId: 'room', kind: 'error', state: 'stopped' });
+  });
+
+  it('the entry event and the archive-shaped result agree on the round', async () => {
+    const t = rig();
+    const result = await t.room.start(config([A, B])).done;
+    const emitted = t.events.flatMap((event) => (event.type === 'entry' ? [event.entry] : []));
+    expect(emitted).toEqual(result.entries);
+  });
+});

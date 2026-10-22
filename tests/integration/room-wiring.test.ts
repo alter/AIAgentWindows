@@ -103,6 +103,8 @@ describe('carry into a working session', () => {
   });
 });
 
+const copied: string[] = [];
+
 function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [], terminal: RoomTerminals = noTerminal(), debugRoot?: string): { room: RoomService; seen: RoomEvent[] } {
   const seen: RoomEvent[] = [];
   const room = new RoomService({
@@ -115,6 +117,7 @@ function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [],
       pasted.push([id, text]);
       return id !== 'gone';
     },
+    copy: (text) => copied.push(text),
   });
   services.push(room);
   return { room, seen };
@@ -235,6 +238,18 @@ describe('room service', () => {
     expect(room.carry('gone', 'final')).toBe(false);
     expect(pasted[0]).toEqual(['s1', 'final of Claude Code']);
     expect(pasted[1]?.[1]).toContain('# Room');
+  });
+
+  it('copies the whole final text of the snapshot, not a text from the renderer, and nothing while there is no final', async () => {
+    copied.length = 0;
+    const { room, seen } = service(echoDriver());
+    expect(room.copyFinal()).toBe(false);
+    room.start(config({ participants: [CLAUDE] }));
+    await finished(seen);
+    expect(room.copyFinal()).toBe(true);
+    const final = room.state().entries.find((entry) => entry.kind === 'final');
+    expect(copied).toEqual([final?.text]);
+    expect(copied[0]?.length).toBeGreaterThan(0);
   });
 
   it('carry is false when there is nothing to carry', () => {

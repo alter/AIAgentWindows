@@ -417,3 +417,51 @@ test('a second run opens a new chat and its reply is complete although identical
     server.close();
   }
 });
+
+test('the feed is grouped by round, entries are collapsed spoilers, the final is open and both Copy buttons put the whole final text into the clipboard', async () => {
+  const { app, page } = await open();
+  try {
+    await run(page, 'relay', 2, 'spoiler question');
+    const sections = page.locator('[data-room="feed"] [data-section]');
+    expect(await sections.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-section')))).toEqual(['prompt', 'round-1', 'round-2', 'final']);
+    const first = page.locator('[data-section="round-1"] details.room-entry').first();
+    await expect(first).toHaveJSProperty('open', false);
+    expect(await page.locator('[data-section="round-2"] details.room-entry').count()).toBe(2);
+    await first.locator('summary').click();
+    await expect(first).toHaveJSProperty('open', true);
+    const others = page.locator('details.room-entry.kind-reply');
+    expect(await others.evaluateAll((nodes) => nodes.map((node) => (node as HTMLDetailsElement).open))).toEqual([true, false, false, false]);
+    const final = page.locator('[data-section="final"] details.room-entry.kind-final');
+    await expect(final).toHaveJSProperty('open', true);
+    const expected = (await final.locator('.room-entry-text').textContent()) ?? '';
+    expect(expected.length).toBeGreaterThan(0);
+    const buttons = final.locator('button[data-room="copy-final"]');
+    await expect(buttons).toHaveCount(2);
+    const order = await final.locator('*').evaluateAll((nodes) => nodes.map((node) => (node.matches('button[data-room="copy-final"]') ? 'b' : node.matches('.room-entry-text') ? 't' : '')).filter((x) => x !== ''));
+    expect(order).toEqual(['b', 't', 'b']);
+    for (const index of [0, 1]) {
+      await app.evaluate(({ clipboard }) => clipboard.writeText('sentinel'));
+      await buttons.nth(index).click();
+      await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(expected);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
+test('a new entry does not close or rebuild an entry the owner opened', async () => {
+  const { app, page } = await open();
+  try {
+    await fill(page, 'relay', 2, 'open survives');
+    await field(page, 'start').click();
+    const first = page.locator('details.room-entry.kind-reply').first();
+    await first.waitFor({ state: 'attached', timeout: finishedWithin(PARTICIPANTS.length, 2).timeout });
+    await first.locator('summary').click();
+    await first.evaluate((node) => node.setAttribute('data-mark', 'kept'));
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 2));
+    await expect(first).toHaveAttribute('data-mark', 'kept');
+    await expect(first).toHaveJSProperty('open', true);
+  } finally {
+    await app.close();
+  }
+});

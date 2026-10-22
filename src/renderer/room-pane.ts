@@ -1,23 +1,14 @@
 // room-pane.ts
 import { isCliKind, type Agent } from '../shared/agents';
 import type { PtyDataEvent } from '../shared/ipc';
-import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEntry, type RoomEvent, type RoomMode } from '../shared/room-model';
+import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEvent, type RoomMode } from '../shared/room-model';
 import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, roomProgress, type CarryWhat, type RoomSnapshot } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
+import { RoomFeed } from './room-feed';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
 
 const DEFAULT_TIMEOUT_MINUTES = '10';
-
-function entryNode(entry: RoomEntry): HTMLElement {
-  const node = el('div', `room-entry kind-${entry.kind}`);
-  node.dataset['author'] = entry.authorId;
-  node.dataset['kind'] = entry.kind;
-  const head = el('div', 'room-entry-head');
-  head.append(el('span', 'room-entry-author', entry.label), el('span', 'room-entry-kind', entry.kind), el('span', 'room-entry-time', new Date(entry.time).toLocaleTimeString()));
-  node.append(head, el('pre', 'room-entry-text', entry.text));
-  return node;
-}
 
 function labeled(text: string, control: HTMLElement): HTMLLabelElement {
   const label = el('label');
@@ -33,7 +24,7 @@ function field(text: string, control: HTMLElement): HTMLLabelElement {
 
 export class RoomPane {
   readonly element = el('section', 'room-pane');
-  private readonly feed = el('div', 'room-feed');
+  private readonly feed = new RoomFeed(() => void this.onCopyFinal());
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly boxes = new Map<string, HTMLInputElement>();
   private readonly mode = el('select');
@@ -62,14 +53,11 @@ export class RoomPane {
     for (const pane of this.sessions.values()) pane.refit();
   });
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
-  private shown = 0;
   private debugDir: string | null = null;
 
   constructor() {
     this.element.hidden = true;
     this.element.dataset['room'] = 'pane';
-    this.feed.setAttribute('role', 'log');
-    this.feed.dataset['room'] = 'feed';
     this.prompt.placeholder = 'Prompt for the room';
     this.prompt.dataset['room'] = 'prompt';
     this.status.dataset['room'] = 'status';
@@ -91,7 +79,7 @@ export class RoomPane {
     this.resume.dataset['room'] = 'resume';
     this.resume.addEventListener('click', () => void api.roomResume());
     this.pause.append(this.pauseNotes, this.terminals, this.resume);
-    this.element.append(el('h2', 'room-title', 'Room'), this.progress, this.feed, this.pause, this.controls());
+    this.element.append(el('h2', 'room-title', 'Room'), this.progress, this.feed.element, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
   }
@@ -238,19 +226,12 @@ export class RoomPane {
   }
 
   private renderFeed(): void {
-    const { entries } = this.snapshot;
-    if (entries.length < this.shown) {
-      this.feed.replaceChildren();
-      this.shown = 0;
-    }
-    if (entries.length === 0) {
-      if (this.feed.childElementCount === 0) this.feed.append(el('div', 'room-feed-empty', 'No messages yet.'));
-      return;
-    }
-    if (this.shown === 0) this.feed.replaceChildren();
-    for (const entry of entries.slice(this.shown)) this.feed.append(entryNode(entry));
-    this.shown = entries.length;
-    this.feed.scrollTop = this.feed.scrollHeight;
+    this.feed.render(this.snapshot);
+  }
+
+  private async onCopyFinal(): Promise<void> {
+    const copied = await api.roomCopyFinal();
+    this.message.textContent = copied ? 'Final result copied.' : 'There is no final result to copy.';
   }
 
   private renderPause(): void {

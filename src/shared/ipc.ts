@@ -20,6 +20,7 @@ export const INVOKE_CHANNELS = {
   roomStop: 'room:stop',
   roomCarry: 'room:carry',
   roomResume: 'room:resume',
+  roomCopyFinal: 'room:copy-final',
   roomTerminalBacklog: 'room:terminal-backlog',
   roomTerminalWrite: 'room:terminal-write',
   roomTerminalResize: 'room:terminal-resize',
@@ -83,6 +84,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomStop]: undefined;
   [INVOKE_CHANNELS.roomCarry]: { id: string; what: CarryWhat };
   [INVOKE_CHANNELS.roomResume]: undefined;
+  [INVOKE_CHANNELS.roomCopyFinal]: undefined;
   [INVOKE_CHANNELS.roomTerminalBacklog]: { id: string };
   [INVOKE_CHANNELS.roomTerminalWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.roomTerminalResize]: { id: string; cols: number; rows: number };
@@ -110,6 +112,7 @@ export interface AppApi {
   roomStop(): Promise<void>;
   roomCarry(id: string, what: CarryWhat): Promise<boolean>;
   roomResume(): Promise<void>;
+  roomCopyFinal(): Promise<boolean>;
   roomTerminalBacklog(id: string): Promise<PtyBacklog>;
   roomTerminalWrite(id: string, data: string): Promise<void>;
   roomTerminalResize(id: string, cols: number, rows: number): Promise<void>;
@@ -194,6 +197,7 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       return (CARRY_KINDS as readonly unknown[]).includes(what) ? { id, what: what as CarryWhat } : null;
     }),
   [INVOKE_CHANNELS.roomResume]: noPayload,
+  [INVOKE_CHANNELS.roomCopyFinal]: noPayload,
   [INVOKE_CHANNELS.roomTerminalBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.roomTerminalWrite]: parseWrite,
   [INVOKE_CHANNELS.roomTerminalResize]: parseResize,

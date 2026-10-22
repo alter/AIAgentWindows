@@ -7,6 +7,9 @@ import {
   applyRoomEvent,
   carryText,
   emptyRoomSnapshot,
+  entryState,
+  feedSections,
+  finalText,
   formToConfig,
   participantAvailability,
   resolveFinalizer,
@@ -448,5 +451,112 @@ describe('roomProgress', () => {
 
   it('a snapshot without a plan (state of an older main) shows nothing', () => {
     expect(roomProgress({ ...run([BEGIN]), plan: null })).toBeNull();
+  });
+});
+
+const TRIO: RoomPlan = {
+  mode: 'relay',
+  rounds: 2,
+  finalizerId: 'a',
+  participants: [
+    { id: 'a', kind: 'claude', label: 'Claude Code' },
+    { id: 'b', kind: 'codex', label: 'Codex' },
+    { id: 'c', kind: 'chatgpt', label: 'ChatGPT' },
+  ],
+};
+
+function turn(id: string, round: number | undefined, kind: RoomEntry['kind'] = 'reply', extra: Partial<RoomEntry> = {}): RoomEntry {
+  const base: RoomEntry = { authorId: id, label: id.toUpperCase(), time: 1_700_000_000_000, kind, text: `${id}${round ?? ''}` };
+  return round === undefined ? { ...base, ...extra } : { ...base, round, ...extra };
+}
+
+function owner(): RoomEntry {
+  return { authorId: 'owner', label: 'Owner', time: 1_700_000_000_000, kind: 'prompt', text: 'q' };
+}
+
+function members(sections: ReturnType<typeof feedSections>): Array<[string, string[]]> {
+  return sections.map((section) => [section.key, section.entries.map((item) => `${item.entry.authorId}${item.entry.round ?? ''}`)]);
+}
+
+describe('feedSections', () => {
+  it('a relay of 3 participants over 2 rounds puts each reply into its round, then the final', () => {
+    const entries = [owner(), turn('a', 1), turn('b', 1), turn('c', 1), turn('a', 2), turn('b', 2), turn('c', 2), turn('a', undefined, 'final')];
+    const sections = feedSections(entries, TRIO);
+    expect(members(sections)).toEqual([
+      ['prompt', ['owner']],
+      ['round-1', ['a1', 'b1', 'c1']],
+      ['round-2', ['a2', 'b2', 'c2']],
+      ['final', ['a']],
+    ]);
+    expect(sections.filter((section) => section.key.startsWith('round-')).map((section) => section.title)).toEqual(['Round 1/2', 'Round 2/2']);
+  });
+
+  it('a broadcast of 2 participants over 2 rounds keeps arrival order inside a round', () => {
+    const plan: RoomPlan = { ...TRIO, mode: 'broadcast', participants: TRIO.participants.slice(0, 2) };
+    const entries = [owner(), turn('b', 1), turn('a', 1), turn('a', 2), turn('b', 2, 'error'), turn('a', undefined, 'final')];
+    expect(members(feedSections(entries, plan))).toEqual([
+      ['prompt', ['owner']],
+      ['round-1', ['b1', 'a1']],
+      ['round-2', ['a2', 'b2']],
+      ['final', ['a']],
+    ]);
+  });
+
+  it('entries without a round (older records) fall into one untitled section between the prompt and the final', () => {
+    const entries = [owner(), turn('a', undefined), turn('b', undefined), turn('a', undefined), turn('b', undefined, 'final')];
+    const sections = feedSections(entries, TRIO);
+    expect(members(sections)).toEqual([
+      ['prompt', ['owner']],
+      ['rest', ['a', 'b', 'a']],
+      ['final', ['b']],
+    ]);
+    expect(sections[1]?.title).toBeNull();
+  });
+
+  it('keeps the index of every entry in the whole list and works without a plan', () => {
+    const entries = [owner(), turn('a', 1), turn('b', 1)];
+    const sections = feedSections(entries, null);
+    expect(sections.flatMap((section) => section.entries.map((item) => item.index))).toEqual([0, 1, 2]);
+    expect(sections.find((section) => section.key === 'round-1')?.title).toBeTruthy();
+  });
+
+  it('a live run has no final section yet, and a new entry only grows the section it belongs to', () => {
+    const before = feedSections([owner(), turn('a', 1)], TRIO);
+    const after = feedSections([owner(), turn('a', 1), turn('b', 1)], TRIO);
+    expect(before.map((section) => section.key)).toEqual(['prompt', 'round-1']);
+    expect(after.map((section) => section.key)).toEqual(['prompt', 'round-1']);
+    expect(after[1]?.entries).toHaveLength(2);
+  });
+
+  it('a failed finalizer note and error without a round stay out of every round and out of the final', () => {
+    const entries = [owner(), turn('a', 1), turn('a', undefined, 'error'), turn('room', undefined, 'error'), turn('b', undefined, 'final')];
+    expect(members(feedSections(entries, TRIO))).toEqual([
+      ['prompt', ['owner']],
+      ['round-1', ['a1']],
+      ['rest', ['a', 'room']],
+      ['final', ['b']],
+    ]);
+  });
+});
+
+describe('entryState', () => {
+  it('names the outcome of an entry', () => {
+    expect(entryState(turn('a', 1))).toBe('replied');
+    expect(entryState(turn('a', 1, 'error'))).toBe('error');
+    expect(entryState(turn('a', 1, 'error', { state: 'timeout' }))).toBe('timeout');
+    expect(entryState(turn('room', undefined, 'error', { state: 'stopped' }))).toBe('stopped');
+    expect(entryState(turn('a', undefined, 'final'))).toBe('final');
+    expect(entryState(owner())).toBe('prompt');
+  });
+});
+
+describe('finalText', () => {
+  it('is the text of the newest final entry, whole, and null without one or when it is empty', () => {
+    const long = 'x'.repeat(5000);
+    const snapshot = { ...emptyRoomSnapshot(), roomId: 'r', entries: [owner(), turn('a', 1), { ...turn('b', undefined, 'final'), text: long }] };
+    expect(finalText(snapshot)).toBe(long);
+    expect(finalText({ ...snapshot, entries: snapshot.entries.slice(0, 2) })).toBeNull();
+    expect(finalText({ ...snapshot, entries: [{ ...turn('b', undefined, 'final'), text: '' }] })).toBeNull();
+    expect(finalText(emptyRoomSnapshot())).toBeNull();
   });
 });

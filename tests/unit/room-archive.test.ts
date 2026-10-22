@@ -186,6 +186,14 @@ describe('parseRoomRecord', () => {
     expect(parsed?.config).not.toHaveProperty('prompt');
   });
 
+  it('keeps the round and the state of an entry, accepts records without them and rejects bad values', () => {
+    const rounded = entry({ kind: 'error', round: 2, state: 'timeout' });
+    expect(parseRoomRecord(record({ entries: [rounded] }))?.entries[0]).toEqual(rounded);
+    expect(parseRoomRecord(record({ entries: [entry()] }))?.entries[0]).not.toHaveProperty('round');
+    for (const round of [0, -1, 1.5, '2', null, 51]) expect(parseRoomRecord(record({ entries: [{ ...entry(), round } as unknown as RoomEntry] }))).toBeNull();
+    for (const state of ['done', 5, null]) expect(parseRoomRecord(record({ entries: [{ ...entry(), state } as unknown as RoomEntry] }))).toBeNull();
+  });
+
   it('rejects invalid entries', () => {
     const good = entry();
     const bads: unknown[] = [

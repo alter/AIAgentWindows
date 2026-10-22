@@ -20,6 +20,7 @@ import {
   type RoomConfig,
   type RoomEntry,
   type RoomEntryKind,
+  type RoomEntryState,
   type RoomEvent,
   type RoomParticipant,
   type RoomStatus,
@@ -238,7 +239,7 @@ export class Room {
       if (!run.signal.aborted) await this.finalize(run);
       if (run.signal.aborted) {
         status = 'stopped';
-        this.append(run, ROOM_ID, ROOM_LABEL, 'error', STOP_TEXT);
+        this.append(run, ROOM_ID, ROOM_LABEL, 'error', STOP_TEXT, { state: 'stopped' });
       }
       await run.flushed();
     } catch {
@@ -264,9 +265,10 @@ export class Room {
   }
 
   private async relay(run: RunState): Promise<void> {
-    for (const participant of relaySchedule(run.config.participants, run.config.rounds)) {
+    const schedule = relaySchedule(run.config.participants, run.config.rounds);
+    for (const [index, participant] of schedule.entries()) {
       if (run.signal.aborted) return;
-      await this.step(run, participant, [...run.entries], false);
+      await this.step(run, participant, [...run.entries], false, Math.floor(index / run.config.participants.length) + 1);
     }
   }
 
@@ -274,13 +276,13 @@ export class Room {
     for (let round = 0; round < run.config.rounds; round += 1) {
       if (run.signal.aborted) return;
       const seen = [...run.entries];
-      await Promise.all(run.config.participants.map((participant) => this.step(run, participant, seen, round > 0)));
+      await Promise.all(run.config.participants.map((participant) => this.step(run, participant, seen, round > 0, round + 1)));
     }
   }
 
-  private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string): void {
+  private append(run: RunState, authorId: string, label: string, kind: RoomEntryKind, text: string, mark: EntryMark = {}): void {
     const limit = Math.min(MAX_REPLY_CHARS, Math.max(0, (this.deps.maxHistoryChars ?? MAX_HISTORY_CHARS) - run.chars));
-    const entry: RoomEntry = { authorId, label, time: this.now(), kind, text: truncateText(text, limit) };
+    const entry: RoomEntry = { authorId, label, time: this.now(), kind, text: truncateText(text, limit), ...mark };
     run.add(entry);
     this.emit({ type: 'entry', roomId: run.id, entry });
   }
@@ -300,12 +302,15 @@ export class Room {
     return driver;
   }
 
-  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase): Promise<boolean> {
+  private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase, round?: number): Promise<boolean> {
     this.progress(run, participant, 'running');
     const outcome = await this.turn(run, participant, seen, phase);
     if (outcome.kind === 'aborted') return false;
     const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
-    this.append(run, participant.id, participant.label, kind, outcome.text);
+    const mark: EntryMark = {};
+    if (round !== undefined) mark.round = round;
+    if (outcome.kind === 'error' && outcome.timedOut === true) mark.state = 'timeout';
+    this.append(run, participant.id, participant.label, kind, outcome.text, mark);
     await run.flushed();
     this.progress(run, participant, outcome.kind === 'reply' ? 'replied' : outcome.timedOut === true ? 'timeout' : 'failed');
     return outcome.kind === 'reply';
@@ -368,6 +373,11 @@ export class Room {
     this.emit({ type: 'resumed', roomId: run.id, participantId: participant.id });
     return outcome === 'resumed';
   }
+}
+
+interface EntryMark {
+  round?: number;
+  state?: RoomEntryState;
 }
 
 type TurnOutcome = { kind: 'reply'; text: string } | { kind: 'error'; text: string; timedOut?: boolean } | { kind: 'aborted' };

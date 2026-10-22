@@ -37,6 +37,7 @@ const api: AppApi = {
   roomStart: (config: RoomConfig) => ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, config) as Promise<RoomStartResult>,
   roomStop: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomStop) as Promise<void>,
   roomCarry: (id, what) => ipcRenderer.invoke(INVOKE_CHANNELS.roomCarry, { id, what }) as Promise<boolean>,
+  roomCopyFinal: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomCopyFinal) as Promise<boolean>,
   roomResume: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomResume) as Promise<void>,
   roomTerminalBacklog: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalBacklog, { id }) as Promise<PtyBacklog>,
   roomTerminalWrite: (id, data) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalWrite, { id, data }) as Promise<void>,

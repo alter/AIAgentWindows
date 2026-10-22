@@ -1,5 +1,5 @@
 // index.ts
-import { app, BrowserWindow, dialog } from 'electron';
+import { app, BrowserWindow, clipboard, dialog } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
@@ -130,6 +130,7 @@ async function start(): Promise<void> {
       if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.roomEvent, event);
     },
     paste: (id, text) => active.paste(id, text),
+    copy: (text) => clipboard.writeText(text),
   });
   room = roomService;
   registerIpc(active, roomService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));

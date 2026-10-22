@@ -7,6 +7,7 @@ import {
   parseRoomConfig,
   type RoomConfigResult,
   type RoomEntry,
+  type RoomEntryState,
   type RoomEvent,
   type PausedSession,
   type RoomMode,
@@ -192,4 +193,48 @@ export function roomProgress(snapshot: RoomSnapshot): RoomProgress | null {
     chips: shown.map((participant) => ({ id: participant.id, label: participant.label, state: snapshot.chips[participant.id] ?? 'waiting' })),
     banner: finishedBanner(snapshot, plan, finalizerLabel),
   };
+}
+
+export type EntryState = 'prompt' | 'replied' | 'final' | 'error' | RoomEntryState;
+
+export interface FeedItem {
+  index: number;
+  entry: RoomEntry;
+}
+
+export interface FeedSection {
+  key: string;
+  title: string | null;
+  entries: FeedItem[];
+}
+
+export function entryState(entry: RoomEntry): EntryState {
+  if (entry.kind === 'reply') return 'replied';
+  if (entry.kind === 'error') return entry.state ?? 'error';
+  return entry.kind;
+}
+
+export function finalText(snapshot: RoomSnapshot): string | null {
+  const last = [...snapshot.entries].reverse().find((entry) => entry.kind === 'final');
+  return last === undefined || last.text.length === 0 ? null : last.text;
+}
+
+function sectionOf(entry: RoomEntry, plan: RoomPlan | null): Pick<FeedSection, 'key' | 'title'> {
+  if (entry.kind === 'prompt') return { key: 'prompt', title: 'Prompt' };
+  if (entry.kind === 'final') return { key: 'final', title: 'Final result' };
+  if (entry.round === undefined) return { key: 'rest', title: null };
+  return { key: `round-${entry.round}`, title: plan === null ? `Round ${entry.round}` : `Round ${entry.round}/${plan.rounds}` };
+}
+
+export function feedSections(entries: readonly RoomEntry[], plan: RoomPlan | null): FeedSection[] {
+  const sections = new Map<string, FeedSection>();
+  entries.forEach((entry, index) => {
+    const { key, title } = sectionOf(entry, plan);
+    const section = sections.get(key) ?? { key, title, entries: [] };
+    section.entries.push({ index, entry });
+    sections.set(key, section);
+  });
+  const all = [...sections.values()];
+  const final = all.filter((section) => section.key === 'final');
+  return [...all.filter((section) => section.key !== 'final'), ...final];
 }

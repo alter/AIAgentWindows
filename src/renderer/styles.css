@@ -284,7 +284,11 @@ body {
 .room-entry.kind-prompt { background: rgba(17, 100, 163, 0.25); }
 .room-entry.kind-error { background: rgba(224, 30, 90, 0.2); }
 .room-entry.kind-final { background: rgba(46, 182, 125, 0.2); }
-.room-entry-head { display: flex; gap: 8px; font-size: 12px; opacity: 0.8; margin-bottom: 4px; }
+.room-section { display: flex; flex-direction: column; gap: 6px; }
+.room-section-title { margin: 6px 0 0; font-size: 13px; color: #fff; }
+.room-entry-head { display: flex; gap: 8px; font-size: 12px; opacity: 0.8; cursor: pointer; }
+.room-entry[open] > .room-entry-head { margin-bottom: 4px; }
+.room-copy { margin: 4px 0; }
 .room-entry-author { font-weight: 700; color: #fff; }
 .room-entry-text { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .room-controls { display: flex; flex-direction: column; gap: 8px; }

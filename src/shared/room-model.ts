@@ -38,12 +38,17 @@ export interface RoomConfig {
   debugSites: boolean;
 }
 
+export type RoomEntryState = 'timeout' | 'stopped';
+const ENTRY_STATES: readonly RoomEntryState[] = ['timeout', 'stopped'];
+
 export interface RoomEntry {
   authorId: string;
   label: string;
   time: number;
   kind: RoomEntryKind;
   text: string;
+  round?: number;
+  state?: RoomEntryState;
 }
 
 export type RoomStatus = 'done' | 'stopped' | 'failed';
@@ -194,7 +199,17 @@ function parseEntry(value: unknown): RoomEntry | null {
   if (!isBoundedString(authorId, MAX_ID_CHARS) || !isBoundedString(label, MAX_ID_CHARS) || !isTimestamp(time)) return null;
   if (typeof kind !== 'string' || !(ENTRY_KINDS as readonly string[]).includes(kind)) return null;
   if (typeof text !== 'string' || text.length > MAX_REPLY_CHARS) return null;
-  return { authorId, label, time, kind: kind as RoomEntryKind, text };
+  const entry: RoomEntry = { authorId, label, time, kind: kind as RoomEntryKind, text };
+  const { round, state } = value;
+  if (round !== undefined) {
+    if (!isInRange(round, MIN_ROUNDS, MAX_ROUNDS)) return null;
+    entry.round = round;
+  }
+  if (state !== undefined) {
+    if (typeof state !== 'string' || !(ENTRY_STATES as readonly string[]).includes(state)) return null;
+    entry.state = state as RoomEntryState;
+  }
+  return entry;
 }
 
 function parseEntries(value: unknown): RoomEntry[] | null {
