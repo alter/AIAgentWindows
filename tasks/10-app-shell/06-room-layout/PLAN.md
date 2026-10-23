@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Room layout — saved rooms as a tree under # Rooms, rename, participants as a table
@@ -8,7 +8,7 @@ created: 2026-10-23
 Saved rooms appear in the sidebar under "# Rooms" like Slack channels and open with one click; a room is named from its first prompt and can be renamed; participants are a table in relay order with a button to add a row. Owner, 2026-10-23: "Saved rooms ... я бы их как в слаке саб-комнаты показывал ... # Rooms и под ним как дерево у нас другие вложеные комнаты кликабельные"; "почему нельзя таблчкой показать, в табличку кнопочкой добавлять".
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
 - [x] AC2 Title and rename: `npx vitest run tests/unit/room-model.test.ts tests/unit/ipc-validate.test.ts tests/integration/room-archive.test.ts` exit 0 — a record without title parses and derives one from the first prompt; a title with a control character or over 80 chars is refused; rename during a run survives the next entry write; an unreadable record is refused and its file unchanged; reverse control: the title dropped from the record write turns `a rename during a run survives the next entry` red (output in NOTES.md)
 - [x] AC3 Rows: `npx vitest run tests/unit/room-view.test.ts` exit 0 — move up, move down, remove keep ids unique, keep the final writer or fall back by the default rule, refuse moves past the ends; a site already present or without an adapter is not offered
 - [x] AC4 Smoke: electron-smoke exit 0 — three participant rows reordered in the table, relay started, authors in <shared>/rooms/<id>.md in the table's order; a room renamed from the tree keeps its title in the record after an app restart and opens from the tree; markup in a title shows as text — windows hidden
@@ -45,7 +45,7 @@ As tasks/10-app-shell/05-design-contrast/PLAN.md; palette tokens and the contras
 - [x] T02 Rooms tree (S3, S5): `src/renderer/room-tree.ts` rendered inside the sidebar from the pane's list; header with arrow and "+", items by title (textContent), selected/aria-current, click opens, context menu Rename with in-place input; pane select removed; 04-room-archive smoke specs rewritten onto the tree; smoke for rename + restart + markup title — verify: fast tier + electron-smoke
 - [x] T03 Participants table (S4, S5): `src/renderer/room-table.ts` (`<table>`, headers with scope, rows from room-view pure logic `moveRow`, existing add/remove, finalizer radio), Add participant menu with five kinds, focus kept after move/remove, accessible names with the instance label; pure logic red first in room-view.test.ts; smoke: reorder three rows, relay, history author order — verify: AC3 command + fast tier + electron-smoke
 - [x] T03b Native controls on the palette (coordinator's screenshot review, scratchpad shots dark.png/light.png 2026-10-23): radios and checkboxes are drawn by the browser in grey on the dark surface and the input placeholder is browser-default grey — both break the owner's no-grey rule; draw radio and checkbox with `appearance: none` from tokens (border `--border`, checked mark `--focus` or `--text`, 24×24 px target, :focus-visible ring, checked state visible without colour alone), placeholder `color: var(--text)` set apart by italic, the pairs in contrast-pairs.json; smoke step: a radio and a checkbox still toggle by click and by Space (outcome: checked) — verify: contrast_check 0 findings + fast tier + electron-smoke
-- [ ] T04 Ledger and notes: docs/PROJECT.md Room row (tree, rename, table); NOTES.md summary; labels `status:review` when AC1-AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem + fast tier
+- [x] T04 Ledger and notes: docs/PROJECT.md Room row (tree, rename, table); NOTES.md summary; labels `status:review` when AC1-AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem + fast tier
 
 ## Log
 - 2026-10-23 coordinator: T00 baseline = 05-design-contrast T05 verification run on c56b372 (fast tier 12 commands exit 0, coverage 920/920 100 %, electron-smoke 38/38)
@@ -56,3 +56,4 @@ As tasks/10-app-shell/05-design-contrast/PLAN.md; palette tokens and the contras
 - 2026-10-23 T03 done: `src/renderer/room-table.ts` (table with scoped headers, radio Final, up/down/remove named by the instance label, Add participant menu of five kinds, keyboard operable, focus kept after move and removal) replaces the participant row and the finalizer select; `moveRow`, `focusAfterRemove`, `addMenuOptions`, `rowLabel` in room-view, sites are rows in relay order; room-view tests red first (9 failed) then 86/86; 3 new smoke tests and 6 specs rewritten onto the table, reverse controls in NOTES.md; fast tier 12 commands exit 0 (coverage 100 %), electron-smoke 44/44
 - 2026-10-23 coordinator: T03 verified (fast tier 12 commands exit 0 with coverage 943/943 100 %, electron-smoke 44/44 — this run); AC3, AC4 met
 - 2026-10-23 T03b done: radios and checkboxes `appearance: none` from tokens (24x24, border --border, checked = inner dot / check mark in --text, dashed when disabled, global --focus ring), `::placeholder` --text italic; 2 pairs added to contrast-pairs.json (contrast_check 0 findings); new smoke `a final radio and the debug checkbox toggle by click and by Space`, red with pointer-events:none (NOTES.md); fast tier 12 commands exit 0 (coverage 100 %), electron-smoke 45/45
+- 2026-10-23 coordinator: T03b verified (contrast_check 0 findings, fast tier 12 commands exit 0 with coverage 943/943 100 %, electron-smoke 45/45 — this run). T04 done: ledger Room row, NOTES summary, labels status:review; AC1 met; paused on AC5 (owner)

@@ -108,3 +108,8 @@ Reverse control (scratch edit, restored afterwards): `pointer-events: none` on t
   1 failed
 ```
 Green without it: `1 passed`.
+
+## Summary (2026-10-23)
+- T01 title and rename (record `title`, `roomTitle`, `room:rename` through RoomService); T02 rooms tree in the sidebar (src/renderer/room-tree.ts), pane select removed; T03 participants table (src/renderer/room-table.ts, `moveRow`, `focusAfterRemove`, `addMenuOptions` in room-view); T03b radios, checkboxes and placeholder drawn from palette tokens after the coordinator's screenshot review.
+- Checks this run: fast tier 12 commands exit 0 (contrast_check 0 findings), coverage 943/943 100 %, electron-smoke 45/45 (T00: 38).
+- Open: AC5, the owner's own use of the tree, rename and table from the keyboard.
