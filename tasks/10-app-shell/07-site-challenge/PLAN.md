@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Site challenge — Cloudflare Turnstile passes for the owner's own click inside a site view
@@ -37,10 +37,11 @@ Electron 44.6.0 (`webContents.debugger`, CDP 1.3 with flat sessions), Chromium 1
 - [x] T01 Diagnosis: spike under spikes/, root cause in NOTES.md, EVIDENCE W22 and W23 narrowed — verify: `python3 scripts/evidence_check.py` exit 0
 - [x] T02 Red smoke (S3): tests/fixtures/ua-frames/ (a page served on localhost embedding an iframe served on 127.0.0.1, both from one fixture server started by the spec, which records request User-Agent headers) and tests/full/site-ua-frames.spec.ts opening the fixture in a site view through the existing AIAW_SITE_URL_<KIND> override; asserts the two frames run in different processes, then equal UA/brands/fetch header per AC3; red on today's code with the output in NOTES.md; the spec is committed red-marked only in NOTES (the suite stays green: commit the spec together with T03 if the gate would otherwise fail) — verify: the red output in NOTES.md
 - [x] T03 Fix (S2): src/main/site-user-agent.ts — auto-attach with flatten and waitForDebuggerOnStart, per-target override with sessionId, nested auto-attach, runIfWaitingForDebugger, detach handling; popups unchanged; unit tests red first in tests/unit/site-user-agent.test.ts with a fake debugger; AC2's reverse control; electron@44.6.0.md section "OOPIF user agent" with URLs; DECISIONS D1 mechanism sentence extended — verify: AC2 command + fast tier + electron-smoke
-- [ ] T04 Close: NOTES summary, labels status:review when AC1-AC3 are [x] — verify: `python3 tasks/check.py` shows no new problem
+- [x] T04 Close: NOTES summary, labels status:review when AC1-AC3 are [x] — verify: `python3 tasks/check.py` shows no new problem
 
 ## Log
 - 2026-10-23 coordinator: T00 baseline = 05-design-contrast T03 verification run on 676615e (fast tier 12 commands exit 0, coverage 910/910 100 %, electron-smoke 35/35)
 - 2026-10-23 coordinator: T01 done — spike (n=1 per variant) A/B/C fail, D passes; root cause: D1's UA override does not reach the out-of-process Turnstile frame (NOTES.md); H1 and H3 refuted; EVIDENCE W22/W23 narrowed; evidence_check 154 rows 0 problems
 - 2026-10-23 07:30 T02 done: tests/fixtures/ua-frames/ + tests/full/site-ua-frames.spec.ts, red on the pre-fix code (child frame UA `Electron/44.6.0`, output in NOTES.md); committed with T03
 - 2026-10-23 07:30 T03 done: per-target override via flat auto-attach in site-user-agent.ts (awaited order override, nested auto-attach, resume: pipelined resume froze the iframe, NOTES.md), 11 unit tests, reverse control red 4/11, electron@44.6.0.md "OOPIF user agent", D1 extended; fast tier 12 commands exit 0 (coverage 100 %), electron-smoke 36/36 incl. site-ua-frames
+- 2026-10-23 coordinator: T02+T03 verified (vitest site-user-agent+site-policy 33/33, fast tier 12 commands exit 0 with coverage 916/916 100 %, electron-smoke 36/36 incl. site-ua-frames — this run; red output on pre-fix code and reverse control in NOTES.md). T04 done: NOTES summary, labels status:review; paused on AC4 (owner's Turnstile check)
