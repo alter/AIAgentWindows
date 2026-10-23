@@ -1,0 +1,68 @@
+TASK: theme switch — System / Light / Dark chosen inside the app, kept across restarts
+
+GOAL
+  The owner picks the palette inside the app: System (follow macOS), Light or
+  Dark, from a control at the bottom of the sidebar; the choice survives an app
+  restart. Owner's request of 2026-10-23 ("а сделай кнопку переключения тем").
+  Serves no gate.
+
+CONTEXT
+  docs/tech/electron@44.6.0.md:85-88 (nativeTheme.themeSource; Playwright emulation, EL1-EL3)
+  src/main/state-file.ts (app state persisted by the main process)
+  src/main/index.ts, src/main/ipc-handlers.ts, src/shared/ipc.ts, src/preload/index.ts
+  src/renderer/sidebar.ts, src/renderer/styles.css (palette tokens by prefers-color-scheme)
+  src/renderer/terminal-theme.ts (terminals follow the scheme live)
+  tasks/10-app-shell/05-design-contrast/PLAN.md
+
+SCOPE
+  + S1 the main process sets `nativeTheme.themeSource` from the stored choice before the first window shows and on every change; default `system`
+  + S2 validated IPC `theme:set` (one of system | light | dark) and `theme:get`; the choice is written to the app state file and an unreadable or unknown value falls back to `system`
+  + S3 a three-option control (System, Light, Dark) at the bottom of the sidebar: a radio group with a visible label, keyboard operable, the current choice checked; palette tokens only, contrast gate stays 0 findings
+  + S4 everything that follows `prefers-color-scheme` follows the choice live: the app UI, terminals, and the site views (nativeTheme is app-wide)
+  − a palette of its own per site view — not requested
+  − new colours or palettes — 10-app-shell/05-design-contrast
+  indivisible: one setting flows main → IPC → renderer control and is tested by one smoke
+
+WRITE-SET
+  src/shared/ipc.ts
+  src/shared/theme.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/index.ts
+  src/main/state-file.ts
+  src/renderer/sidebar.ts
+  src/renderer/theme-switch.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/theme.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/unit/state-file.test.ts
+  tests/integration/
+  tests/full/
+  docs/PROJECT.md
+  tasks/10-app-shell/11-theme-switch/
+
+DATA
+  theme.choice: dir=in; type=string enum system|light|dark; size=one of 3 values; null=no; interpretable=no; validated=tests/unit/ipc-validate.test.ts::theme set accepts only system, light or dark; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/native-theme.md#L28-L52
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  A smoke run picks Dark, finds nativeTheme.themeSource "dark" and the page on
+  the dark palette (with Playwright's colour emulation removed), restarts the
+  app and finds Dark still chosen and applied; every task of
+  tasks/10-app-shell/11-theme-switch/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/theme.test.ts and tests/unit/ipc-validate.test.ts: parse of the stored choice (unknown → system), IPC accepts only the three values
+  3. [full] electron-smoke: pick Light then Dark by click and by keyboard, themeSource follows, the page palette follows with emulateMedia({ colorScheme: null }), restart keeps the choice
+  4. [fast] reverse control: drop the themeSource write in the theme:set handler → tests/full/theme-switch.spec.ts::the chosen theme applies and survives a restart
+  5. [fast] HUMAN: the owner switches themes in the app and looks at both palettes
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/05-design-contrast
