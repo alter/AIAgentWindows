@@ -34,6 +34,7 @@ import { createSiteLogger } from './site-log-file';
 import { SiteViews } from './site-views';
 import { createIsolatedRunner } from './site-adapters/isolated-runner';
 import { loadState } from './state-file';
+import { sweepStaleTemps } from './store/atomic-file';
 
 const userDataOverride = process.env['AIAW_USER_DATA'];
 if (userDataOverride) app.setPath('userData', userDataOverride);
@@ -88,6 +89,7 @@ async function start(): Promise<void> {
   const userData = app.getPath('userData');
   const sharedDir = path.join(userData, 'shared');
   await mkdir(sharedDir, { recursive: true });
+  await sweepStaleTemps(userData);
   const state = await loadState(path.join(userData, 'agents.json'));
   nativeTheme.themeSource = parseThemeChoice(state.theme);
   const window = createWindow();

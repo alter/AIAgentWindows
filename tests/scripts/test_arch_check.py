@@ -113,5 +113,23 @@ class ArchCheckTest(unittest.TestCase):
         self.assertIn("src/renderer/b.ts:1 [renderer-node]", bad.stdout)
 
 
+    def test_store_imports_electron(self) -> None:
+        self.put("src/main/store/atomic-file.ts", "import { app } from 'electron';\n")
+        self.assertEqual(self.codes(), {"store-electron"})
+
+    def test_electron_outside_store_is_fine(self) -> None:
+        self.put("src/main/index.ts", "import { app } from 'electron';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
+    def test_delete_calls_outside_the_store_are_refused(self) -> None:
+        self.put("src/main/a.ts", "await rm(dir, { recursive: true });\nfs.unlinkSync(f);\nsession.clearStorageData();\n")
+        self.assertEqual(self.codes(), {"no-delete"})
+        self.assertEqual(len(arch_check.check(self.root)), 3)
+
+    def test_delete_in_atomic_file_and_in_tests_is_allowed(self) -> None:
+        self.put("src/main/store/atomic-file.ts", "await rm(temp, { force: true });\n")
+        self.put("tests/unit/a.test.ts", "await rm(dir);\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,8 @@ IMPORT_CALL = re.compile(r"""\b(?:require|import)\s*\(\s*(['"`])([^'"`\n]+)\1\s*
 CONSTRUCTOR = re.compile(r"\bnew\s+(WebContentsView|BrowserWindow)\s*\(")
 PRELOAD = re.compile(r"\bpreload\b")
 SITE_MARK = re.compile(r"\bpartition\b|persist:")
+DELETE_CALL = re.compile(r"\b(?:rm|rmdir|unlink|rmSync|rmdirSync|unlinkSync|clearStorageData|clearCache)\s*\(")
+DELETE_HOME = "src/main/store/atomic-file.ts"
 COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
@@ -86,6 +88,21 @@ def shared_problems(rel: str, text: str) -> list[str]:
     return out
 
 
+def store_problems(rel: str, text: str) -> list[str]:
+    out = []
+    for line, spec in specifiers(text):
+        if is_package(spec, "electron"):
+            out.append(f"{rel}:{line} [store-electron] store imports {spec}")
+    return out
+
+
+def delete_problems(rel: str, text: str) -> list[str]:
+    return [
+        f"{rel}:{line_of(text, m.start())} [no-delete] {m.group(0).strip('( ')} outside {DELETE_HOME}"
+        for m in DELETE_CALL.finditer(text)
+    ]
+
+
 def preload_problems(rel: str, text: str) -> list[str]:
     out = []
     for m in CONSTRUCTOR.finditer(text):
@@ -104,6 +121,10 @@ def check_file(rel: str, text: str) -> list[str]:
         out.extend(renderer_problems(rel, text))
     if rel.startswith("src/shared/"):
         out.extend(shared_problems(rel, text))
+    if rel.startswith("src/main/store/"):
+        out.extend(store_problems(rel, text))
+    if rel.startswith("src/main/") and rel != DELETE_HOME:
+        out.extend(delete_problems(rel, text))
     if rel.startswith("src/"):
         out.extend(preload_problems(rel, text))
     return out

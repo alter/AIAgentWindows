@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emptyState, type AppState } from '../../src/shared/agents';
-import { loadState, saveState } from '../../src/main/state-file';
+import { loadState, saveState, stateFailure } from '../../src/main/state-file';
+import { FailClosedError } from '../../src/main/store/json-file';
 
 const SAMPLE: AppState = {
   version: 1,
@@ -101,5 +102,33 @@ describe('state file', () => {
       await writeFile(file, JSON.stringify({ version: 1, agents: [], openrouterKey }), 'utf8');
       expect((await loadState(file)).openrouterKey).toBeUndefined();
     }
+  });
+});
+
+describe('state file fails closed', () => {
+  it('keeps a truncated file and a future-version file byte-identical when a save is attempted', async () => {
+    for (const content of ['{"version":1,"agents":[', JSON.stringify({ version: 3, agents: [] })]) {
+      const file = path.join(dir, `agents-${content.length}.json`);
+      await writeFile(file, content, 'utf8');
+      expect(await loadState(file)).toEqual(emptyState());
+      expect(stateFailure(file)).not.toBeNull();
+      await expect(saveState(file, SAMPLE)).rejects.toBeInstanceOf(FailClosedError);
+      expect(await readFile(file, 'utf8')).toBe(content);
+    }
+  });
+
+  it('reports no failure for a missing file and for one that loaded', async () => {
+    const file = path.join(dir, 'fresh.json');
+    expect(stateFailure(file)).toBeNull();
+    await saveState(file, SAMPLE);
+    await loadState(file);
+    expect(stateFailure(file)).toBeNull();
+  });
+
+  it('rejects a file that is not an object', async () => {
+    const file = path.join(dir, 'array.json');
+    await writeFile(file, '[]', 'utf8');
+    await loadState(file);
+    expect(stateFailure(file)).toContain('not an object');
   });
 });

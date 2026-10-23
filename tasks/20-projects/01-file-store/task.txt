@@ -1,0 +1,32 @@
+TASK: file store — atomic write, JSON file with the fail-closed rule
+
+GOAL
+  The one place that writes app state: exclusive temp file + rename, the stale
+  temp sweep, and a JSON reader that never lets a later write cover a file it
+  could not read (docs/plans/projects.md D18, T04). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/main/state-file.ts
+  src/main/store/atomic-file.ts
+  src/main/store/json-file.ts
+
+SCOPE
+  + store/atomic-file.ts, store/json-file.ts, state-file.ts on them, the sweep at start
+  + arch_check rules store-electron and no-delete with tests
+  − room history, records and conversations stay on their writers (no defect, D18)
+  − state.json and the migration — 02-state-v2
+
+OUTCOME
+  src/main/store/json-file.ts exists and tests/unit/json-file.test.ts passes.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [full] electron-smoke exit 0
+  3. [fast] reverse control: the fail-closed check removed → tests/unit/json-file.test.ts and tests/unit/state-file.test.ts go red (output in NOTES.md)
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects
