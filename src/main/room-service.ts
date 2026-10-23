@@ -4,7 +4,7 @@ import { Room, type DriverFactory, type RoomContinuation } from './room';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { listRecords, readRecord, stopInterrupted, writeRecord } from './room-archive';
-import { isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
+import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
 import {
   applyRoomEvent,
@@ -109,7 +109,7 @@ export class RoomService {
     const point = resumePoint(record);
     if (point === null) throw new Error('there is nothing to resume in this room');
     if (!resumeMatches(point, record.config, resumeWith)) throw new Error('the prompt or the setup differs from the stopped run: continue with a new prompt instead');
-    return { ...base, done: point.done };
+    return { ...base, entries: dropSegmentStops(record.entries), done: point.done };
   }
 
   async rename(id: string, title: string): Promise<boolean> {

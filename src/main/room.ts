@@ -209,6 +209,14 @@ class RunState {
     this.enqueue(() => writeRecord(this.roomsDir, record));
   }
 
+  rewrite(): void {
+    const whole = this.render(this.entries);
+    this.historyState = 'append';
+    this.enqueue(() => writeAtomic(this.historyPath, whole));
+    const record = this.recordOf('running');
+    this.enqueue(() => writeRecord(this.roomsDir, record));
+  }
+
   render(entries: readonly RoomEntry[]): string {
     return renderHistoryHeader(this.id, this.nonce, this.finalizer.label) + entries.map((entry) => renderEntryBlock(this.nonce, entry)).join('');
   }
@@ -309,7 +317,10 @@ export class Room {
         ...(run.previous === undefined ? {} : { previous: run.previous }),
       });
       if (run.resumed === undefined) this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
-      else this.replayDone(run, run.resumed);
+      else {
+        run.rewrite();
+        this.replayDone(run, run.resumed);
+      }
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
       else await this.broadcast(run);

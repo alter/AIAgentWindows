@@ -17,7 +17,7 @@ interface Session {
 
 interface RecordShape {
   status: string;
-  entries: { label: string; kind: string; text: string; round?: number }[];
+  entries: { label: string; kind: string; text: string; round?: number; state?: string }[];
 }
 
 function newBase(): string {
@@ -172,6 +172,8 @@ test('a run cut by closing the app mid-turn reopens as stopped with the replies 
   expect(record.entries.filter((entry) => entry.kind === 'reply')).toHaveLength(written);
 });
 
+const stopEntry = '.room-entry[data-author="room"]:has([data-state="stopped"])';
+
 test('a relay stopped mid-run is resumed from its first unanswered turn and ends with the final', async () => {
   const base = newBase();
   const session = await launch(base, { AIAW_STUB_REPLY_DELAY_MS: '1500' });
@@ -184,13 +186,16 @@ test('a relay stopped mid-run is resumed from its first unanswered turn and ends
     await expect(page.locator('.room-entry.kind-reply')).toHaveCount(2, { timeout: 20_000 });
     await field(page, 'stop').click();
     await expect(field(page, 'status')).toContainText('stopped', { timeout: 15_000 });
+    await expect(page.locator(stopEntry)).toHaveCount(1);
     await expect(field(page, 'start')).toHaveAttribute('data-room-action', 'resume');
     await field(page, 'prompt').fill('another question');
     await expect(field(page, 'start')).toHaveAttribute('data-room-action', 'continue');
     await field(page, 'prompt').fill('resumable question');
     await expect(field(page, 'start')).toHaveAttribute('data-room-action', 'resume');
     await field(page, 'start').click();
+    await expect(page.locator(stopEntry)).toHaveCount(0);
     await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 2));
+    await expect(page.locator(stopEntry)).toHaveCount(0);
     await expect(field(page, 'start')).toHaveAttribute('data-room-action', 'continue');
   } finally {
     await session.app.close();
@@ -198,6 +203,7 @@ test('a relay stopped mid-run is resumed from its first unanswered turn and ends
   const files = roomFiles(base);
   const record = readRecord(files.json);
   expect(record.status).toBe('done');
+  expect(record.entries.some((entry) => entry.state === 'stopped')).toBe(false);
   expect(record.entries.filter((entry) => entry.kind === 'prompt')).toHaveLength(1);
   const turns = record.entries.filter((entry) => entry.round !== undefined && entry.kind !== 'prompt').map((entry) => `${entry.label}:${entry.round}`);
   expect(new Set(turns).size).toBe(turns.length);

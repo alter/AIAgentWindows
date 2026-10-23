@@ -375,6 +375,11 @@ export function resumeMatches(point: ResumePoint, run: Pick<RoomConfig, 'mode' |
   return point.prompt === config.prompt && sameSetup(run, config);
 }
 
+export function dropSegmentStops(entries: readonly RoomEntry[]): RoomEntry[] {
+  const start = entries.map((entry) => entry.kind).lastIndexOf('prompt');
+  return entries.filter((entry, index) => index <= start || !(entry.authorId === ROOM_ID && entry.state === 'stopped'));
+}
+
 export function entriesBeforeRound(entries: readonly RoomEntry[], round: number): RoomEntry[] {
   const start = entries.map((entry) => entry.kind).lastIndexOf('prompt');
   return entries.filter((entry, index) => index <= start || entry.round !== round);

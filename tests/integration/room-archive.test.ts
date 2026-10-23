@@ -7,7 +7,7 @@ import type { DriverFactory, ParticipantDriver } from '../../src/main/room';
 import { listRecords, readRecord } from '../../src/main/room-archive';
 import type { RoomTerminals } from '../../src/main/room-drivers';
 import { RoomService } from '../../src/main/room-service';
-import type { RoomConfig, RoomEvent, RoomParticipant } from '../../src/shared/room-model';
+import { ROOM_ID, type RoomConfig, type RoomEvent, type RoomParticipant } from '../../src/shared/room-model';
 
 const CLAUDE: RoomParticipant = { id: 'claude', kind: 'claude', label: 'Claude Code' };
 const CODEX: RoomParticipant = { id: 'codex', kind: 'codex', label: 'Codex' };
@@ -240,6 +240,63 @@ describe('room resume in the service', () => {
     expect([...pairs].sort()).toEqual(['claude:1', 'claude:2', 'codex:1', 'codex:2']);
     expect(record?.entries.filter((entry) => entry.kind === 'prompt')).toHaveLength(1);
     expect(record?.entries.filter((entry) => entry.kind === 'final')).toHaveLength(1);
+  });
+
+  function stopEntries(entries: { authorId: string; state?: string }[]): number {
+    return entries.filter((entry) => entry.authorId === ROOM_ID && entry.state === 'stopped').length;
+  }
+
+  function roomBlocks(history: string): number {
+    return history.split('\n').filter((line) => /^<<<entry-\S+ author="Room" /.test(line)).length;
+  }
+
+  it('a resume drops the stop entries of its segment', async () => {
+    const script: Script = { calls: [], hold: (_call, count) => count === 3 };
+    const { room, seen } = service(scripted(script));
+    const wanted = config({ rounds: 2 });
+    const started = await room.start(wanted);
+    const id = started.ok ? started.roomId : '';
+    await stopAfterCalls(room, script, 3);
+    await finishedCount(seen, 1);
+    expect(stopEntries((await readRecord(roomsDir(), id))?.entries ?? [])).toBe(1);
+    expect(roomBlocks(await readFile(path.join(roomsDir(), `${id}.md`), 'utf8'))).toBe(1);
+
+    script.hold = (_call, count) => count === 4;
+    expect((await room.start(wanted, id, true)).ok).toBe(true);
+    await stopAfterCalls(room, script, 4);
+    await finishedCount(seen, 2);
+    expect(stopEntries((await readRecord(roomsDir(), id))?.entries ?? [])).toBe(1);
+
+    script.hold = () => false;
+    expect((await room.start(wanted, id, true)).ok).toBe(true);
+    await finishedCount(seen, 3);
+
+    const record = await readRecord(roomsDir(), id);
+    expect(record?.status).toBe('done');
+    expect(stopEntries(record?.entries ?? [])).toBe(0);
+    expect(roomBlocks(await readFile(path.join(roomsDir(), `${id}.md`), 'utf8'))).toBe(0);
+    expect(script.calls.slice(3).filter((call) => /author="Room" /.test(call.text))).toHaveLength(0);
+    const starts = seen.filter((event) => event.type === 'started');
+    expect(starts).toHaveLength(3);
+    for (const event of starts.slice(1)) expect(event.type === 'started' ? stopEntries(event.previous ?? []) : -1).toBe(0);
+  });
+
+  it('a Continue with a new prompt keeps the stop entry of the old segment', async () => {
+    const script: Script = { calls: [], hold: (_call, count) => count === 3 };
+    const { room, seen } = service(scripted(script));
+    const started = await room.start(config({ rounds: 2 }));
+    const id = started.ok ? started.roomId : '';
+    await stopAfterCalls(room, script, 3);
+    await finishedCount(seen, 1);
+
+    script.hold = () => false;
+    expect((await room.start(config({ prompt: 'another question' }), id)).ok).toBe(true);
+    await finishedCount(seen, 2);
+
+    const record = await readRecord(roomsDir(), id);
+    expect(stopEntries(record?.entries ?? [])).toBe(1);
+    expect(roomBlocks(await readFile(path.join(roomsDir(), `${id}.md`), 'utf8'))).toBe(1);
+    expect(script.calls.slice(3).some((call) => /author="Room" /.test(call.text))).toBe(true);
   });
 
   it('refuses a resume whose prompt or setup differs, one with nothing to resume or for another room, and writes nothing', async () => {

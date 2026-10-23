@@ -131,7 +131,8 @@ export class RoomPane {
   apply(event: RoomEvent): void {
     this.snapshot = applyRoomEvent(this.snapshot, event);
     if (this.snapshot.roomId !== null) this.openedId = this.snapshot.roomId;
-    this.renderFeed();
+    if (event.type === 'started') this.feed.reload(this.snapshot);
+    else this.renderFeed();
     this.renderState();
     if (event.type === 'finished') void this.refreshList();
   }
