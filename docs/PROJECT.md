@@ -109,6 +109,7 @@ python3 -m unittest discover -s tests/scripts
 python3 scripts/evidence_check.py
 python3 scripts/arch_check.py
 python3 scripts/check_publish_flags.py
+python3 scripts/contrast_check.py
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*.sh' -- shellcheck -S warning
 python3 scripts/lint_changed.py --base 2393fe1 --glob '.github/workflows/*.yml' --glob '.github/workflows/*.yaml' -- actionlint
 python3 scripts/lint_changed.py --base 2393fe1 --glob '*' -- sh -c 'for f do gitleaks dir --no-banner --log-level error "$f" || exit 1; done' sh
