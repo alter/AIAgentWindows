@@ -7,4 +7,4 @@ verify:pending
 milestone:M2
 format:2
 capability:OpenRouter models: Room participants and chat agents, paid and free
-depends:10-app-shell/14-agent-identity
+depends:10-app-shell/19-room-delete

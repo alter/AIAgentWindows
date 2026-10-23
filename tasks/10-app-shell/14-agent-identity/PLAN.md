@@ -12,6 +12,7 @@ Owner, 2026-10-23: "мы умеем переименовывать комнат�
 - [ ] AC2 Study: docs/tech/lobe-icons@<pinned version>.md lists the vendored files, their slugs, colour/mono variant, licence (MIT) and each brand's usage terms, each with a URL; tasks/check.py shows no item without a URL
 - [ ] AC3 Rules: unit tests for title parse, `agent:rename` validation, icon map covering every AgentKind; seen red first
 - [ ] AC4 Smoke: electron-smoke exit 0 — `an agent renamed from the sidebar keeps its title after a restart` (F2 and context menu, Escape cancels) and `markup in an agent title is shown as text`; every kind's item shows its vendored logo (img src ends with the file name); reverse control (title via innerHTML) red, output in NOTES.md — windows hidden
+- [ ] AC6 "+" alignment: smoke asserts the Rooms and Agents "+" buttons have equal width and equal right edge (getBoundingClientRect), in both states of the Rooms tree
 - [ ] AC5 HUMAN (excluded from /run): the owner looks at the logos in both themes
 
 ## Stack
@@ -35,7 +36,7 @@ As tasks/10-app-shell/06-room-layout/PLAN.md. Icons: @lobehub/icons-static-svg, 
 ## Tasks
 - [ ] T00 Baseline: the coordinator's last verified run before T01 — verify: the Log line exists
 - [ ] T01 Study: docs/tech/lobe-icons@<version>.md from the package and the brand pages — verify: AC2
-- [ ] T02 Rename and icons (S1–S4): agent title parse and `agent:rename` (red first), AgentController rename + persist, sidebar rename editor (F2, context menu), vendored SVGs + build copy + icon map, tiles from tokens; smoke tests/full/agent-identity.spec.ts with reverse control — verify: AC3 + fast tier + electron-smoke
+- [ ] T02 Rename, icons and "+" alignment (S1–S5): agent title parse and `agent:rename` (red first), AgentController rename + persist, sidebar rename editor (F2, context menu), vendored SVGs + build copy + icon map, tiles from tokens; smoke tests/full/agent-identity.spec.ts with reverse control — verify: AC3 + fast tier + electron-smoke
 - [ ] T03 Ledger and notes: docs/PROJECT.md shell row; NOTES.md; labels `status:review` — verify: tasks/check.py no new problem + fast tier
 
 ## Log

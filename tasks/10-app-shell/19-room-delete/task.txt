@@ -1,0 +1,63 @@
+TASK: room delete — remove saved rooms from the tree, files to the Trash
+
+GOAL
+  A saved room can be deleted from the "# Rooms" tree: its record, history and
+  site debug folder go to the system Trash (recoverable), the tree and the pane
+  update. Owner's request of 2026-10-23 ("нет функционала удаления комнат, хотя
+  часть из них могут быть уже не нужными"). Serves no gate.
+
+CONTEXT
+  src/renderer/room-tree.ts (context menu Rename, F2), src/renderer/sidebar.ts (in-panel confirm of agent close)
+  src/main/room-service.ts, src/main/room-archive.ts (records <shared>/rooms/<id>.json and .md)
+  src/shared/room-model.ts (isRoomId), src/shared/ipc.ts
+  docs/tech/electron@44.6.0.md (shell.trashItem)
+
+SCOPE
+  + S1 context menu "Delete" and the Delete / Backspace key on a tree item ask for confirmation inside the sidebar (Delete / Cancel buttons, Escape cancels, focus on Cancel first); no browser dialog
+  + S2 validated IPC `room:delete` (isRoomId); room-service refuses the room of a running run and an id outside the rooms directory; moves <id>.json, <id>.md and debug/sites/<id> to the Trash with shell.trashItem; a missing file is not an error
+  + S3 after delete the tree refreshes; if the deleted room was open, the pane opens the next room in the list or a new room
+  − deleting several rooms at once, emptying the Trash — not requested
+  − deleting agents — exists (agent close)
+  indivisible: one action from the tree through IPC to the archive, one smoke
+
+WRITE-SET
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/room-service.ts
+  src/main/room-archive.ts
+  src/main/index.ts
+  src/renderer/room-tree.ts
+  src/renderer/room-pane.ts
+  src/renderer/sidebar.ts
+  src/renderer/styles.css
+  tests/unit/
+  tests/integration/
+  tests/full/
+  docs/PROJECT.md
+  tasks/10-app-shell/19-room-delete/
+
+DATA
+  delete.id: dir=in; type=string; size=the isRoomId pattern; null=no; interpretable=no; validated=tests/unit/ipc-validate.test.ts::room delete rejects a malformed id; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/shell.md
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  A smoke run deletes a saved room from the tree after confirming, finds its
+  .json and .md gone from <shared>/rooms (moved by a trash function replaced in
+  test mode) and the tree without it; a running room's delete is refused;
+  every task of tasks/10-app-shell/19-room-delete/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/integration/room-archive.test.ts: delete moves the three paths to the trash function, refuses a running room and a malformed id, tolerates a missing file
+  3. [full] electron-smoke: context menu Delete → confirm → files gone, tree updated, opened room replaced; Cancel and Escape keep the room
+  4. [fast] reverse control: drop the running-room check in room-service → tests/integration/room-archive.test.ts::a running room cannot be deleted
+  5. [fast] HUMAN: the owner deletes a room and finds it in the Trash
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/14-agent-identity

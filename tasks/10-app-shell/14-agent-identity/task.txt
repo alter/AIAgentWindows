@@ -19,6 +19,7 @@ SCOPE
   + S2 icons: SVG files vendored from @lobehub/icons-static-svg at one pinned version into src/renderer/assets/icons/ with a LICENSE note and the source URL of each file; colour variants where the brand has one, mono marks (OpenAI, Grok) drawn in var(--text) as the brands' own black/white marks; no other recolouring, no stretching
   + S3 the icon tile: the logo on a neutral tile from palette tokens (non-text pair Lc 45 / 3:1 for mono marks in both palettes); accessible name stays the agent title
   + S4 SVG is loaded as an <img> from a bundled file or as a sanitized static string built at build time — never parsed from a runtime string with innerHTML
+  + S5 the "+" buttons of "# Rooms" and "Agents" have one size and one right edge in the sidebar (owner, 2026-10-23: "этот + не может выровнять ... зачем он туда-сюда плавает?")
   − OpenRouter's own icon wiring — 10-app-shell OpenRouter tasks (the file is vendored here)
   − renaming Room participants — their labels come from kind, model and effort
   indivisible: the agent item is rewritten once for both the rename editor and the new icon

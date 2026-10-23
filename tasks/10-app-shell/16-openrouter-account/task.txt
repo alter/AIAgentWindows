@@ -74,4 +74,4 @@ ROLE
   APP, QA, HUMAN
 
 DEPENDS
-  10-app-shell/14-agent-identity
+  10-app-shell/19-room-delete
