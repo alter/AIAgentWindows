@@ -5,6 +5,7 @@ import type { PtyBacklog, PtyDataEvent } from '../shared/ipc';
 import { dropPastePayload, rawKeySequence, sanitizePaste } from '../shared/terminal-input';
 import { api } from './api';
 import { el } from './dom';
+import { LIGHT_SCHEME_QUERY, schemeOf, TERMINAL_MINIMUM_CONTRAST, terminalTheme } from './terminal-theme';
 
 export interface TerminalIo {
   write(data: string): void;
@@ -38,8 +39,13 @@ export class TerminalPane {
     scrollback: 5000,
     fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
     fontSize: 13,
-    theme: { background: '#1a1d21', foreground: '#d1d2d3' },
+    minimumContrastRatio: TERMINAL_MINIMUM_CONTRAST,
+    theme: terminalTheme(schemeOf(window.matchMedia(LIGHT_SCHEME_QUERY).matches)),
   });
+  private readonly scheme = window.matchMedia(LIGHT_SCHEME_QUERY);
+  private readonly onSchemeChange = (): void => {
+    this.terminal.options.theme = terminalTheme(schemeOf(this.scheme.matches));
+  };
   private readonly host = el('div', 'terminal-host');
   private readonly fit = new FitAddon();
   private readonly restartButton = el('button', 'restart-button', 'Restart');
@@ -61,6 +67,7 @@ export class TerminalPane {
     this.element.addEventListener('paste', (event) => this.handlePaste(event), true);
     this.element.addEventListener('dragover', (event) => event.preventDefault());
     this.element.addEventListener('drop', (event) => this.handleDrop(event));
+    this.scheme.addEventListener('change', this.onSchemeChange);
     void this.hydrate();
   }
 
@@ -105,6 +112,7 @@ export class TerminalPane {
   }
 
   dispose(): void {
+    this.scheme.removeEventListener('change', this.onSchemeChange);
     this.terminal.dispose();
     this.element.remove();
   }
