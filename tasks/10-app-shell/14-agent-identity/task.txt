@@ -1,0 +1,67 @@
+TASK: agent identity — rename agents in the sidebar and show the products' own icons
+
+GOAL
+  Agents in the sidebar can be renamed like rooms, and every agent kind shows
+  its product's logo (Claude Code, Codex, ChatGPT, Grok, DeepSeek; OpenRouter
+  once it exists) instead of a generic glyph. Owner's request of 2026-10-23
+  ("не умеем переименовывать агентов, и иконок нет от агентов правильных, надо
+  бы брать их официальные иконки"). Serves no gate.
+
+CONTEXT
+  src/renderer/sidebar.ts (agent items, kindIcon, context menu), src/renderer/icons.ts
+  src/renderer/room-tree.ts (rename in place: context menu / F2, Enter saves, Escape cancels)
+  src/shared/agents.ts (Agent.title), src/main/agent-controller.ts
+  https://github.com/lobehub/lobe-icons (MIT; the source of the vendored SVGs, pinned version written up by T01 in docs/tech/ before any design)
+  https://openai.com/brand , https://x.ai/legal/brand-guidelines , https://openrouter.ai/brand (use as provided, no recolour, no endorsement)
+
+SCOPE
+  + S1 rename: context menu "Rename" and F2 on an agent item edit its title in place (Enter saves, Escape cancels, 1..80 chars, no control characters); validated IPC `agent:rename`; stored in agents.json; the pane header and close-button names follow
+  + S2 icons: SVG files vendored from @lobehub/icons-static-svg at one pinned version into src/renderer/assets/icons/ with a LICENSE note and the source URL of each file; colour variants where the brand has one, mono marks (OpenAI, Grok) drawn in var(--text) as the brands' own black/white marks; no other recolouring, no stretching
+  + S3 the icon tile: the logo on a neutral tile from palette tokens (non-text pair Lc 45 / 3:1 for mono marks in both palettes); accessible name stays the agent title
+  + S4 SVG is loaded as an <img> from a bundled file or as a sanitized static string built at build time — never parsed from a runtime string with innerHTML
+  − OpenRouter's own icon wiring — 10-app-shell OpenRouter tasks (the file is vendored here)
+  − renaming Room participants — their labels come from kind, model and effort
+  indivisible: the agent item is rewritten once for both the rename editor and the new icon
+
+WRITE-SET
+  src/shared/agents.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/agent-controller.ts
+  src/renderer/sidebar.ts
+  src/renderer/icons.ts
+  src/renderer/assets/icons/
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  scripts/build.mjs
+  tests/unit/
+  tests/full/
+  docs/tech/lobe-icons@1.97.0.md
+  docs/PROJECT.md
+  tasks/10-app-shell/14-agent-identity/
+
+DATA
+  agent.title: dir=in; type=string typed by the owner; size=1..80 chars, no control characters; null=no; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink sidebar-agent-title: consumes agent.title; protection=textContent only, never innerHTML; test=tests/full/agent-identity.spec.ts::markup in an agent title is shown as text
+
+OUTCOME
+  A smoke run renames an agent from the sidebar, restarts the app and finds the
+  title in agents.json and in the sidebar, and finds every agent kind's item
+  showing its vendored logo file; every task of
+  tasks/10-app-shell/14-agent-identity/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit: title parse (control characters, length), IPC agent:rename refuses a bad id or title; icon map covers every AgentKind
+  3. [full] electron-smoke: rename by F2 and by context menu, Escape cancels, restart keeps the title; markup in a title shows as text; each kind's item shows its logo (img src ends with the vendored file name)
+  4. [fast] reverse control: write the title with innerHTML in sidebar → tests/full/agent-identity.spec.ts::markup in an agent title is shown as text
+  5. [fast] HUMAN: the owner looks at the logos in both themes
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/13-sidebar-resize

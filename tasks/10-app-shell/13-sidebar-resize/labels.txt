@@ -1,0 +1,10 @@
+phase:app-shell
+role:APP
+type:feature
+priority:P1
+status:todo
+verify:pending
+depends:10-app-shell/12-sidebar-palette
+milestone:M2
+format:2
+capability:Slack-like shell (agent sidebar, tabs, multiple windows)

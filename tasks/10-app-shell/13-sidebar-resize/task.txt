@@ -1,0 +1,67 @@
+TASK: sidebar resize — a draggable divider between the sidebar and the work area, width kept across restarts
+
+GOAL
+  The divider between the left panel and the work area moves: by mouse drag
+  and by keyboard; site views follow it; the width survives an app restart.
+  Owner's request of 2026-10-23 ("разделитель между левой панелью ... статический,
+  а хотелось бы его двигать уметь"). Serves no gate.
+
+CONTEXT
+  src/shared/site-layout.ts (SIDEBAR_WIDTH constant, siteBounds used by the main process for site views)
+  src/main/site-views.ts (WebContentsView bounds)
+  src/renderer/index.ts:12 (--sidebar-width set from the constant)
+  src/renderer/styles.css (.sidebar flex basis var(--sidebar-width))
+  src/shared/agents.ts (AppState in agents.json), src/main/agent-controller.ts (persist)
+  docs/tech/electron@44.6.0.md
+
+SCOPE
+  + S1 a vertical separator between sidebar and content (role="separator", aria-orientation vertical, aria-valuenow/min/max in px, focusable); pointer drag resizes live; ArrowLeft/ArrowRight by 16 px, Home/End to min/max; double-click resets to the default 260
+  + S2 width limits: min 180 px, max 50 % of the window width (and never above 600 px); a window resize clamps a stored width
+  + S3 site views (ChatGPT, Grok, DeepSeek) are laid out from the current width: siteBounds takes the width as a parameter; the renderer reports the width to the main process through a validated IPC `layout:sidebar` (integer px in range), throttled during a drag
+  + S4 the width is stored in agents.json (`sidebarWidth`, optional; old files load) and applied before the first paint
+  − colours of the divider beyond existing tokens (--border, --focus) — 10-app-shell/12-sidebar-palette
+  − collapsing the sidebar completely — not requested
+  indivisible: one width flows renderer → IPC → main layout and the state file; one smoke covers it
+
+WRITE-SET
+  src/shared/site-layout.ts
+  src/shared/agents.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/site-views.ts
+  src/main/agent-controller.ts
+  src/main/index.ts
+  src/renderer/index.ts
+  src/renderer/sidebar-resizer.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/
+  tests/full/
+  docs/PROJECT.md
+  tasks/10-app-shell/13-sidebar-resize/
+
+DATA
+  layout.sidebarWidth: dir=in; type=integer px; range=180..600; null=no; interpretable=no; validated=tests/unit/ipc-validate.test.ts::layout sidebar accepts only an integer width in range; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  A smoke run drags the divider and moves it by keyboard, finds the sidebar
+  width and the site view x-offset equal to the new width, restarts the app
+  and finds the width kept; every task of
+  tasks/10-app-shell/13-sidebar-resize/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit: siteBounds with a width; clamp rule (min, max, 50 % of window); stored width parse (missing or out of range → default); IPC accepts only an integer in range
+  3. [full] electron-smoke: drag and keyboard resize, site view bounds follow (main-process evaluate), restart keeps the width
+  4. [fast] reverse control: drop the width argument from siteBounds in site-views → tests/full/sidebar-resize.spec.ts::the divider moves by drag and keys and the width survives a restart
+  5. [fast] HUMAN: the owner drags the divider with a site open
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/12-sidebar-palette

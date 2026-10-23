@@ -1,0 +1,10 @@
+phase:app-shell
+role:ARCH
+type:research
+priority:P1
+status:todo
+verify:pending
+milestone:M2
+format:2
+capability:OpenRouter models: Room participants and chat agents, paid and free
+depends:10-app-shell/12-sidebar-palette

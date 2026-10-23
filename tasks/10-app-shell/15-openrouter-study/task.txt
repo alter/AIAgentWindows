@@ -1,0 +1,54 @@
+TASK: openrouter study — the versioned reference the OpenRouter tasks design against
+
+GOAL
+  Write docs/tech/openrouter@2026-10-23.md from OpenRouter's own documentation
+  (the API is unversioned, so the doc is dated): PKCE sign-in, keys, model
+  list, chat completions with streaming, reasoning effort, web search plugin,
+  errors and limits, every item with a URL. Required by the working contract
+  before any OpenRouter task is designed. Owner's request of 2026-10-23
+  ("OpenRouter подключать уметь, как платные модели, так и бесплатные").
+
+CONTEXT
+  https://openrouter.ai/docs/use-cases/oauth-pkce
+  https://openrouter.ai/docs/api-reference/limits
+  https://openrouter.ai/docs/api-reference/errors
+  https://openrouter.ai/docs/features/web-search
+  docs/tech/electron@44.6.0.md (safeStorage, shell.openExternal, net)
+  docs/tech/xterm@6.0.0.md (format of a tech doc in this repo)
+
+SCOPE
+  + S1 PKCE: auth URL and parameters, localhost callback rules, code exchange endpoint, body, response, errors, expiry; headless mode
+  + S2 keys: Bearer use, key info endpoint (credits, limits), revocation
+  + S3 models: GET /api/v1/models fields and types (id, name, pricing strings, context_length, supported_parameters), the :free variant rule, free-tier limits (20/min, 50 or 1000/day by lifetime credits)
+  + S4 chat completions: body, messages, streaming SSE (comments, final usage chunk, [DONE], mid-stream errors with HTTP 200), headers HTTP-Referer / X-Title, reasoning parameters (effort or max_tokens) and which models accept them, max_tokens defaults
+  + S5 web search: the web plugin, engines, price per request, deprecated :online
+  + S6 Electron side: safeStorage (availability on macOS, encryptString/decryptString), shell.openExternal, a loopback HTTP server on 127.0.0.1 with a random port — from the Electron 44.6.0 and Node 22 docs
+  + S7 an "Implications for this app" section: the shortest path chosen (PKCE with a loopback callback plus a paste-key fallback) and every limit the app must respect
+  − any code — 10-app-shell OpenRouter build tasks
+  indivisible: one reference document
+
+WRITE-SET
+  docs/tech/openrouter@2026-10-23.md
+  tasks/10-app-shell/15-openrouter-study/
+
+DATA
+  (none)
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  docs/tech/openrouter@2026-10-23.md exists, every item carries a URL from
+  openrouter.ai/docs or the pinned Electron / Node docs, and tasks/check.py
+  reports no item without a URL in it.
+
+VERIFY (QA)
+  1. [fast] `python3 tasks/check.py` reports no problem in docs/tech/openrouter@2026-10-23.md
+  2. [fast] reverse control: remove the URL from one item → tasks/check.py::tech_check reports that item (output in NOTES.md)
+  3. [fast] HUMAN: none
+
+ROLE
+  ARCH
+
+DEPENDS
+  10-app-shell/12-sidebar-palette
