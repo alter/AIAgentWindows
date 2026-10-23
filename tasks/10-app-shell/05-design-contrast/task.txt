@@ -13,6 +13,8 @@ CONTEXT
   src/renderer/room-feed.ts (summary entries, .room-entry-head is display:flex so no native marker)
   docs/tech/xterm@6.0.0.md
   docs/tech/electron@44.6.0.md
+  docs/tech/apca-w3@0.1.9.md (written in T01)
+  docs/tech/wcag@2.2.md (written in T01)
   docs/PROJECT.md §6 (gate checks)
 
 SCOPE

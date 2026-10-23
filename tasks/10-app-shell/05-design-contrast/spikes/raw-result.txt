@@ -1,0 +1,53 @@
+{
+  "A default": {
+    "themeSource": "system",
+    "shouldUseDarkColors": true,
+    "dark": true,
+    "light": false,
+    "bodyBg": "rgb(0, 0, 0)"
+  },
+  "themeSource=light #1": {
+    "themeSource": "light",
+    "shouldUseDarkColors": false,
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)"
+  },
+  "themeSource=dark #2": {
+    "themeSource": "dark",
+    "shouldUseDarkColors": true,
+    "dark": true,
+    "light": false,
+    "bodyBg": "rgb(0, 0, 0)"
+  },
+  "themeSource=system #3": {
+    "themeSource": "system",
+    "shouldUseDarkColors": true,
+    "dark": true,
+    "light": false,
+    "bodyBg": "rgb(0, 0, 0)"
+  },
+  "themeSource=dark #4": {
+    "themeSource": "dark",
+    "shouldUseDarkColors": true,
+    "dark": true,
+    "light": false,
+    "bodyBg": "rgb(0, 0, 0)"
+  },
+  "themeSource=light #5": {
+    "themeSource": "light",
+    "shouldUseDarkColors": false,
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)"
+  },
+  "changeEvents": [
+    "dark=false",
+    "dark=true",
+    "dark=false"
+  ],
+  "versions": {
+    "electron": "44.6.0",
+    "chrome": "152.0.7977.130"
+  }
+}

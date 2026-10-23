@@ -1,0 +1,42 @@
+{
+ "launch colorScheme=dark": {
+  "atLaunch": {
+   "dark": true,
+   "bodyBg": "rgb(0, 0, 0)"
+  },
+  "afterEmulateMediaOpposite": {
+   "dark": false,
+   "bodyBg": "rgb(255, 255, 255)"
+  }
+ },
+ "launch colorScheme=light": {
+  "atLaunch": {
+   "dark": false,
+   "bodyBg": "rgb(255, 255, 255)"
+  },
+  "afterEmulateMediaOpposite": {
+   "dark": true,
+   "bodyBg": "rgb(0, 0, 0)"
+  }
+ },
+ "launch colorScheme=null": {
+  "atLaunch": {
+   "dark": true,
+   "bodyBg": "rgb(0, 0, 0)"
+  },
+  "afterEmulateMediaOpposite": {
+   "dark": true,
+   "bodyBg": "rgb(0, 0, 0)"
+  }
+ },
+ "launch colorScheme=undefined": {
+  "atLaunch": {
+   "dark": false,
+   "bodyBg": "rgb(255, 255, 255)"
+  },
+  "afterEmulateMediaOpposite": {
+   "dark": true,
+   "bodyBg": "rgb(0, 0, 0)"
+  }
+ }
+}

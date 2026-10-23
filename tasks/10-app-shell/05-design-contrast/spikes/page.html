@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>
+:root { --bg: #000000; }
+@media (prefers-color-scheme: light) { :root { --bg: #ffffff; } }
+body { background: var(--bg); }
+</style>
+<link rel="stylesheet" href="../../../../node_modules/@xterm/xterm/css/xterm.css">
+<div id="t"></div>
+<script src="../../../../node_modules/@xterm/xterm/lib/xterm.js"></script>
+<script>
+window.term = new Terminal({ theme: { background: '#000000', foreground: '#ffffff' }, minimumContrastRatio: 1 });
+term.open(document.getElementById('t'));
+</script>

@@ -1,0 +1,90 @@
+{
+  "A default (system)": {
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)",
+    "themeSource": "system",
+    "shouldUseDarkColors": true
+  },
+  "B themeSource=light": {
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)",
+    "themeSource": "light",
+    "shouldUseDarkColors": false
+  },
+  "C themeSource=dark": {
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)",
+    "themeSource": "dark",
+    "shouldUseDarkColors": true
+  },
+  "D themeSource=system": {
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)",
+    "themeSource": "system",
+    "shouldUseDarkColors": true
+  },
+  "E change events (light query) after light then dark": [],
+  "F before emulateMedia": {
+    "dark": false,
+    "light": true,
+    "bodyBg": "rgb(255, 255, 255)",
+    "themeSource": "system",
+    "shouldUseDarkColors": true
+  },
+  "G emulateMedia": {
+    "light": {
+      "dark": false,
+      "bodyBg": "rgb(255, 255, 255)"
+    },
+    "dark": {
+      "dark": true,
+      "bodyBg": "rgb(0, 0, 0)"
+    }
+  },
+  "G2 after emulateMedia(null) and themeSource=dark": {
+    "dark": true,
+    "light": false,
+    "bodyBg": "rgb(0, 0, 0)",
+    "themeSource": "dark",
+    "shouldUseDarkColors": true
+  },
+  "G3 emulateMedia dark->light roundtrip": {
+    "dark": false,
+    "bodyBg": "rgb(255, 255, 255)"
+  },
+  "H xterm initial theme": {
+    "scrollableElementBackground": "rgb(0, 0, 0)",
+    "rowsRule": ".xterm-rows { pointer-events: none; color: #ffffff; font-family: monospace; font-size: 15px; font-kerning: none; white-space: pre}",
+    "optionsThemeBackground": "#000000"
+  },
+  "I xterm after options.theme reassignment": {
+    "scrollableElementBackground": "rgb(255, 255, 255)",
+    "rowsRule": ".xterm-rows { pointer-events: none; color: #000000; font-family: monospace; font-size: 15px; font-kerning: none; white-space: pre}",
+    "optionsThemeBackground": "#ffffff"
+  },
+  "J xterm after mutating options.theme.background in place": {
+    "scrollableElementBackground": "rgb(255, 255, 255)",
+    "rowsRule": ".xterm-rows { pointer-events: none; color: #000000; font-family: monospace; font-size: 15px; font-kerning: none; white-space: pre}",
+    "optionsThemeBackground": "#00ff00"
+  },
+  "K ratio 1, rgb(30,30,30) on black": {
+    "cls": "",
+    "style": "color:#1e1e1e;"
+  },
+  "L ratio 4.5 set after the text was written": {
+    "cls": "",
+    "style": "color:#7d7d7d;"
+  },
+  "M minimumContrastRatio read back after setting 99 and 0.2": [
+    21,
+    1
+  ],
+  "versions": {
+    "electron": "44.6.0",
+    "chrome": "152.0.7977.130"
+  }
+}
