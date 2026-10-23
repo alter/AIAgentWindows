@@ -44,6 +44,7 @@ WRITE-SET
   docs/tech/claude-code@2.1.306.md
   docs/tech/codex@0.163.0.md
   docs/PROJECT.md
+  docs/EVIDENCE.md
   tasks/10-app-shell/03-room-participants/
 
 DATA
