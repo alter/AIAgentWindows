@@ -1,6 +1,6 @@
 // cli-args.test.ts
 import { describe, expect, it } from 'vitest';
-import { buildRoomTurnSpawn, buildSpawn, type SpawnOptions } from '../../src/shared/cli-args';
+import { buildInfoSpawn, buildRoomTurnSpawn, buildSpawn, type SpawnOptions } from '../../src/shared/cli-args';
 
 const SESSION = '3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b';
 const HOSTILE = '/tmp/a b"; touch /tmp/pwned; "';
@@ -163,5 +163,34 @@ describe('buildRoomTurnSpawn model and effort', () => {
     const spec = buildRoomTurnSpawn('claude', options({ model: 'a b"; touch /tmp/pwned' }));
     expect(spec.args[3]).toBe(SCRIPT);
     expect(spec.args).toContain('a b"; touch /tmp/pwned');
+  });
+});
+
+describe('buildInfoSpawn', () => {
+  const base = { cwd: '/work/project', platform: 'darwin', env: { SHELL: '/bin/bash', PATH: '/usr/bin' } };
+
+  it('runs the binary through the login shell with the arguments as separate entries', () => {
+    const spec = buildInfoSpawn('codex', ['debug', 'models'], base);
+    expect(spec.file).toBe('/bin/bash');
+    expect(spec.args).toEqual(['-l', '-i', '-c', SCRIPT, 'agent-shell', 'codex', 'debug', 'models']);
+    expect(spec.cwd).toBe('/work/project');
+  });
+
+  it('runs the binary directly on win32 and without a login shell', () => {
+    expect(buildInfoSpawn('claude', ['--help'], { ...base, platform: 'win32' })).toMatchObject({ file: 'claude', args: ['--help'] });
+    expect(buildInfoSpawn('claude', ['--help'], { ...base, loginShell: false })).toMatchObject({ file: 'claude', args: ['--help'] });
+  });
+
+  it('uses the binary override and refuses to start a real CLI in test mode', () => {
+    const env = { ...base.env, AIAW_CLAUDE_BIN: '/stub/claude' };
+    expect(buildInfoSpawn('claude', ['--help'], { ...base, env, loginShell: false }).file).toBe('/stub/claude');
+    const testEnv = { ...base.env, AIAW_USER_DATA: '/tmp/profile' };
+    expect(() => buildInfoSpawn('claude', ['--help'], { ...base, env: testEnv })).toThrow(/test mode/);
+  });
+
+  it('needs a cwd and drops CLAUDE_CODE_CHILD_SESSION', () => {
+    expect(() => buildInfoSpawn('claude', ['--help'], { ...base, cwd: '' })).toThrow(/cwd/);
+    const env = { ...base.env, CLAUDE_CODE_CHILD_SESSION: '1', HOME: '/h' };
+    expect(buildInfoSpawn('claude', ['--help'], { ...base, env }).env).toEqual({ SHELL: '/bin/bash', PATH: '/usr/bin', HOME: '/h' });
   });
 });

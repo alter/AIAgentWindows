@@ -165,6 +165,13 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomTerminalResize, { id: ID, cols: 80 }).ok).toBe(false);
   });
 
+  it('room:models takes no payload', () => {
+    expect(INVOKE_CHANNELS.roomModels).toBe('room:models');
+    expect(validateRequest(INVOKE_CHANNELS.roomModels, undefined)).toEqual({ ok: true, value: undefined });
+    expect(validateRequest(INVOKE_CHANNELS.roomModels, {}).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomModels, null).ok).toBe(false);
+  });
+
   it('the room event channels are events, not invokes', () => {
     expect(isEventChannel(EVENT_CHANNELS.roomTerminalData)).toBe(true);
     expect(isEventChannel(EVENT_CHANNELS.roomEvent)).toBe(true);

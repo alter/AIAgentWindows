@@ -10,6 +10,7 @@ import {
   type PtyExitEvent,
   type SiteStateEvent,
 } from '../shared/ipc';
+import type { RoomModels } from '../shared/cli-models';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
 import type { RoomOpenResult, RoomSnapshot, RoomStartResult } from '../shared/room-view';
 
@@ -43,6 +44,7 @@ const api: AppApi = {
   roomCarry: (id, what) => ipcRenderer.invoke(INVOKE_CHANNELS.roomCarry, { id, what }) as Promise<boolean>,
   roomCopyFinal: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomCopyFinal) as Promise<boolean>,
   roomResume: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomResume) as Promise<void>,
+  roomModels: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomModels) as Promise<RoomModels>,
   roomTerminalBacklog: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalBacklog, { id }) as Promise<PtyBacklog>,
   roomTerminalWrite: (id, data) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalWrite, { id, data }) as Promise<void>,
   roomTerminalResize: (id, cols, rows) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalResize, { id, cols, rows }) as Promise<void>,

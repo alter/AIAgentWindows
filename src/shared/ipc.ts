@@ -1,5 +1,6 @@
 // ipc.ts
 import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
+import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
@@ -23,6 +24,7 @@ export const INVOKE_CHANNELS = {
   roomStop: 'room:stop',
   roomCarry: 'room:carry',
   roomResume: 'room:resume',
+  roomModels: 'room:models',
   roomCopyFinal: 'room:copy-final',
   roomTerminalBacklog: 'room:terminal-backlog',
   roomTerminalWrite: 'room:terminal-write',
@@ -95,6 +97,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomStop]: undefined;
   [INVOKE_CHANNELS.roomCarry]: { id: string; what: CarryWhat };
   [INVOKE_CHANNELS.roomResume]: undefined;
+  [INVOKE_CHANNELS.roomModels]: undefined;
   [INVOKE_CHANNELS.roomCopyFinal]: undefined;
   [INVOKE_CHANNELS.roomTerminalBacklog]: { id: string };
   [INVOKE_CHANNELS.roomTerminalWrite]: { id: string; data: string };
@@ -126,6 +129,7 @@ export interface AppApi {
   roomStop(): Promise<void>;
   roomCarry(id: string, what: CarryWhat): Promise<boolean>;
   roomResume(): Promise<void>;
+  roomModels(): Promise<RoomModels>;
   roomCopyFinal(): Promise<boolean>;
   roomTerminalBacklog(id: string): Promise<PtyBacklog>;
   roomTerminalWrite(id: string, data: string): Promise<void>;
@@ -221,6 +225,7 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       return (CARRY_KINDS as readonly unknown[]).includes(what) ? { id, what: what as CarryWhat } : null;
     }),
   [INVOKE_CHANNELS.roomResume]: noPayload,
+  [INVOKE_CHANNELS.roomModels]: noPayload,
   [INVOKE_CHANNELS.roomCopyFinal]: noPayload,
   [INVOKE_CHANNELS.roomTerminalBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.roomTerminalWrite]: parseWrite,

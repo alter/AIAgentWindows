@@ -19,8 +19,8 @@ export const OWNER_ID = 'owner';
 export const ROOM_ID = 'room';
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const PARTICIPANT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
-const MODEL_PATTERN = /^[A-Za-z0-9._:[\]-]{1,64}$/;
-const EFFORT_PATTERN = /^[a-z]{1,16}$/;
+export const MODEL_PATTERN = /^[A-Za-z0-9._:[\]-]{1,64}$/;
+export const EFFORT_PATTERN = /^[a-z]{1,16}$/;
 const ENTRY_KINDS: readonly RoomEntryKind[] = ['prompt', 'reply', 'final', 'error'];
 const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stopped', 'failed'];
 

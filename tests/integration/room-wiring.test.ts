@@ -9,6 +9,7 @@ import type { RoomTerminals } from '../../src/main/room-drivers';
 import { listRecords, readRecord, writeRecord } from '../../src/main/room-archive';
 import { RoomService } from '../../src/main/room-service';
 import { emptyState } from '../../src/shared/agents';
+import type { RoomModels } from '../../src/shared/cli-models';
 import { EVENT_CHANNELS } from '../../src/shared/ipc';
 import type { RoomConfig, RoomEvent, RoomParticipant } from '../../src/shared/room-model';
 
@@ -105,6 +106,7 @@ describe('carry into a working session', () => {
 });
 
 const copied: string[] = [];
+const SUGGESTIONS: RoomModels = { claude: { models: ['opus'], efforts: ['high'] }, codex: { models: [{ id: 'gpt-a', efforts: ['low'] }] } };
 
 function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [], terminal: RoomTerminals = noTerminal(), debugRoot?: string): { room: RoomService; seen: RoomEvent[] } {
   const seen: RoomEvent[] = [];
@@ -119,6 +121,7 @@ function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [],
       return id !== 'gone';
     },
     copy: (text) => copied.push(text),
+    models: async () => SUGGESTIONS,
   });
   services.push(room);
   return { room, seen };
@@ -251,6 +254,11 @@ describe('room service', () => {
     const final = room.state().entries.find((entry) => entry.kind === 'final');
     expect(copied).toEqual([final?.text]);
     expect(copied[0]?.length).toBeGreaterThan(0);
+  });
+
+  it('hands the renderer the suggestions its dependency reads', async () => {
+    const { room } = service(async () => ({ turn: async () => 'x', reset: async () => undefined, dispose: () => undefined }));
+    expect(await room.models()).toBe(SUGGESTIONS);
   });
 
   it('carry is false when there is nothing to carry', () => {

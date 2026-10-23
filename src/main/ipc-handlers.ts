@@ -32,6 +32,7 @@ function buildHandlers(controller: AgentController, room: RoomService): Handlers
     [INVOKE_CHANNELS.roomStop]: () => room.stop(),
     [INVOKE_CHANNELS.roomCarry]: ({ id, what }) => room.carry(id, what),
     [INVOKE_CHANNELS.roomResume]: () => room.resume(),
+    [INVOKE_CHANNELS.roomModels]: () => room.models(),
     [INVOKE_CHANNELS.roomCopyFinal]: () => room.copyFinal(),
     [INVOKE_CHANNELS.roomTerminalBacklog]: ({ id }) => room.terminalBacklog(id),
     [INVOKE_CHANNELS.roomTerminalWrite]: ({ id, data }) => room.terminalWrite(id, data),

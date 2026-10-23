@@ -15,6 +15,7 @@ import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { createRoomDrivers, type RoomDrivers } from './room-drivers';
 import { RoomService } from './room-service';
+import { createModelCatalog } from './cli-models';
 import { createSiteSeats } from './site-seats';
 import { adapterFor } from './site-adapters/registry';
 import { installMenu } from './menu';
@@ -131,6 +132,7 @@ async function start(): Promise<void> {
     },
     paste: (id, text) => active.paste(id, text),
     copy: (text) => clipboard.writeText(text),
+    models: createModelCatalog({ cwd: roomsDir, platform: process.platform, loginShell: roomLoginShell(process.env), env: process.env }),
   });
   room = roomService;
   await roomService.init();

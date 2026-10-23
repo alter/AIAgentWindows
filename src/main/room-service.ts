@@ -1,6 +1,7 @@
 // room-service.ts
 import path from 'node:path';
 import { Room, type DriverFactory, type RoomContinuation } from './room';
+import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { listRecords, readRecord, stopInterrupted } from './room-archive';
 import { isRoomId, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
@@ -26,6 +27,7 @@ export interface RoomServiceDeps {
   terminal: RoomTerminals;
   paste(agentId: string, text: string): boolean;
   copy(text: string): void;
+  models(): Promise<RoomModels>;
   now?(): number;
   newId?(): string;
 }
@@ -139,6 +141,10 @@ export class RoomService {
     if (text === null) return false;
     this.deps.copy(text);
     return true;
+  }
+
+  models(): Promise<RoomModels> {
+    return this.deps.models();
   }
 
   shutdown(): Promise<void> {

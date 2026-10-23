@@ -33,6 +33,12 @@ WRITE-SET
   src/shared/room-model.ts
   src/shared/room-view.ts
   src/shared/cli-args.ts
+  src/shared/cli-models.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/cli-models.ts
+  src/main/ipc-handlers.ts
+  src/main/index.ts
   src/main/room.ts
   src/main/room-drivers.ts
   src/main/room-service.ts
@@ -43,6 +49,11 @@ WRITE-SET
   tests/unit/cli-args.test.ts
   tests/unit/room-sessions.test.ts
   tests/integration/room.test.ts
+  tests/integration/room-wiring.test.ts
+  tests/integration/cli-models.test.ts
+  tests/unit/cli-models.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/fixtures/
   tests/full/room.spec.ts
   docs/tech/claude-code@2.1.306.md
   docs/tech/codex@0.163.0.md

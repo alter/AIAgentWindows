@@ -3,6 +3,44 @@ import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
+const STUB_HELP = [
+  'Usage: stub [options] [prompt]',
+  '',
+  'Options:',
+  '  --effort <level>                      Effort level for the current session',
+  '                                        (low, medium, high, xhigh, max)',
+  '  --model <model>                       Model for the current session. Provide',
+  '                                        an alias for the latest model (e.g.',
+  "                                        'fable', 'opus', or 'sonnet') or a",
+  "                                        model's full name.",
+  '  -n, --name <name>                     Set a display name',
+  '',
+].join('\n');
+
+const STUB_CATALOG = {
+  models: [
+    { slug: 'stub-gpt-a', visibility: 'list', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] },
+    { slug: 'stub-gpt-hidden', visibility: 'hide', supported_reasoning_levels: [{ effort: 'low' }] },
+    { slug: 'stub-gpt-b', visibility: 'list', supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }, { effort: 'ultra' }] },
+  ],
+};
+
+export function infoOf(argv) {
+  if (argv.length === 1 && argv[0] === '--help') return STUB_HELP;
+  if (argv.length === 2 && argv[0] === 'debug' && argv[1] === 'models') return JSON.stringify(STUB_CATALOG) + '\n';
+  return null;
+}
+
+export async function runInfo(text, argv) {
+  const file = process.env.AIAW_STUB_ARGV_LOG;
+  if (file) appendFileSync(file, JSON.stringify({ argv, info: true, pid: process.pid }) + '\n');
+  if (process.env.AIAW_STUB_NOISE) process.stdout.write('shell start-up noise, not json\n');
+  if (process.env.AIAW_STUB_HANG) await hang();
+  process.stdout.write(text);
+  await new Promise((resolve) => process.stdout.write('', resolve));
+  return 0;
+}
+
 export function printKindOf(argv) {
   if (argv.includes('-p') || argv.includes('--print')) return 'claude';
   if (argv[0] === 'exec') return 'codex';

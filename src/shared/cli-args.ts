@@ -95,6 +95,8 @@ function roomCliArgs(kind: CliKind, options: SpawnOptions): string[] {
   return [...ROOM_CODEX_ARGS, ...codexChoice(options), ...resume, PROMPT_FROM_STDIN];
 }
 
+export type InfoOptions = Pick<SpawnOptions, 'cwd' | 'platform' | 'loginShell' | 'env'>;
+
 function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
   const override = env[BIN_OVERRIDE[kind]];
   if (override) return override;
@@ -104,10 +106,9 @@ function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
   return kind;
 }
 
-function spawnSpec(kind: CliKind, options: SpawnOptions, room: boolean): SpawnSpec {
+function wrapSpec(kind: CliKind, args: string[], options: InfoOptions): SpawnSpec {
   if (options.cwd.length === 0) throw new Error('cwd is required');
   const bin = binaryFor(kind, options.env);
-  const args = room ? roomCliArgs(kind, options) : workingCliArgs(kind, options);
   const env = childEnv(options.env);
   if (options.platform === 'win32' || options.loginShell === false) return { file: bin, args, cwd: options.cwd, env };
   const shell = options.env.SHELL || DEFAULT_SHELL;
@@ -120,9 +121,13 @@ function spawnSpec(kind: CliKind, options: SpawnOptions, room: boolean): SpawnSp
 }
 
 export function buildSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
-  return spawnSpec(kind, options, false);
+  return wrapSpec(kind, workingCliArgs(kind, options), options);
 }
 
 export function buildRoomTurnSpawn(kind: CliKind, options: SpawnOptions): SpawnSpec {
-  return spawnSpec(kind, options, true);
+  return wrapSpec(kind, roomCliArgs(kind, options), options);
+}
+
+export function buildInfoSpawn(kind: CliKind, args: readonly string[], options: InfoOptions): SpawnSpec {
+  return wrapSpec(kind, [...args], options);
 }
