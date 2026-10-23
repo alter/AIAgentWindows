@@ -1,5 +1,6 @@
 // room-view.ts
 import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type AgentKind, type SiteKind } from './agents';
+import { emptyRoomModels, type RoomModels } from './cli-models';
 import { renderCarryHistory } from './room-history';
 import {
   OWNER_ID,
@@ -7,6 +8,7 @@ import {
   ROOM_PARTICIPANTS,
   defaultFinalizerId,
   instanceLabel,
+  nextParticipantId,
   roomPlan,
   parseRoomConfig,
   type RoomConfigResult,
@@ -144,6 +146,46 @@ function rowParticipant(row: FormRow): RoomParticipant {
 function tickedParticipants(checked: readonly string[], rows: readonly FormRow[]): RoomParticipant[] {
   const sites = ROOM_PARTICIPANTS.filter((item) => isSiteKind(item.kind) && checked.includes(item.id));
   return [...rows.filter((row) => checked.includes(row.id)).map(rowParticipant), ...sites];
+}
+
+export function defaultRows(): FormRow[] {
+  return DEFAULT_ROWS.map((row) => ({ ...row }));
+}
+
+export function addRow(rows: readonly FormRow[], kind: AgentKind): FormRow[] {
+  if (isSiteKind(kind)) return [...rows];
+  return [...rows, { id: nextParticipantId(kind, rows.map((row) => row.id)), kind }];
+}
+
+export function removeRow(rows: readonly FormRow[], id: string): FormRow[] {
+  return rows.filter((row) => row.id !== id);
+}
+
+export function modelSuggestions(kind: AgentKind, models: RoomModels = emptyRoomModels()): string[] {
+  if (kind === 'claude') return [...models.claude.models];
+  if (kind === 'codex') return models.codex.models.map((item) => item.id);
+  return [];
+}
+
+function withCurrent(levels: readonly string[], current: string): string[] {
+  return current === '' || levels.includes(current) ? [...levels] : [...levels, current];
+}
+
+export function effortChoices(kind: AgentKind, model: string, current: string, models: RoomModels = emptyRoomModels()): string[] {
+  if (kind === 'claude') return withCurrent(models.claude.efforts, current);
+  if (kind !== 'codex') return [];
+  const known = models.codex.models.find((item) => item.id === model.trim());
+  const union = [...new Set(models.codex.models.flatMap((item) => item.efforts))];
+  return withCurrent(known === undefined ? union : known.efforts, current);
+}
+
+export interface FinalizerChoice {
+  id: string;
+  label: string;
+}
+
+export function finalizerChoices(checked: readonly string[], rows: readonly FormRow[] = DEFAULT_ROWS): FinalizerChoice[] {
+  return tickedParticipants(checked, rows).map(({ id, label }) => ({ id, label }));
 }
 
 export function resolveFinalizer(checked: readonly string[], previous: string, rows: readonly FormRow[] = DEFAULT_ROWS): string {

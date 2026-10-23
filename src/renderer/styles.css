@@ -309,6 +309,13 @@ body {
 .room-list { max-width: min(520px, 60vw); text-overflow: ellipsis; }
 .room-row label.unavailable { opacity: 0.55; }
 .room-unavailable { font-size: 11px; }
+.room-people { gap: 6px 8px; }
+.room-participant { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 6px; font-size: 12px; }
+.room-participant input[type="text"] { width: 120px; padding: 2px 4px; font: inherit; color: inherit; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; }
+.room-participant select { max-width: 96px; font-size: 12px; }
+.room-row-remove { padding: 0 6px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; cursor: pointer; opacity: 0.7; }
+.room-row-remove:disabled { opacity: 0.3; cursor: default; }
+.room-add { padding: 2px 10px; font-size: 12px; }
 .room-row select, .room-row input[type="number"] { font: inherit; }
 .room-button {
   padding: 6px 14px;

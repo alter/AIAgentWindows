@@ -1,5 +1,6 @@
 // cli-models.ts
 import { execFile } from 'node:child_process';
+import { mkdir } from 'node:fs/promises';
 import type { CliKind } from '../shared/agents';
 import { buildInfoSpawn, type InfoOptions } from '../shared/cli-args';
 import { parseClaudeHelpModels, parseCodexCatalogText, type RoomModels } from '../shared/cli-models';
@@ -31,6 +32,7 @@ function capture(kind: CliKind, args: string[], deps: ModelCatalogDeps): Promise
 }
 
 async function read(deps: ModelCatalogDeps): Promise<RoomModels> {
+  await mkdir(deps.cwd, { recursive: true }).catch(() => undefined);
   const [help, catalog] = await Promise.all([capture('claude', ['--help'], deps), capture('codex', ['debug', 'models'], deps)]);
   return { claude: parseClaudeHelpModels(help ?? ''), codex: parseCodexCatalogText(catalog) };
 }

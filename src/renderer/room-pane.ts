@@ -1,14 +1,44 @@
 // room-pane.ts
-import { isCliKind, type Agent } from '../shared/agents';
+import { AGENT_LABELS, isCliKind, isSiteKind, type Agent, type AgentKind } from '../shared/agents';
+import { emptyRoomModels, type RoomModels } from '../shared/cli-models';
 import type { PtyDataEvent } from '../shared/ipc';
 import { MAX_ROUNDS, MIN_ROUNDS, ROOM_PARTICIPANTS, type RoomEvent, type RoomListItem, type RoomMode } from '../shared/room-model';
-import { applyRoomEvent, emptyRoomSnapshot, formToConfig, participantAvailability, resolveFinalizer, roomListOption, roomProgress, type CarryWhat, type RoomFormValues, type RoomSnapshot } from '../shared/room-view';
+import {
+  addRow,
+  applyRoomEvent,
+  defaultRows,
+  effortChoices,
+  emptyRoomSnapshot,
+  finalizerChoices,
+  formToConfig,
+  modelSuggestions,
+  participantAvailability,
+  removeRow,
+  resolveFinalizer,
+  roomListOption,
+  roomProgress,
+  type CarryWhat,
+  type FormRow,
+  type RoomFormValues,
+  type RoomSnapshot,
+} from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
 import { RoomFeed } from './room-feed';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
 
 const DEFAULT_TIMEOUT_MINUTES = '10';
+const CLI_KINDS: readonly AgentKind[] = ['claude', 'codex'];
+
+interface RowView {
+  id: string;
+  kind: AgentKind;
+  root: HTMLElement;
+  box: HTMLInputElement;
+  model: HTMLInputElement;
+  effort: HTMLSelectElement;
+  remove: HTMLButtonElement;
+}
 
 function labeled(text: string, control: HTMLElement): HTMLLabelElement {
   const label = el('label');
@@ -27,6 +57,10 @@ export class RoomPane {
   private readonly feed = new RoomFeed(() => void this.onCopyFinal());
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly boxes = new Map<string, HTMLInputElement>();
+  private readonly people = el('div', 'room-row room-people');
+  private readonly datalists = new Map<AgentKind, HTMLDataListElement>();
+  private rows: RowView[] = [];
+  private models: RoomModels = emptyRoomModels();
   private readonly mode = el('select');
   private readonly rounds = el('input');
   private readonly timeout = el('input');
@@ -54,6 +88,7 @@ export class RoomPane {
   private readonly observer = new ResizeObserver(() => {
     for (const pane of this.sessions.values()) pane.refit();
   });
+  private readonly sites: HTMLElement[] = [];
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
   private debugDir: string | null = null;
   private openedId: string | null = null;
@@ -86,6 +121,7 @@ export class RoomPane {
     this.element.append(el('h2', 'room-title', 'Room'), this.archive(), this.progress, this.feed.element, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
+    void this.loadModels();
   }
 
   show(): void {
@@ -193,6 +229,7 @@ export class RoomPane {
   }
 
   private applyForm(form: RoomFormValues): void {
+    this.renderRows(form.rows ?? defaultRows(), form.checked);
     for (const [id, input] of this.boxes) input.checked = form.checked.includes(id) && !input.disabled;
     this.prompt.value = form.prompt;
     this.mode.value = form.mode;
@@ -200,13 +237,19 @@ export class RoomPane {
     this.timeout.value = form.timeoutMinutes;
     this.debugSites.checked = form.debugSites ?? false;
     this.renderFinalizer();
-    this.finalizer.value = resolveFinalizer(this.checkedIds(), form.finalizerId ?? '');
+    this.finalizer.value = resolveFinalizer(this.checkedIds(), form.finalizerId ?? '', this.currentRows());
   }
 
   private controls(): HTMLElement {
     const box = el('div', 'room-controls');
-    const people = el('div', 'room-row');
-    for (const participant of ROOM_PARTICIPANTS) {
+    this.people.dataset['room'] = 'participants';
+    for (const kind of CLI_KINDS) {
+      const list = el('datalist');
+      list.id = `room-models-${kind}`;
+      this.datalists.set(kind, list);
+      box.append(list);
+    }
+    for (const participant of ROOM_PARTICIPANTS.filter((item) => isSiteKind(item.kind))) {
       const input = el('input');
       input.type = 'checkbox';
       input.dataset['participant'] = participant.id;
@@ -220,8 +263,9 @@ export class RoomPane {
         item.classList.add('unavailable');
         item.append(el('span', 'room-unavailable', 'no adapter'));
       }
-      people.append(item);
+      this.sites.push(item);
     }
+    this.renderRows(defaultRows(), []);
     this.mode.dataset['room'] = 'mode';
     for (const [value, text] of [['broadcast', 'To all'], ['relay', 'Relay']] as const) {
       const option = el('option', undefined, text);
@@ -254,7 +298,7 @@ export class RoomPane {
     this.carryHistory.type = 'button';
     this.carryHistory.dataset['room'] = 'carry-history';
     carry.append(field('Working session', this.target), this.carryFinal, this.carryHistory);
-    box.append(this.prompt, people, settings, this.status, this.message, carry);
+    box.append(this.prompt, this.people, settings, this.status, this.message, carry);
     this.start.addEventListener('click', () => void this.onStart());
     this.stop.addEventListener('click', () => void api.roomStop());
     this.mode.addEventListener('change', () => this.renderState());
@@ -264,14 +308,101 @@ export class RoomPane {
   }
 
   private checkedIds(): string[] {
-    return [...this.boxes].filter(([, input]) => input.checked).map(([id]) => id);
+    const ticked = [...this.boxes].filter(([, input]) => input.checked).map(([id]) => id);
+    return [...this.rows.filter((view) => view.box.checked).map((view) => view.id), ...ticked];
+  }
+
+  private currentRows(): FormRow[] {
+    return this.rows.map((view) => ({ id: view.id, kind: view.kind, model: view.model.value, effort: view.effort.value }));
+  }
+
+  private async loadModels(): Promise<void> {
+    this.models = await api.roomModels().catch(() => emptyRoomModels());
+    for (const [kind, list] of this.datalists) {
+      list.replaceChildren(
+        ...modelSuggestions(kind, this.models).map((name) => {
+          const option = el('option');
+          option.value = name;
+          return option;
+        }),
+      );
+    }
+    for (const view of this.rows) this.refreshEfforts(view);
+  }
+
+  private refreshEfforts(view: RowView): void {
+    const current = view.effort.value;
+    const none = el('option', undefined, 'CLI default');
+    none.value = '';
+    view.effort.replaceChildren(none);
+    for (const level of effortChoices(view.kind, view.model.value, current, this.models)) {
+      const option = el('option', undefined, level);
+      option.value = level;
+      view.effort.append(option);
+    }
+    view.effort.value = current;
+  }
+
+  private buildRow(row: FormRow, checked: boolean): RowView {
+    const root = el('div', 'room-participant');
+    root.dataset['row'] = row.id;
+    const box = el('input');
+    box.type = 'checkbox';
+    box.checked = checked;
+    box.dataset['participant'] = row.id;
+    const model = el('input');
+    model.type = 'text';
+    model.value = row.model ?? '';
+    model.placeholder = 'model';
+    model.setAttribute('list', `room-models-${row.kind}`);
+    model.dataset['rowField'] = 'model';
+    model.spellcheck = false;
+    const effort = el('select');
+    effort.dataset['rowField'] = 'effort';
+    const remove = el('button', 'room-row-remove', '\u00d7');
+    remove.type = 'button';
+    remove.title = 'Remove';
+    remove.dataset['rowField'] = 'remove';
+    const view: RowView = { id: row.id, kind: row.kind, root, box, model, effort, remove };
+    root.append(labeled(AGENT_LABELS[row.kind], box), model, effort, remove);
+    const none = el('option', undefined, 'CLI default');
+    none.value = '';
+    effort.append(none);
+    if (row.effort !== undefined && row.effort !== '') {
+      effort.append(Object.assign(el('option', undefined, row.effort), { value: row.effort }));
+      effort.value = row.effort;
+    }
+    box.addEventListener('change', () => this.renderFinalizer());
+    model.addEventListener('input', () => {
+      this.refreshEfforts(view);
+      this.renderFinalizer();
+    });
+    effort.addEventListener('change', () => this.renderFinalizer());
+    remove.addEventListener('click', () => this.renderRows(removeRow(this.currentRows(), row.id), this.checkedIds()));
+    return view;
+  }
+
+  private renderRows(rows: readonly FormRow[], checked: readonly string[]): void {
+    this.rows = rows.map((row) => this.buildRow(row, checked.includes(row.id)));
+    for (const view of this.rows) this.refreshEfforts(view);
+    const adders = CLI_KINDS.map((kind) => {
+      const button = el('button', 'room-button room-add', `Add ${AGENT_LABELS[kind]}`);
+      button.type = 'button';
+      button.dataset['room'] = `add-${kind}`;
+      button.addEventListener('click', () => this.renderRows(addRow(this.currentRows(), kind), this.checkedIds()));
+      return button;
+    });
+    this.people.replaceChildren(...this.rows.map((view) => view.root), ...this.sites, ...adders);
+    this.renderFinalizer();
+    this.renderState();
   }
 
   private renderFinalizer(): void {
     const checked = this.checkedIds();
-    const chosen = resolveFinalizer(checked, this.finalizer.value);
+    const rows = this.currentRows();
+    const chosen = resolveFinalizer(checked, this.finalizer.value, rows);
     this.finalizer.replaceChildren();
-    for (const participant of ROOM_PARTICIPANTS.filter((item) => checked.includes(item.id))) {
+    for (const participant of finalizerChoices(checked, rows)) {
       const option = el('option', undefined, participant.label);
       option.value = participant.id;
       this.finalizer.append(option);
@@ -287,6 +418,7 @@ export class RoomPane {
       rounds: this.rounds.value,
       timeoutMinutes: this.timeout.value,
       checked: this.checkedIds(),
+      rows: this.currentRows(),
       finalizerId: this.finalizer.value,
       debugSites: this.debugSites.checked,
     });
@@ -376,10 +508,13 @@ export class RoomPane {
       const input = this.boxes.get(participant.id);
       if (input !== undefined) input.disabled = busy || !participantAvailability(participant).available;
     }
+    for (const view of this.rows) for (const control of [view.box, view.model, view.effort, view.remove]) control.disabled = busy;
+    for (const button of this.people.querySelectorAll<HTMLButtonElement>('.room-add')) button.disabled = busy;
     const canCarry = !busy && this.snapshot.roomId !== null && this.target.value.length > 0;
     this.carryFinal.disabled = !canCarry;
     this.carryHistory.disabled = !canCarry;
-    const names = ROOM_PARTICIPANTS.filter((item) => running.includes(item.id)).map((item) => item.label);
+    const labels = new Map(this.snapshot.plan?.participants.map((item) => [item.id, item.label]) ?? []);
+    const names = running.map((id) => labels.get(id) ?? id);
     const where = (historyPath === null ? '' : ` History: ${historyPath}`) + (this.debugDir === null ? '' : ` Debug: ${this.debugDir}`);
     this.status.textContent =
       phase === 'idle' ? 'Idle.' : `${busy ? (paused.length > 0 ? 'Waiting for you' : `Running ${names.join(', ')}`) : phase} (${completed}/${total}).${where}`;

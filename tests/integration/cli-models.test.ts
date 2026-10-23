@@ -17,9 +17,9 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-function catalog(extra: Record<string, string> = {}, timeoutMs?: number): ReturnType<typeof createModelCatalog> {
+function catalog(extra: Record<string, string> = {}, timeoutMs?: number, cwd: string = dir): ReturnType<typeof createModelCatalog> {
   return createModelCatalog({
-    cwd: dir,
+    cwd,
     platform: 'darwin',
     loginShell: false,
     timeoutMs,
@@ -33,6 +33,12 @@ describe('model catalog from the stub CLIs', () => {
     expect(models.claude).toEqual({ models: ['fable', 'opus', 'sonnet'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] });
     expect(models.codex.models.map((model) => model.id)).toEqual(['stub-gpt-a', 'stub-gpt-b']);
     expect(models.codex.models[1]?.efforts).toContain('ultra');
+  });
+
+  it('reads the catalog although the working directory does not exist yet, as on a fresh profile', async () => {
+    const models = await catalog({}, undefined, path.join(dir, 'shared', 'rooms'))();
+    expect(models.claude.models).toContain('opus');
+    expect(models.codex.models.length).toBeGreaterThan(0);
   });
 
   it('starts each CLI once per catalog however often it is asked', async () => {

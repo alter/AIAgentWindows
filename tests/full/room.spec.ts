@@ -119,6 +119,32 @@ test('a 2-round relay shows each round, the final turn, per-participant chips an
   }
 });
 
+test('a second Claude row with a model and effort is a separate participant of the started run', async () => {
+  const { app, page } = await open();
+  try {
+    await field(page, 'add-claude').click();
+    const second = page.locator('[data-row="claude-2"]');
+    await expect(second).toBeVisible();
+    await second.locator('[data-row-field="model"]').fill('sonnet');
+    await expect(second.locator('[data-row-field="effort"] option[value="medium"]')).toHaveCount(1);
+    await second.locator('[data-row-field="effort"]').selectOption('medium');
+    await second.locator('input[data-participant="claude-2"]').check();
+    await page.locator('input[data-participant="claude"]').check();
+    await expect(field(page, 'finalizer').locator('option')).toHaveText(['Claude Code', 'Claude Code \u00b7 sonnet \u00b7 medium']);
+    await field(page, 'prompt').fill('two claude rows');
+    await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'rounds').fill('1');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done', finishedWithin(2, 1));
+    const authors = (await historyHeadings(page)).map((heading) => heading.split(' | ')[0]);
+    expect(authors).toEqual(expect.arrayContaining(['Claude Code', 'Claude Code \u00b7 sonnet \u00b7 medium']));
+    await second.locator('[data-row-field="remove"]').click();
+    await expect(second).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test('the finalizer lists the ticked participants, defaults to Claude Code and writes the final answer', async () => {
   const { app, page } = await open();
   try {

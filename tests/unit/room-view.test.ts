@@ -2,8 +2,15 @@
 import { describe, expect, it } from 'vitest';
 import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
 import type { RoomEntry, RoomEvent, RoomPlan, RoomRecord, RoomRecordConfig } from '../../src/shared/room-model';
+import type { RoomModels } from '../../src/shared/cli-models';
 import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
 import {
+  addRow,
+  defaultRows,
+  effortChoices,
+  finalizerChoices,
+  modelSuggestions,
+  removeRow,
   applyRoomEvent,
   carryText,
   emptyRoomSnapshot,
@@ -843,5 +850,65 @@ describe('roomListOption', () => {
 
   it('a room with an empty prompt still has a label', () => {
     expect(roomListOption({ ...readable, firstPrompt: '' }).label.length).toBeGreaterThan(0);
+  });
+});
+
+describe('participant row logic', () => {
+  const models: RoomModels = {
+    claude: { models: ['opus', 'sonnet'], efforts: ['low', 'high'] },
+    codex: {
+      models: [
+        { id: 'gpt-a', efforts: ['low', 'medium'] },
+        { id: 'gpt-b', efforts: ['medium', 'xhigh'] },
+      ],
+    },
+  };
+
+  it('adds a row of a CLI kind with the next free id and refuses a site kind', () => {
+    const first = addRow(defaultRows(), 'claude');
+    expect(first.map((row) => row.id)).toEqual(['claude', 'codex', 'claude-2']);
+    expect(addRow(removeRow(first, 'claude'), 'claude').map((row) => row.id)).toEqual(['codex', 'claude-2', 'claude']);
+    expect(addRow(first, 'grok')).toEqual(first);
+  });
+
+  it('removes only the row with that id', () => {
+    expect(removeRow(addRow(defaultRows(), 'codex'), 'codex').map((row) => row.id)).toEqual(['claude', 'codex-2']);
+    expect(removeRow(defaultRows(), 'nobody')).toEqual(defaultRows());
+  });
+
+  it('suggests models of the kind, and none for a site or when the CLI could not be read', () => {
+    expect(modelSuggestions('claude', models)).toEqual(['opus', 'sonnet']);
+    expect(modelSuggestions('codex', models)).toEqual(['gpt-a', 'gpt-b']);
+    expect(modelSuggestions('grok', models)).toEqual([]);
+    expect(modelSuggestions('claude')).toEqual([]);
+  });
+
+  it('claude offers its levels; codex offers the levels of the chosen model or the union when the model is unknown', () => {
+    expect(effortChoices('claude', 'anything', '', models)).toEqual(['low', 'high']);
+    expect(effortChoices('codex', 'gpt-b', '', models)).toEqual(['medium', 'xhigh']);
+    expect(effortChoices('codex', ' gpt-a ', '', models)).toEqual(['low', 'medium']);
+    expect(effortChoices('codex', 'my-own', '', models)).toEqual(['low', 'medium', 'xhigh']);
+    expect(effortChoices('codex', '', '', models)).toEqual(['low', 'medium', 'xhigh']);
+    expect(effortChoices('grok', '', '', models)).toEqual([]);
+  });
+
+  it('keeps a saved effort the CLI no longer lists, and offers nothing else when no levels are known', () => {
+    expect(effortChoices('claude', '', 'ultra', models)).toEqual(['low', 'high', 'ultra']);
+    expect(effortChoices('claude', '', 'high', models)).toEqual(['low', 'high']);
+    expect(effortChoices('claude', '', '')).toEqual([]);
+    expect(effortChoices('codex', 'x', 'high')).toEqual(['high']);
+  });
+
+  it('lists the finalizer candidates by instance label in row order, sites last', () => {
+    const rows = [
+      { id: 'claude', kind: 'claude' as const, model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude' as const },
+    ];
+    expect(finalizerChoices(['grok', 'claude-2', 'claude'], rows)).toEqual([
+      { id: 'claude', label: 'Claude Code · opus · high' },
+      { id: 'claude-2', label: 'Claude Code' },
+      { id: 'grok', label: 'Grok' },
+    ]);
+    expect(finalizerChoices(['codex']).map((item) => item.id)).toEqual(['codex']);
   });
 });
