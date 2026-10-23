@@ -489,6 +489,33 @@ test('the feed is grouped by round, entries are collapsed spoilers, the final is
   }
 });
 
+test("the final's Copy rests for 3 s after a copy", async () => {
+  const { app, page } = await open();
+  try {
+    await run(page, 'relay', 2, 'copy rest question');
+    const final = page.locator('[data-section="final"] details.room-entry.kind-final');
+    const expected = (await final.locator('.room-entry-text').textContent()) ?? '';
+    expect(expected.length).toBeGreaterThan(0);
+    const buttons = final.locator('button[data-room="copy-final"]');
+    await expect(buttons).toHaveCount(2);
+    await app.evaluate(({ clipboard }) => clipboard.writeText('sentinel'));
+    await buttons.nth(0).click();
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(expected);
+    for (const index of [0, 1]) {
+      await expect(buttons.nth(index)).toHaveAttribute('aria-disabled', 'true');
+      await expect(buttons.nth(index)).toHaveAttribute('data-copied', /.*/);
+    }
+    await expect(field(page, 'message')).toHaveText('');
+    expect(await buttons.nth(0).evaluate((node) => node === document.activeElement)).toBe(true);
+    for (const index of [0, 1]) {
+      await expect(buttons.nth(index)).not.toHaveAttribute('aria-disabled', 'true', { timeout: 6000 });
+      await expect(buttons.nth(index)).not.toHaveAttribute('data-copied', /.*/);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 test('a new entry does not close or rebuild an entry the owner opened', async () => {
   const { app, page } = await open();
   try {

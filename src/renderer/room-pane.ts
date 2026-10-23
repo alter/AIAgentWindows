@@ -43,7 +43,7 @@ function field(text: string, control: HTMLElement): HTMLLabelElement {
 
 export class RoomPane {
   readonly element = el('section', 'room-pane');
-  private readonly feed = new RoomFeed(() => void this.onCopyFinal());
+  private readonly feed = new RoomFeed(() => this.onCopyFinal());
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly table = new RoomTable();
   private readonly setup = el('details', 'room-setup');
@@ -344,9 +344,10 @@ export class RoomPane {
     this.feed.render(this.snapshot);
   }
 
-  private async onCopyFinal(): Promise<void> {
+  private async onCopyFinal(): Promise<boolean> {
     const copied = await api.roomCopyFinal();
-    this.message.textContent = copied ? 'Final result copied.' : 'There is no final result to copy.';
+    this.message.textContent = copied ? '' : 'There is no final result to copy.';
+    return copied;
   }
 
   private renderPause(): void {

@@ -518,7 +518,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   cursor: pointer;
 }
 .room-button.stop { background: var(--danger-bg); }
-.room-button:disabled { background: transparent; border-style: dashed; border-color: var(--border); color: var(--text); cursor: default; }
+.room-button:disabled, .room-button[aria-disabled="true"] { background: transparent; border-style: dashed; border-color: var(--border); color: var(--text); cursor: default; }
 .room-progress { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--surface); }
 .room-progress[hidden] { display: none; }
 .room-progress-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: baseline; }

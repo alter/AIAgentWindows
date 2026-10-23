@@ -431,6 +431,8 @@ export function renameTitle(current: string, typed: string): string | null {
 const MODE_TEXT: Record<RoomMode, string> = { broadcast: 'To all', relay: 'Relay' };
 const ROUNDS_SHAPE = /^\d{1,3}$/;
 
+export const COPY_REST_MS = 3000;
+
 export type StartAction = 'start' | 'continue' | 'resume';
 
 const START_LABELS: Record<StartAction, string> = { start: 'Start', continue: 'Continue', resume: 'Resume' };

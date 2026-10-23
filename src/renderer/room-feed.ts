@@ -1,17 +1,9 @@
 // room-feed.ts
 import type { RoomEntry } from '../shared/room-model';
-import { entryState, feedSections, type FeedSection, type RoomSnapshot } from '../shared/room-view';
+import { COPY_REST_MS, entryState, feedSections, type FeedSection, type RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 
-function copyButton(onCopy: () => void): HTMLButtonElement {
-  const button = el('button', 'room-button room-copy', 'Copy');
-  button.type = 'button';
-  button.dataset['room'] = 'copy-final';
-  button.addEventListener('click', onCopy);
-  return button;
-}
-
-function entryNode(entry: RoomEntry, onCopy: () => void): HTMLDetailsElement {
+function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement): HTMLDetailsElement {
   const node = el('details', `room-entry kind-${entry.kind}`);
   node.dataset['author'] = entry.authorId;
   node.dataset['kind'] = entry.kind;
@@ -27,7 +19,7 @@ function entryNode(entry: RoomEntry, onCopy: () => void): HTMLDetailsElement {
     el('span', 'room-entry-time', new Date(entry.time).toLocaleTimeString()),
   );
   const text = el('pre', 'room-entry-text', entry.text);
-  if (entry.kind === 'final') node.append(summary, copyButton(onCopy), text, copyButton(onCopy));
+  if (entry.kind === 'final') node.append(summary, copyButton(), text, copyButton());
   else node.append(summary, text);
   return node;
 }
@@ -42,9 +34,11 @@ function sectionNode(section: FeedSection): HTMLElement {
 export class RoomFeed {
   readonly element = el('div', 'room-feed');
   private readonly sections = new Map<string, HTMLElement>();
+  private readonly copyButtons = new Set<HTMLButtonElement>();
+  private restTimer: ReturnType<typeof setTimeout> | null = null;
   private shown = 0;
 
-  constructor(private readonly onCopy: () => void) {
+  constructor(private readonly onCopy: () => Promise<boolean>) {
     this.element.setAttribute('role', 'log');
     this.element.dataset['room'] = 'feed';
   }
@@ -65,7 +59,7 @@ export class RoomFeed {
         this.element.insertBefore(node, this.element.children[position] ?? null);
       }
       for (const item of section.entries) {
-        if (item.index >= this.shown) node.append(entryNode(item.entry, this.onCopy));
+        if (item.index >= this.shown) node.append(entryNode(item.entry, () => this.copyButton()));
       }
     });
     this.shown = entries.length;
@@ -73,6 +67,8 @@ export class RoomFeed {
   }
 
   reset(): void {
+    this.stopRest();
+    this.copyButtons.clear();
     this.element.replaceChildren();
     this.sections.clear();
     this.shown = 0;
@@ -81,5 +77,45 @@ export class RoomFeed {
   reload(snapshot: RoomSnapshot): void {
     this.reset();
     this.render(snapshot);
+  }
+
+  private copyButton(): HTMLButtonElement {
+    const button = el('button', 'room-button room-copy', 'Copy');
+    button.type = 'button';
+    button.dataset['room'] = 'copy-final';
+    button.addEventListener('click', () => void this.copy(button));
+    this.copyButtons.add(button);
+    return button;
+  }
+
+  private async copy(button: HTMLButtonElement): Promise<void> {
+    if (button.getAttribute('aria-disabled') === 'true') return;
+    if (await this.onCopy()) this.rest();
+  }
+
+  private rest(): void {
+    this.stopRest();
+    for (const button of this.copyButtons) this.setCopied(button, true);
+    this.restTimer = setTimeout(() => {
+      this.restTimer = null;
+      for (const button of this.copyButtons) this.setCopied(button, false);
+    }, COPY_REST_MS);
+  }
+
+  private stopRest(): void {
+    if (this.restTimer === null) return;
+    clearTimeout(this.restTimer);
+    this.restTimer = null;
+  }
+
+  private setCopied(button: HTMLButtonElement, copied: boolean): void {
+    button.textContent = copied ? 'Copied' : 'Copy';
+    if (copied) {
+      button.setAttribute('aria-disabled', 'true');
+      button.dataset['copied'] = '';
+    } else {
+      button.removeAttribute('aria-disabled');
+      delete button.dataset['copied'];
+    }
   }
 }
