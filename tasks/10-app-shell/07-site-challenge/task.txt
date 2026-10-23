@@ -1,0 +1,58 @@
+TASK: site challenge — Cloudflare Turnstile passes for the owner's own click inside a site view
+
+GOAL
+  The owner clicks the Cloudflare Turnstile checkbox on grok.com inside the
+  app and it stays at "Verifying..." (owner, 2026-10-23, screenshot). The site
+  view is a Chromium page driven by a person; whatever the app adds or hides
+  that makes the challenge fail is found with evidence and removed or made
+  consistent. Fix of the embedded-views capability (docs/PROJECT.md §3). Serves no gate.
+
+CONTEXT
+  src/main/site-views.ts (ensure, configureSession)
+  src/shared/site-policy.ts (OWNER_USER_AGENT, userAgentOverride, permissionCheckAllowed)
+  src/main/site-user-agent.ts (debugger attached, Emulation.setUserAgentOverride)
+  docs/EVIDENCE.md W3, W4, W15, W22-W24
+  ~/Library/Application Support/ai-agent-windows/logs/sites.log (challenges.cloudflare.com permission checks denied)
+  docs/tech/electron@44.6.0.md
+
+SCOPE
+  + S1 diagnosis first: what the challenges.cloudflare.com frame sees in the product's site view (user agent, client hints and Sec-CH-UA headers, permission states, debugger, window.chrome) against plain Electron and a fresh Chrome profile; root cause stated with evidence in NOTES.md before any code
+  + S2 the fix at the owning cause: the site view stops presenting the signal that fails the challenge, for every site view and for the frames and popups inside it
+  + S3 a regression test for the corrected rule (pure rule in src/shared or the session/view setup), red before the fix
+  − solving or automating any challenge, captcha or login — never (docs/PROJECT.md §3, "Credential or captcha automation" is absent)
+  − hiding that the page is driven by the app's adapters during a Room run — adapters are unchanged
+  − sites other than ChatGPT, Grok, DeepSeek — no such sites
+  indivisible: the diagnosis decides which of the session, the view and the policy changes
+
+WRITE-SET
+  src/main/site-views.ts
+  src/main/site-user-agent.ts
+  src/shared/site-policy.ts
+  tests/unit/site-policy.test.ts
+  tests/unit/site-user-agent.test.ts
+  tasks/10-app-shell/07-site-challenge/
+
+DATA
+  permission request in a site view: dir=in; type=Electron permission name and requesting origin; size=permission names of Electron 44.6.0; null=no; interpretable=no; validated=tests/unit/site-policy.test.ts::sensitive permissions stay denied for a foreign origin; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/session.md
+
+SECURITY
+  sink site-permissions: consumes permission request in a site view; protection=camera, microphone, location and the other sensitive permissions are still never granted to an origin other than the site's own; test=tests/unit/site-policy.test.ts::sensitive permissions stay denied for a foreign origin
+
+OUTCOME
+  tasks/10-app-shell/07-site-challenge/NOTES.md states the root cause with its
+  evidence, the product's challenge frame reports the same signals as the
+  fixed rule intends (spike output in spikes/), and the owner records in NOTES.md
+  that the Turnstile check on grok.com passes after the fix.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] reverse control: restore the pre-fix rule in src/shared/site-policy.ts → tests/unit/site-policy.test.ts::challenge frame sees the same permission state as the site
+  3. [fast] tests/unit/site-policy.test.ts: sensitive permissions stay denied for a foreign origin after the fix
+  4. [full] electron-smoke exit 0 (site views on the local fixture page)
+  5. [fast] HUMAN: the owner passes the Turnstile check on grok.com in the app and records it in NOTES.md
+
+ROLE
+  ARCH, APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/02-room

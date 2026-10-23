@@ -41,7 +41,11 @@ WRITE-SET
   src/renderer/room-tree.ts
   src/renderer/styles.css
   src/renderer/contrast-pairs.json
-  tests/unit/
+  tests/unit/room-model.test.ts
+  tests/unit/room-view.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/unit/room-tree.test.ts
+  tests/unit/room-table.test.ts
   tests/integration/
   tests/full/
   tests/fixtures/

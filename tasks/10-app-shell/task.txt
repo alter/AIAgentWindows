@@ -16,6 +16,7 @@ SCOPE
   + 04-room-archive — saved rooms: record on disk, list, reopen, continue; an interrupted run is kept as stopped
   + 05-design-contrast — light and dark palettes by the system setting, WCAG 2 AA and APCA held by a gate, disclosure arrows
   + 06-room-layout — saved rooms as a tree under # Rooms in the sidebar, rename, participants as a table
+  + 07-site-challenge — Cloudflare Turnstile passes for the owner's own click inside a site view
   − Forward between windows, shared directory, last-reply adapters outside the Room — later tasks of this phase
   − Import of existing local CLI sessions — its own task of this phase, after 01
 
