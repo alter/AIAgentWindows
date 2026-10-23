@@ -23,12 +23,12 @@ function sample(): AppState {
     { id: 'a2', kind: 'codex', title: 'Codex', cwd: '/work/x', createdAt: 2 },
     { id: 'a3', kind: 'deepseek', title: 'DeepSeek', createdAt: 3 },
   ];
-  return { version: 1, agents };
+  return { version: 2, agents };
 }
 
 function withAgent(patch: Record<string, unknown>): string {
   const agent = { id: 'a1', kind: 'claude', title: 'T', cwd: '/w', createdAt: 1, ...patch };
-  return JSON.stringify({ version: 1, agents: [agent] });
+  return JSON.stringify({ version: 2, agents: [agent] });
 }
 
 describe('state store', () => {
@@ -42,13 +42,13 @@ describe('state store', () => {
     expect(parseState('')).toEqual(emptyState());
     expect(parseState('null')).toEqual(emptyState());
     expect(parseState('[]')).toEqual(emptyState());
-    expect(parseState(JSON.stringify({ version: 1, agents: 'x' }))).toEqual(emptyState());
-    expect(parseState(JSON.stringify({ version: 1, agents: [42] }))).toEqual(emptyState());
+    expect(parseState(JSON.stringify({ version: 2, agents: 'x' }))).toEqual(emptyState());
+    expect(parseState(JSON.stringify({ version: 2, agents: [42] }))).toEqual(emptyState());
     expect(parseState('x'.repeat(1024 * 1024 + 1))).toEqual(emptyState());
   });
 
   it('falls back to empty state on wrong version', () => {
-    expect(parseState(JSON.stringify({ version: 2, agents: [] }))).toEqual(emptyState());
+    expect(parseState(JSON.stringify({ version: 1, agents: [] }))).toEqual(emptyState());
     expect(parseState(JSON.stringify({ agents: [] }))).toEqual(emptyState());
   });
 
@@ -82,7 +82,7 @@ describe('state store', () => {
 
   it('rejects duplicate ids', () => {
     const a = { id: 'a1', kind: 'codex', title: 'T', cwd: '/w', createdAt: 1 };
-    expect(parseState(JSON.stringify({ version: 1, agents: [a, a] }))).toEqual(emptyState());
+    expect(parseState(JSON.stringify({ version: 2, agents: [a, a] }))).toEqual(emptyState());
   });
 
   it('drops unknown fields on read', () => {
@@ -93,14 +93,14 @@ describe('state store', () => {
 
   it('keeps the model, effort and web settings of an OpenRouter agent and loads an old one without them', () => {
     const settings = { model: 'acme/m:free', modelName: 'Acme M', effort: 'low', web: true };
-    const state: AppState = { version: 1, agents: [{ id: 'o1', kind: 'openrouter', title: 'OpenRouter · Acme M', openrouter: settings, createdAt: 1 }] };
+    const state: AppState = { version: 2, agents: [{ id: 'o1', kind: 'openrouter', title: 'OpenRouter · Acme M', openrouter: settings, createdAt: 1 }] };
     expect(parseState(serializeState(state))).toEqual(state);
-    const old = parseState(JSON.stringify({ version: 1, agents: [{ id: 'o2', kind: 'openrouter', title: 'OpenRouter', createdAt: 2 }] }));
+    const old = parseState(JSON.stringify({ version: 2, agents: [{ id: 'o2', kind: 'openrouter', title: 'OpenRouter', createdAt: 2 }] }));
     expect(old.agents[0]?.openrouter).toEqual({ model: '', effort: '', web: false });
   });
 
   it('refuses settings that are malformed or sit on another kind of agent', () => {
-    const agent = (patch: Record<string, unknown>): string => JSON.stringify({ version: 1, agents: [{ id: 'o1', kind: 'openrouter', title: 'T', createdAt: 1, ...patch }] });
+    const agent = (patch: Record<string, unknown>): string => JSON.stringify({ version: 2, agents: [{ id: 'o1', kind: 'openrouter', title: 'T', createdAt: 1, ...patch }] });
     expect(parseState(agent({ openrouter: { model: 'Bad Model', effort: '', web: false } }))).toEqual(emptyState());
     expect(parseState(agent({ openrouter: 'x' }))).toEqual(emptyState());
     expect(parseState(agent({ cwd: '/w' }))).toEqual(emptyState());

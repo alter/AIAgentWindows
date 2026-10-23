@@ -5,6 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AgentController, type ControllerDeps } from '../../src/main/agent-controller';
 import { loadState } from '../../src/main/state-file';
+import { openStore } from '../unit/helpers/app-state';
 import type { AppState } from '../../src/shared/agents';
 import type { Rollout } from '../../src/shared/codex-claim';
 import { EVENT_CHANNELS, type PtyDataEvent } from '../../src/shared/ipc';
@@ -18,9 +19,9 @@ let events: { channel: string; payload: unknown }[];
 let rollouts: Rollout[];
 let controllers: AgentController[];
 
-function build(initial: AppState): AgentController {
+async function build(initial: AppState): Promise<AgentController> {
   const deps: ControllerDeps = {
-    stateFile: path.join(dir, 'agents.json'),
+    store: await openStore(dir, initial),
     sharedDir: path.join(dir, 'shared'),
     platform: 'win32',
     env: { PATH: process.env.PATH, AIAW_CLAUDE_BIN: STUB, AIAW_CODEX_BIN: STUB, CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config') },
@@ -28,7 +29,7 @@ function build(initial: AppState): AgentController {
     emit: (channel, payload) => events.push({ channel, payload }),
     listRollouts: async () => rollouts,
   };
-  const controller = new AgentController(deps, initial);
+  const controller = new AgentController(deps);
   controllers.push(controller);
   return controller;
 }
@@ -64,15 +65,15 @@ afterEach(async () => {
 
 describe('restore at start', () => {
   it('resumes a claude agent from the state file with its session id', async () => {
-    const first = build({ version: 1, agents: [] });
+    const first = await build({ version: 2, agents: [] });
     await first.add('claude');
-    const saved = await loadState(path.join(dir, 'agents.json'));
+    const saved = await loadState(path.join(dir, 'state.json'));
     const agent = saved.agents[0];
     first.shutdown();
     await mkdir(path.join(dir, 'claude-config', 'projects', '-some-folder'), { recursive: true });
     await writeFile(path.join(dir, 'claude-config', 'projects', '-some-folder', `${agent?.sessionId}.jsonl`), '{}\n');
     events = [];
-    const second = build(saved);
+    const second = await build(saved);
     await second.restore();
     await expect.poll(() => output(agent?.id ?? '')).toContain('STUB-CLI BANNER');
     expect(output(agent?.id ?? '')).toContain('--resume');
@@ -81,13 +82,13 @@ describe('restore at start', () => {
   });
 
   it('starts a claude agent with its own session id when no transcript exists', async () => {
-    const first = build({ version: 1, agents: [] });
+    const first = await build({ version: 2, agents: [] });
     await first.add('claude');
-    const saved = await loadState(path.join(dir, 'agents.json'));
+    const saved = await loadState(path.join(dir, 'state.json'));
     const agent = saved.agents[0];
     first.shutdown();
     events = [];
-    const second = build(saved);
+    const second = await build(saved);
     await second.restore();
     await expect.poll(() => output(agent?.id ?? '')).toContain('STUB-CLI BANNER');
     expect(output(agent?.id ?? '')).toContain('--session-id');
@@ -95,16 +96,16 @@ describe('restore at start', () => {
   });
 
   it('claims the codex rollout when the list is saved and resumes it after a restart', async () => {
-    const first = build({ version: 1, agents: [] });
+    const first = await build({ version: 2, agents: [] });
     await first.add('codex');
-    expect((await loadState(path.join(dir, 'agents.json'))).agents[0]?.sessionId).toBeUndefined();
+    expect((await loadState(path.join(dir, 'state.json'))).agents[0]?.sessionId).toBeUndefined();
     rollouts = [rolloutFor(dir, Date.now() + 1000)];
     await first.flush();
-    const saved = await loadState(path.join(dir, 'agents.json'));
+    const saved = await loadState(path.join(dir, 'state.json'));
     expect(saved.agents[0]?.sessionId).toBe(CODEX_ID);
     first.shutdown();
     events = [];
-    const second = build(saved);
+    const second = await build(saved);
     await second.restore();
     const id = saved.agents[0]?.id ?? '';
     await expect.poll(() => output(id)).toContain('STUB-CLI BANNER');
@@ -115,26 +116,26 @@ describe('restore at start', () => {
   it('claims before restoring and persists the claim', async () => {
     const created = Date.now() - 60_000;
     const initial: AppState = {
-      version: 1,
+      version: 2,
       agents: [{ id: 'codex-1', kind: 'codex', title: 'Codex', cwd: dir, createdAt: created }],
     };
     rollouts = [rolloutFor(dir, created + 5000)];
-    const controller = build(initial);
+    const controller = await build(initial);
     await controller.restore();
     expect(controller.agentById('codex-1')?.sessionId).toBe(CODEX_ID);
-    expect((await loadState(path.join(dir, 'agents.json'))).agents[0]?.sessionId).toBe(CODEX_ID);
+    expect((await loadState(path.join(dir, 'state.json'))).agents[0]?.sessionId).toBe(CODEX_ID);
     await expect.poll(() => output('codex-1')).toContain(CODEX_ID);
   });
 
   it('restores an unclaimed codex agent as a fresh codex and a site agent without a pty', async () => {
     const initial: AppState = {
-      version: 1,
+      version: 2,
       agents: [
         { id: 'codex-1', kind: 'codex', title: 'Codex', cwd: dir, createdAt: 1000 },
         { id: 'site-1', kind: 'grok', title: 'Grok', createdAt: 1000 },
       ],
     };
-    const controller = build(initial);
+    const controller = await build(initial);
     await controller.restore();
     await expect.poll(() => output('codex-1')).toContain('STUB-CLI BANNER');
     expect(output('codex-1')).not.toContain('resume');
@@ -144,13 +145,13 @@ describe('restore at start', () => {
 
   it('keeps an agent whose folder is gone listed and restores the others', async () => {
     const initial: AppState = {
-      version: 1,
+      version: 2,
       agents: [
         { id: 'gone', kind: 'claude', title: 'Claude', cwd: path.join(dir, 'missing'), sessionId: SESSION, createdAt: 1000 },
         { id: 'fine', kind: 'claude', title: 'Claude', cwd: dir, sessionId: CODEX_ID, createdAt: 1000 },
       ],
     };
-    const controller = build(initial);
+    const controller = await build(initial);
     await controller.restore();
     await expect.poll(() => output('fine')).toContain('STUB-CLI BANNER');
     expect(controller.snapshot().agents.map((agent) => agent.id)).toEqual(['gone', 'fine']);

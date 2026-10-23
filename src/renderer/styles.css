@@ -232,7 +232,9 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .or-account { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--text); }
 .or-title { margin: 0 0 4px; font-size: inherit; font-weight: 700; }
 .or-state, .or-free, .or-notice { margin: 0 0 6px; overflow-wrap: anywhere; }
-.or-notice { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn-bg); color: var(--text); }
+.sidebar-notice { margin: 0 8px 6px; overflow-wrap: anywhere; font-size: 12px; }
+.sidebar-notice[hidden] { display: none; }
+.or-notice, .sidebar-notice { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn-bg); color: var(--text); }
 .or-account [hidden], .or-notice[hidden] { display: none; }
 .or-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .or-button, .or-button-plain { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; cursor: pointer; }

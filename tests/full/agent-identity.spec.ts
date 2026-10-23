@@ -53,7 +53,7 @@ async function addAgent(page: Page, kind: string): Promise<void> {
 }
 
 function storedTitles(userData: string): string[] {
-  const state = JSON.parse(readFileSync(path.join(userData, 'agents.json'), 'utf8')) as { agents: { title: string }[] };
+  const state = JSON.parse(readFileSync(path.join(userData, 'state.json'), 'utf8')) as { agents: { title: string }[] };
   return state.agents.map((agent) => agent.title);
 }
 

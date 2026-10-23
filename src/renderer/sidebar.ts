@@ -56,6 +56,7 @@ export class Sidebar {
   private readonly theme: ThemeSwitch;
   private readonly account = new OpenRouterAccount();
   private readonly list = el('ul', 'agent-list');
+  private readonly notice = el('p', 'sidebar-notice');
   private readonly header = el('div', 'sidebar-header');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
@@ -90,10 +91,13 @@ export class Sidebar {
     this.addButton.setAttribute('aria-haspopup', 'menu');
     this.addButton.setAttribute('aria-expanded', 'false');
     this.menu.hidden = true;
+    this.notice.hidden = true;
+    this.notice.dataset['sidebar'] = 'notice';
+    this.notice.setAttribute('role', 'status');
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(this.rooms.element, this.header, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
+    this.element.append(this.rooms.element, this.header, this.notice, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
@@ -108,6 +112,11 @@ export class Sidebar {
       this.hideContextMenu();
       this.setPending(null);
     });
+  }
+
+  showNotice(text: string): void {
+    this.notice.textContent = text;
+    this.notice.hidden = text === '';
   }
 
   setTheme(choice: ThemeChoice): void {

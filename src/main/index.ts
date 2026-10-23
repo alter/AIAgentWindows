@@ -3,6 +3,7 @@ import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell 
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { partitionFor } from '../shared/agents';
 import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice } from '../shared/theme';
 import { applyRenderSwitches } from '../shared/render-switches';
@@ -33,7 +34,7 @@ import { installMenu } from './menu';
 import { createSiteLogger } from './site-log-file';
 import { SiteViews } from './site-views';
 import { createIsolatedRunner } from './site-adapters/isolated-runner';
-import { loadState } from './state-file';
+import { AppStateStore } from './store/app-state';
 import { sweepStaleTemps } from './store/atomic-file';
 
 const userDataOverride = process.env['AIAW_USER_DATA'];
@@ -90,19 +91,22 @@ async function start(): Promise<void> {
   const sharedDir = path.join(userData, 'shared');
   await mkdir(sharedDir, { recursive: true });
   await sweepStaleTemps(userData);
-  const state = await loadState(path.join(userData, 'agents.json'));
+  const store = await AppStateStore.open(userData);
+  const failure = store.failure();
+  if (failure !== null) console.error(failure);
+  const state = store.read();
   nativeTheme.themeSource = parseThemeChoice(state.theme);
   const window = createWindow();
   mainWindow = window;
   const siteLog = createSiteLogger(path.join(userData, 'logs', 'sites.log'));
   const siteViews = new SiteViews(window, (event) => {
     if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
-  }, process.env, siteLog);
+  }, (kind) => partitionFor(store.read().partitions, kind), process.env, siteLog);
   sites = siteViews;
   siteViews.setSidebarWidth(parseSidebarWidth(state.sidebarWidth));
   controller = new AgentController(
     {
-      stateFile: path.join(userData, 'agents.json'),
+      store,
       sharedDir,
       platform: process.platform,
       env: process.env,
@@ -117,7 +121,6 @@ async function start(): Promise<void> {
       closeChat: (id) => chats?.stop(id),
       listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
     },
-    state,
   );
   const active = controller;
   await active.restore();

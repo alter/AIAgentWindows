@@ -8,7 +8,7 @@ import { loadState, saveState, stateFailure } from '../../src/main/state-file';
 import { FailClosedError } from '../../src/main/store/json-file';
 
 const SAMPLE: AppState = {
-  version: 1,
+  version: 2,
   agents: [
     { id: 'a1', kind: 'claude', title: 'Claude Code', cwd: '/tmp/a b"; touch /tmp/pwned; "', sessionId: '0b1c3a52-5f0e-4a39-9d5e-7a8c1f2e3d4b', createdAt: 1 },
     { id: 'a2', kind: 'grok', title: 'Grok', createdAt: 2 },
@@ -58,7 +58,7 @@ describe('state file', () => {
 
   it('loads a file written before the theme existed without a theme', async () => {
     const file = path.join(dir, 'agents.json');
-    await writeFile(file, JSON.stringify({ version: 1, agents: [] }), 'utf8');
+    await writeFile(file, JSON.stringify({ version: 2, agents: [] }), 'utf8');
     expect(await loadState(file)).toEqual(emptyState());
   });
 
@@ -70,28 +70,28 @@ describe('state file', () => {
 
   it('loads a file written before the sidebar width existed without a width', async () => {
     const file = path.join(dir, 'agents.json');
-    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'dark' }), 'utf8');
+    await writeFile(file, JSON.stringify({ version: 2, agents: [], theme: 'dark' }), 'utf8');
     expect((await loadState(file)).sidebarWidth).toBeUndefined();
   });
 
   it('reads an out of range or non-integer stored sidebar width as 260', async () => {
     const file = path.join(dir, 'agents.json');
     for (const sidebarWidth of [50, 5000, 300.5, '300', null]) {
-      await writeFile(file, JSON.stringify({ version: 1, agents: [], sidebarWidth }), 'utf8');
+      await writeFile(file, JSON.stringify({ version: 2, agents: [], sidebarWidth }), 'utf8');
       expect((await loadState(file)).sidebarWidth).toBe(260);
     }
   });
 
   it('keeps theme and sidebar width side by side', async () => {
     const file = path.join(dir, 'agents.json');
-    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'light', sidebarWidth: 280 }), 'utf8');
+    await writeFile(file, JSON.stringify({ version: 2, agents: [], theme: 'light', sidebarWidth: 280 }), 'utf8');
     const state = await loadState(file);
     expect([state.theme, state.sidebarWidth]).toEqual(['light', 280]);
   });
 
   it('reads an unknown stored theme as system', async () => {
     const file = path.join(dir, 'agents.json');
-    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'neon' }), 'utf8');
+    await writeFile(file, JSON.stringify({ version: 2, agents: [], theme: 'neon' }), 'utf8');
     expect((await loadState(file)).theme).toBe('system');
   });
   it('round-trips a stored key ciphertext and drops anything that is not base64 or is too long', async () => {
@@ -99,7 +99,7 @@ describe('state file', () => {
     await saveState(file, { ...SAMPLE, openrouterKey: 'AQIDBA==' });
     expect((await loadState(file)).openrouterKey).toBe('AQIDBA==');
     for (const openrouterKey of ['sk-or-v1-plain key', '', 7, null, 'A'.repeat(4097)]) {
-      await writeFile(file, JSON.stringify({ version: 1, agents: [], openrouterKey }), 'utf8');
+      await writeFile(file, JSON.stringify({ version: 2, agents: [], openrouterKey }), 'utf8');
       expect((await loadState(file)).openrouterKey).toBeUndefined();
     }
   });
@@ -107,7 +107,7 @@ describe('state file', () => {
 
 describe('state file fails closed', () => {
   it('keeps a truncated file and a future-version file byte-identical when a save is attempted', async () => {
-    for (const content of ['{"version":1,"agents":[', JSON.stringify({ version: 3, agents: [] })]) {
+    for (const content of ['{"version":2,"agents":[', JSON.stringify({ version: 3, agents: [] })]) {
       const file = path.join(dir, `agents-${content.length}.json`);
       await writeFile(file, content, 'utf8');
       expect(await loadState(file)).toEqual(emptyState());

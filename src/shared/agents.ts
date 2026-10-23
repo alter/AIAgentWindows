@@ -9,6 +9,7 @@ export type AgentKind = (typeof AGENT_KINDS)[number];
 export type CliKind = 'claude' | 'codex';
 export type SiteKind = 'chatgpt' | 'grok' | 'deepseek';
 
+export const SITE_KINDS: readonly SiteKind[] = ['chatgpt', 'grok', 'deepseek'];
 export const SITE_KINDS_WITH_ADAPTER: readonly SiteKind[] = ['chatgpt', 'grok', 'deepseek'];
 
 export const AGENT_LABELS: Readonly<Record<AgentKind, string>> = {
@@ -36,16 +37,19 @@ export interface Agent {
   createdAt: number;
 }
 
+export type SitePartitions = Partial<Record<SiteKind, string>>;
+
 export interface AppState {
-  version: 1;
+  version: 2;
   agents: Agent[];
   theme?: ThemeChoice;
   sidebarWidth?: number;
   openrouterKey?: string;
+  partitions?: SitePartitions;
 }
 
 export const MAX_AGENT_TITLE_CHARS = 80;
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 export const MAX_STATE_BYTES = 1024 * 1024;
 export const MAX_CWD_BYTES = 4096;
 export const MAX_CIPHER_CHARS = 4096;
@@ -109,7 +113,7 @@ function validCwd(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && Buffer.byteLength(value, 'utf8') <= MAX_CWD_BYTES;
 }
 
-function parseAgent(raw: unknown): Agent | null {
+export function parseAgent(raw: unknown): Agent | null {
   if (!isRecord(raw)) return null;
   const { id, kind, title, cwd, sessionId, openrouter, createdAt } = raw;
   if (typeof id !== 'string' || id.length === 0) return null;
@@ -135,29 +139,65 @@ function parseAgent(raw: unknown): Agent | null {
   return agent;
 }
 
-export function parseState(text: string): AppState {
-  if (Buffer.byteLength(text, 'utf8') > MAX_STATE_BYTES) return emptyState();
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    return emptyState();
+export function defaultPartition(kind: SiteKind): string {
+  return `persist:${kind}`;
+}
+
+function validPartition(kind: SiteKind, value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  return value === defaultPartition(kind) || (value.startsWith('persist:') && isUuid(value.slice('persist:'.length)));
+}
+
+export function partitionFor(partitions: SitePartitions | undefined, kind: SiteKind): string {
+  return partitions?.[kind] ?? defaultPartition(kind);
+}
+
+function parsePartitions(raw: unknown): SitePartitions {
+  if (!isRecord(raw)) throw new Error('partitions is not an object');
+  const partitions: SitePartitions = {};
+  for (const kind of SITE_KINDS) {
+    const value = raw[kind];
+    if (value === undefined) continue;
+    if (!validPartition(kind, value)) throw new Error(`the ${kind} partition is not valid`);
+    partitions[kind] = value;
   }
-  if (!isRecord(raw) || raw['version'] !== STATE_VERSION || !Array.isArray(raw['agents'])) {
-    return emptyState();
-  }
+  return partitions;
+}
+
+export type StateSettings = Pick<AppState, 'theme' | 'sidebarWidth' | 'openrouterKey'>;
+
+export function parseSettings(raw: Record<string, unknown>): StateSettings {
+  const settings: StateSettings = {};
+  if (raw['theme'] !== undefined) settings.theme = parseThemeChoice(raw['theme']);
+  if (raw['sidebarWidth'] !== undefined) settings.sidebarWidth = parseSidebarWidth(raw['sidebarWidth']);
+  const cipher = raw['openrouterKey'];
+  if (typeof cipher === 'string' && cipher.length <= MAX_CIPHER_CHARS && BASE64_PATTERN.test(cipher)) settings.openrouterKey = cipher;
+  return settings;
+}
+
+export function parseStateDocument(raw: unknown): AppState {
+  if (!isRecord(raw)) throw new Error('not an object');
+  if (raw['version'] !== STATE_VERSION) throw new Error(`version ${String(raw['version'])} is not ${STATE_VERSION}`);
+  if (!Array.isArray(raw['agents'])) throw new Error('agents is not a list');
   const agents: Agent[] = [];
   const seen = new Set<string>();
   for (const item of raw['agents'] as unknown[]) {
     const agent = parseAgent(item);
-    if (agent === null || seen.has(agent.id)) return emptyState();
+    if (agent === null) throw new Error('an agent is not valid');
+    if (seen.has(agent.id)) throw new Error('an agent id is repeated');
     seen.add(agent.id);
     agents.push(agent);
   }
-  const state: AppState = { version: STATE_VERSION, agents };
-  if (raw['theme'] !== undefined) state.theme = parseThemeChoice(raw['theme']);
-  if (raw['sidebarWidth'] !== undefined) state.sidebarWidth = parseSidebarWidth(raw['sidebarWidth']);
-  const cipher = raw['openrouterKey'];
-  if (typeof cipher === 'string' && cipher.length <= MAX_CIPHER_CHARS && BASE64_PATTERN.test(cipher)) state.openrouterKey = cipher;
+  const state: AppState = { version: STATE_VERSION, agents, ...parseSettings(raw) };
+  if (raw['partitions'] !== undefined) state.partitions = parsePartitions(raw['partitions']);
   return state;
+}
+
+export function parseState(text: string): AppState {
+  if (Buffer.byteLength(text, 'utf8') > MAX_STATE_BYTES) return emptyState();
+  try {
+    return parseStateDocument(JSON.parse(text));
+  } catch {
+    return emptyState();
+  }
 }

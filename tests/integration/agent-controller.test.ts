@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { AgentController, type ControllerDeps } from '../../src/main/agent-controller';
 import { loadState } from '../../src/main/state-file';
-import { emptyState } from '../../src/shared/agents';
+import { openStore } from '../unit/helpers/app-state';
 import { EVENT_CHANNELS, type AgentsSnapshot, type PtyDataEvent } from '../../src/shared/ipc';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
@@ -19,9 +19,9 @@ let showSite: Mock<NonNullable<ControllerDeps['showSite']>>;
 let closeSite: Mock<NonNullable<ControllerDeps['closeSite']>>;
 let layoutSidebar: Mock<NonNullable<ControllerDeps['layoutSidebar']>>;
 
-function controllerDeps(): ControllerDeps {
+async function controllerDeps(): Promise<ControllerDeps> {
   return {
-    stateFile: path.join(dir, 'agents.json'),
+    store: await openStore(dir),
     sharedDir: path.join(dir, 'shared'),
     platform: 'win32',
     env: { PATH: process.env.PATH, AIAW_CLAUDE_BIN: STUB, AIAW_CODEX_BIN: STUB },
@@ -34,8 +34,8 @@ function controllerDeps(): ControllerDeps {
   };
 }
 
-function build(): AgentController {
-  return new AgentController(controllerDeps(), emptyState());
+async function build(): Promise<AgentController> {
+  return new AgentController(await controllerDeps());
 }
 
 async function waitForBanner(id: string): Promise<string> {
@@ -60,7 +60,7 @@ beforeEach(async () => {
   showSite = vi.fn<NonNullable<ControllerDeps['showSite']>>();
   closeSite = vi.fn<NonNullable<ControllerDeps['closeSite']>>();
   layoutSidebar = vi.fn<NonNullable<ControllerDeps['layoutSidebar']>>();
-  controller = build();
+  controller = await build();
 });
 
 afterEach(async () => {
@@ -74,7 +74,7 @@ describe('agent controller', () => {
     await controller.setSidebarWidth(340);
     expect(controller.sidebarWidth()).toBe(340);
     expect(layoutSidebar).toHaveBeenCalledWith(340);
-    expect((await loadState(path.join(dir, 'agents.json'))).sidebarWidth).toBe(340);
+    expect((await loadState(path.join(dir, 'state.json'))).sidebarWidth).toBe(340);
   });
 
   it('adds a claude agent that runs in a pty with a fresh session id and persists it', async () => {
@@ -88,7 +88,7 @@ describe('agent controller', () => {
     const banner = await waitForBanner(agent?.id ?? '');
     expect(banner).toContain('--session-id');
     expect(banner).toContain('--add-dir');
-    expect((await loadState(path.join(dir, 'agents.json'))).agents).toEqual(snapshot.agents);
+    expect((await loadState(path.join(dir, 'state.json'))).agents).toEqual(snapshot.agents);
     const changed = events.filter((event) => event.channel === EVENT_CHANNELS.agentsChanged);
     expect((changed.at(-1)?.payload as AgentsSnapshot).selectedId).toBe(agent?.id);
   });
@@ -169,14 +169,13 @@ describe('agent controller', () => {
   it('shows the refusal in the pane and spawns nothing when test mode has no binary override', async () => {
     const guarded = new AgentController(
       {
-        stateFile: path.join(dir, 'guarded.json'),
+        store: await openStore(path.join(dir, 'guarded')),
         sharedDir: path.join(dir, 'shared'),
         platform: 'win32',
         env: { PATH: process.env.PATH, AIAW_USER_DATA: dir },
         pickFolder: async () => folder,
         emit: (channel, payload) => events.push({ channel, payload }),
       },
-      emptyState(),
     );
     try {
       await guarded.add('codex');
@@ -196,7 +195,7 @@ describe('agent controller', () => {
     expect(await controller.rename(grok?.id ?? '', '  Research  ')).toBe(true);
     expect(controller.snapshot().agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
     expect(controller.snapshot().selectedId).toBe(deepseek?.id);
-    expect((await loadState(path.join(dir, 'agents.json'))).agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
+    expect((await loadState(path.join(dir, 'state.json'))).agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
     const changed = events.filter((event) => event.channel === EVENT_CHANNELS.agentsChanged);
     expect((changed.at(-1)?.payload as AgentsSnapshot).agents[0]?.title).toBe('Research');
     const before = events.length;
@@ -205,7 +204,7 @@ describe('agent controller', () => {
     }
     expect(events.length).toBe(before);
     expect(controller.snapshot().agents[0]?.title).toBe('Research');
-    const reopened = new AgentController({ ...controllerDeps(), stateFile: path.join(dir, 'agents.json') }, await loadState(path.join(dir, 'agents.json')));
+    const reopened = new AgentController(await controllerDeps());
     expect(reopened.snapshot().agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
     reopened.shutdown();
   });
@@ -221,7 +220,7 @@ describe('agent controller', () => {
     expect(snapshot.agents.map((agent) => agent.id)).toEqual([grok?.id, codex?.id]);
     expect(snapshot.selectedId).toBe(codex?.id);
     expect(controller.ptyBacklog(claude?.id ?? '')).toEqual({ data: '', end: 0 });
-    expect((await loadState(path.join(dir, 'agents.json'))).agents.map((agent) => agent.id)).toEqual([grok?.id, codex?.id]);
+    expect((await loadState(path.join(dir, 'state.json'))).agents.map((agent) => agent.id)).toEqual([grok?.id, codex?.id]);
     await controller.close(grok?.id ?? '');
     expect(closeSite).toHaveBeenCalledWith(grok?.id);
     await controller.close('missing');
@@ -238,8 +237,8 @@ describe('agent controller', () => {
     const after = events.length;
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(events.slice(after).some((event) => event.channel === EVENT_CHANNELS.ptyData)).toBe(false);
-    const reopened = build();
-    const state = await loadState(path.join(dir, 'agents.json'));
+    const reopened = await build();
+    const state = await loadState(path.join(dir, 'state.json'));
     expect(state.agents).toEqual([]);
     expect(reopened.snapshot().agents).toEqual([]);
   });

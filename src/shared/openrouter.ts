@@ -13,6 +13,7 @@ export const SIGN_IN_TIMEOUT_MS = 10 * 60 * 1000;
 export type OpenRouterMode = 'browser' | 'code';
 export type OpenRouterNotice =
   | 'storage-unavailable'
+  | 'state-refused'
   | 'sign-in-failed'
   | 'sign-in-timeout'
   | 'key-rejected'
@@ -70,6 +71,7 @@ type Env = Readonly<Record<string, string | undefined>>;
 
 const NOTICE_TEXT: Readonly<Record<OpenRouterNotice, string>> = {
   'storage-unavailable': 'This computer cannot store the key safely, so nothing was saved.',
+  'state-refused': 'The app state file state.json in the data folder cannot be read, so the key was not saved and nothing was changed.',
   'sign-in-failed': 'OpenRouter refused the sign-in. Start it again.',
   'sign-in-timeout': 'Sign-in was not finished in 10 minutes. Start it again.',
   'key-rejected': 'OpenRouter no longer accepts the saved key. Sign in again.',

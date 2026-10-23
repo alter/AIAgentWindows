@@ -8,7 +8,7 @@ import { OwnerPause, type DriverFactory, type ParticipantDriver } from '../../sr
 import type { RoomTerminals } from '../../src/main/room-drivers';
 import { listRecords, readRecord, writeRecord } from '../../src/main/room-archive';
 import { RoomService } from '../../src/main/room-service';
-import { emptyState } from '../../src/shared/agents';
+import { openStore } from '../unit/helpers/app-state';
 import type { RoomModels } from '../../src/shared/cli-models';
 import { EVENT_CHANNELS } from '../../src/shared/ipc';
 import type { RoomConfig, RoomEvent, RoomParticipant } from '../../src/shared/room-model';
@@ -29,7 +29,7 @@ beforeEach(async () => {
   showSite = vi.fn<NonNullable<ControllerDeps['showSite']>>();
   const configDir = path.join(dir, 'claude-config');
   const deps: ControllerDeps = {
-    stateFile: path.join(dir, 'agents.json'),
+    store: await openStore(dir),
     sharedDir: path.join(dir, 'shared'),
     platform: 'win32',
     env: { PATH: process.env.PATH, AIAW_CLAUDE_BIN: STUB, AIAW_CODEX_BIN: STUB, AIAW_STUB_TRANSCRIPT: 'claude', CLAUDE_CONFIG_DIR: configDir },
@@ -37,7 +37,7 @@ beforeEach(async () => {
     emit: (channel, payload) => events.push({ channel, payload }),
     showSite,
   };
-  controller = new AgentController(deps, emptyState());
+  controller = new AgentController(deps);
 });
 
 afterEach(async () => {

@@ -6,7 +6,7 @@ import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from '../shared/openrouter';
 import { openrouterTitle } from '../shared/openrouter-chat';
-import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
+import { EVENT_CHANNELS, type AddAgentResult, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice, type ThemeChoice } from '../shared/theme';
 import { OutputBuffer } from '../shared/output-buffer';
@@ -14,10 +14,10 @@ import { claimForAgents, restoreSpawn } from '../shared/restore';
 import { bracketedPaste } from '../shared/terminal-input';
 import { claudeTranscriptExists } from './claude-transcripts';
 import { PtyManager } from './pty-manager';
-import { saveState } from './state-file';
+import { StateRefusedError, type AppStateStore } from './store/app-state';
 
 export interface ControllerDeps {
-  stateFile: string;
+  store: AppStateStore;
   sharedDir: string;
   platform: string;
   env: Readonly<Record<string, string | undefined>>;
@@ -30,6 +30,8 @@ export interface ControllerDeps {
   closeChat?(id: string): void;
   listRollouts?(sinceMs: number): Promise<Rollout[]>;
 }
+
+type ControllerSlice = 'agents' | 'theme' | 'sidebarWidth' | 'openrouterKey';
 
 export class AgentController {
   private agents: Agent[];
@@ -44,7 +46,8 @@ export class AgentController {
   private readonly closed = new Set<string>();
   private saving: Promise<void> = Promise.resolve();
 
-  constructor(private readonly deps: ControllerDeps, initial: AppState) {
+  constructor(private readonly deps: ControllerDeps) {
+    const initial: AppState = deps.store.read();
     this.agents = [...initial.agents];
     this.selectedId = this.agents[0]?.id ?? null;
     this.themeChoice = parseThemeChoice(initial.theme);
@@ -68,7 +71,7 @@ export class AgentController {
 
   async setTheme(choice: ThemeChoice): Promise<void> {
     this.themeChoice = choice;
-    await this.persist();
+    await this.persist('theme');
   }
 
   sidebarWidth(): number {
@@ -78,7 +81,7 @@ export class AgentController {
   async setSidebarWidth(width: number): Promise<void> {
     this.sidebar = width;
     this.deps.layoutSidebar?.(width);
-    await this.persist();
+    await this.persist('sidebarWidth');
   }
 
   openrouterCipher(): string | null {
@@ -86,8 +89,10 @@ export class AgentController {
   }
 
   async setOpenrouterCipher(cipher: string | null): Promise<void> {
+    if ((cipher ?? undefined) === this.cipher) return;
+    this.refuseWhileFailClosed();
     this.cipher = cipher ?? undefined;
-    await this.persist();
+    await this.persist('openrouterKey');
   }
 
   agentById(id: string): Agent | undefined {
@@ -98,14 +103,17 @@ export class AgentController {
     return this.selectedId === null ? undefined : this.agentById(this.selectedId);
   }
 
-  async add(kind: AgentKind): Promise<void> {
+  async add(kind: AgentKind): Promise<AddAgentResult> {
+    const refused = this.deps.store.failure();
+    if (refused !== null) return { ok: false, error: refused };
     const agent = isCliKind(kind) ? await this.createCliAgent(kind) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent() : this.createSiteAgent(kind);
-    if (agent === null) return;
+    if (agent === null) return { ok: true };
     this.agents.push(agent);
     this.selectedId = agent.id;
     this.roomOpen = false;
-    await this.persist();
+    await this.persist('agents');
     this.emitChanged();
+    return { ok: true };
   }
 
   async select(id: string): Promise<void> {
@@ -138,7 +146,7 @@ export class AgentController {
     this.spawnedAt.delete(id);
     this.agents = next.agents;
     this.selectedId = next.selectedId;
-    await this.persist();
+    await this.persist('agents');
     this.emitChanged();
   }
 
@@ -146,7 +154,7 @@ export class AgentController {
     const clean = parseAgentTitle(title);
     if (clean === null || this.agentById(id) === undefined) return false;
     this.agents = this.agents.map((agent) => (agent.id === id ? { ...agent, title: clean } : agent));
-    await this.persist();
+    await this.persist('agents');
     this.emitChanged();
     return true;
   }
@@ -159,7 +167,7 @@ export class AgentController {
     const renamed = known.title !== openrouterTitle(before);
     const title = renamed ? known.title : openrouterTitle(clean);
     this.agents = this.agents.map((agent) => (agent.id === id ? { ...agent, title, openrouter: clean } : agent));
-    await this.persist();
+    await this.persist('agents');
     this.emitChanged();
     return true;
   }
@@ -172,7 +180,7 @@ export class AgentController {
   async restart(id: string): Promise<boolean> {
     const known = this.agentById(id);
     if (known === undefined || !isCliKind(known.kind) || this.pty.has(id)) return false;
-    if (await this.claimSessions()) await this.persist();
+    if (await this.claimSessions()) await this.persist('agents');
     const agent = this.agentById(id);
     if (agent === undefined || this.pty.has(id)) return false;
     this.respawn(agent);
@@ -202,11 +210,11 @@ export class AgentController {
   async restore(): Promise<void> {
     const claimed = await this.claimSessions();
     for (const agent of this.agents) this.respawn(agent);
-    if (claimed) await this.persist();
+    if (claimed) await this.persist('agents');
   }
 
   flush(): Promise<void> {
-    return this.persist();
+    return this.persist('agents');
   }
 
   shutdown(): void {
@@ -290,12 +298,34 @@ export class AgentController {
     return true;
   }
 
-  private persist(): Promise<void> {
+  private refuseWhileFailClosed(): void {
+    const refused = this.deps.store.failure();
+    if (refused !== null) throw new StateRefusedError(refused);
+  }
+
+  private slice(slice: ControllerSlice): Promise<void> {
+    const { store } = this.deps;
+    switch (slice) {
+      case 'agents':
+        return store.update('agents', () => [...this.agents]);
+      case 'theme':
+        return store.update('theme', () => this.themeChoice);
+      case 'sidebarWidth':
+        return store.update('sidebarWidth', () => this.sidebar);
+      case 'openrouterKey':
+        return store.update('openrouterKey', () => this.cipher);
+    }
+  }
+
+  private persist(slice: ControllerSlice): Promise<void> {
     const run = async (): Promise<void> => {
-      await this.claimSessions();
-      const state: AppState = { version: 1, agents: this.agents, theme: this.themeChoice, sidebarWidth: this.sidebar };
-      if (this.cipher !== undefined) state.openrouterKey = this.cipher;
-      await saveState(this.deps.stateFile, state);
+      const claimed = await this.claimSessions();
+      try {
+        await this.slice(slice);
+        if (claimed && slice !== 'agents') await this.slice('agents');
+      } catch (error) {
+        if (!(error instanceof StateRefusedError)) throw error;
+      }
     };
     this.saving = this.saving.then(run, run);
     return this.saving;

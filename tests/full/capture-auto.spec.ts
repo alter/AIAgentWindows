@@ -2,7 +2,7 @@
 import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -49,6 +49,7 @@ interface Outcome {
   out: string;
   agentsBefore: string;
   agentsAfter: string;
+  userData: string;
 }
 
 async function runAuto(sites: Record<'chatgpt' | 'grok' | 'deepseek', Site>): Promise<Outcome> {
@@ -75,7 +76,7 @@ async function runAuto(sites: Record<'chatgpt' | 'grok' | 'deepseek', Site>): Pr
   child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString()));
   child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString()));
   const code = await new Promise<number | null>((resolve) => child.on('exit', resolve));
-  return { code, output, out, agentsBefore, agentsAfter: readFileSync(path.join(userData, 'agents.json'), 'utf8') };
+  return { code, output, out, agentsBefore, agentsAfter: readFileSync(path.join(userData, 'agents.json'), 'utf8'), userData };
 }
 
 test('unattended capture saves the first existing chat of each site and sends nothing', async () => {
@@ -107,6 +108,8 @@ test('unattended capture saves the first existing chat of each site and sends no
       expect(diagnostic.wait, kind).toMatchObject({ messageListSeen: true, timedOut: false });
     }
     expect(result.agentsAfter).toBe(result.agentsBefore);
+    const partitions = readdirSync(path.join(result.userData, 'Partitions')).sort();
+    expect(partitions).toEqual(Object.values(AGENTS).sort());
   } finally {
     for (const site of Object.values(sites)) site.server.close();
   }

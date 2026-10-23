@@ -42,7 +42,7 @@ async function siteViewX(app: ElectronApplication): Promise<number | undefined> 
 }
 
 function storedWidth(userData: string): unknown {
-  return (JSON.parse(readFileSync(path.join(userData, 'agents.json'), 'utf8')) as { sidebarWidth?: unknown }).sidebarWidth;
+  return (JSON.parse(readFileSync(path.join(userData, 'state.json'), 'utf8')) as { sidebarWidth?: unknown }).sidebarWidth;
 }
 
 async function expectWidth(app: ElectronApplication, page: Page, width: number): Promise<void> {

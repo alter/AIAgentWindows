@@ -1,27 +1,24 @@
 // state-file.ts
-import { emptyState, MAX_STATE_BYTES, parseState, serializeState, STATE_VERSION, type AppState } from '../shared/agents';
-import { JsonFile } from './store/json-file';
+import { emptyState, MAX_STATE_BYTES, parseStateDocument, serializeState, type AppState } from '../shared/agents';
+import { JsonFile, type JsonRead } from './store/json-file';
 
 const files = new Map<string, JsonFile<AppState>>();
-
-function parseShape(raw: unknown): AppState {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error('not an object');
-  const version = (raw as Record<string, unknown>)['version'];
-  if (version !== STATE_VERSION) throw new Error(`version ${String(version)} is not ${STATE_VERSION}`);
-  return parseState(JSON.stringify(raw));
-}
 
 function fileFor(file: string): JsonFile<AppState> {
   let known = files.get(file);
   if (known === undefined) {
-    known = new JsonFile(file, { maxBytes: MAX_STATE_BYTES, parse: parseShape });
+    known = new JsonFile(file, { maxBytes: MAX_STATE_BYTES, parse: parseStateDocument });
     files.set(file, known);
   }
   return known;
 }
 
+export function readState(file: string): Promise<JsonRead<AppState>> {
+  return fileFor(file).read();
+}
+
 export async function loadState(file: string): Promise<AppState> {
-  const read = await fileFor(file).read();
+  const read = await readState(file);
   return read.kind === 'ok' ? read.value : emptyState();
 }
 

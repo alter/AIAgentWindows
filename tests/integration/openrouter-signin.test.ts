@@ -1,5 +1,5 @@
 // openrouter-signin.test.ts
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import os from 'node:os';
@@ -12,7 +12,7 @@ import { challengeOf, createPkce } from '../../src/main/openrouter/pkce';
 import type { SecretBox } from '../../src/main/openrouter/secret-box';
 import { OpenRouterService } from '../../src/main/openrouter/service';
 import { fetchOpener, testSecretBox } from '../../src/main/openrouter/test-mode';
-import { emptyState } from '../../src/shared/agents';
+import { openStore } from '../unit/helpers/app-state';
 import type { OpenRouterStatus } from '../../src/shared/openrouter';
 import { ACCOUNT_LIMITED_MODEL, PROVIDER_LIMITED_MODEL, startFakeOpenRouter, type FakeOpenRouter } from '../fixtures/openrouter-fake';
 
@@ -22,17 +22,16 @@ let controller: AgentController;
 let statuses: OpenRouterStatus[];
 let services: OpenRouterService[];
 
-function newController(): AgentController {
+async function newController(folder: string = dir): Promise<AgentController> {
   return new AgentController(
     {
-      stateFile: path.join(dir, 'agents.json'),
+      store: await openStore(folder),
       sharedDir: path.join(dir, 'shared'),
       platform: 'darwin',
       env: {},
       pickFolder: async () => null,
       emit: () => undefined,
     },
-    emptyState(),
   );
 }
 
@@ -62,7 +61,7 @@ function build(options: Options = {}): OpenRouterService {
 }
 
 async function stateText(): Promise<string> {
-  return readFile(path.join(dir, 'agents.json'), 'utf8');
+  return readFile(path.join(dir, 'state.json'), 'utf8');
 }
 
 function callbackBase(): string {
@@ -104,7 +103,7 @@ function portOf(url: string): number {
 beforeEach(async () => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'aiaw-openrouter-'));
   fake = await startFakeOpenRouter();
-  controller = newController();
+  controller = await newController();
   statuses = [];
   services = [];
 });
@@ -429,6 +428,25 @@ describe('safe storage', () => {
     expect(controller.openrouterCipher()).toBeNull();
     expect((await service.paste('sk-or-v1-pasted')).notice).toBe('storage-unavailable');
     expect(fake.requests).toHaveLength(0);
+  });
+
+  it('while state.json cannot be read the key is not saved, the block says so and the file stays as it was', async () => {
+    const broken = path.join(dir, 'broken');
+    const truncated = '{"version":2,"agents":[{"id":"';
+    await mkdir(broken);
+    await writeFile(path.join(broken, 'state.json'), truncated, 'utf8');
+    const working = controller;
+    controller = await newController(broken);
+    try {
+      const service = build();
+      const status = await service.paste(fake.key);
+      expect(status).toEqual({ state: 'signed-out', mode: null, notice: 'state-refused', info: null });
+      expect(controller.openrouterCipher()).toBeNull();
+      expect(await readFile(path.join(broken, 'state.json'), 'utf8')).toBe(truncated);
+    } finally {
+      controller.shutdown();
+      controller = working;
+    }
   });
 
   it('a stored key stays untouched while safe storage is unavailable at start-up', async () => {

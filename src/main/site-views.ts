@@ -34,6 +34,7 @@ export class SiteViews {
   constructor(
     private readonly window: BrowserWindow,
     private readonly emit: (event: SiteStateEvent) => void,
+    private readonly partitionOf: (kind: SiteKind) => string,
     private readonly env: Readonly<Record<string, string | undefined>> = {},
     private readonly log: SiteLogger = () => undefined,
   ) {
@@ -171,7 +172,7 @@ export class SiteViews {
   private ensure(id: string, kind: SiteKind): SiteEntry {
     const existing = this.entries.get(id);
     if (existing !== undefined) return existing;
-    const partition = `persist:${id}`;
+    const partition = this.partitionOf(kind);
     this.configureSession(partition, kind);
     const view = new WebContentsView({
       webPreferences: { partition, contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false },

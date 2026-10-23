@@ -191,7 +191,13 @@ export class OpenRouterService {
   }
 
   private async adopt(key: string, info: OpenRouterStatus['info']): Promise<OpenRouterStatus> {
-    if (!(await this.deps.store.save(key))) return this.signedOut('storage-unavailable');
+    let saved: boolean;
+    try {
+      saved = await this.deps.store.save(key);
+    } catch {
+      return this.signedOut('state-refused');
+    }
+    if (!saved) return this.signedOut('storage-unavailable');
     this.set({ state: 'connected', mode: null, notice: null, info });
     if (info === null) await this.loadInfo();
     return this.current;

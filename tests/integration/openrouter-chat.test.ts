@@ -11,7 +11,7 @@ import { ConversationStore } from '../../src/main/openrouter/conversation-store'
 import { KeyStore } from '../../src/main/openrouter/key-store';
 import { OpenRouterService } from '../../src/main/openrouter/service';
 import { testSecretBox } from '../../src/main/openrouter/test-mode';
-import { emptyState } from '../../src/shared/agents';
+import { openStore } from '../unit/helpers/app-state';
 import type { OpenRouterSettings, OpenRouterStatus } from '../../src/shared/openrouter';
 import {
   BUSY_TEXT,
@@ -273,10 +273,7 @@ describe('the agent, its conversation file and Copy', () => {
 
   it('closing the agent stops its reply and keeps the file; settings change the title until it is renamed', async () => {
     const closeChat = vi.fn<(id: string) => void>();
-    const controller = new AgentController(
-      { stateFile: path.join(dir, 'agents.json'), sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined, closeChat },
-      emptyState(),
-    );
+    const controller = new AgentController({ store: await openStore(dir), sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined, closeChat });
     try {
       await controller.add('openrouter');
       const created = controller.snapshot().agents[0];
@@ -309,10 +306,8 @@ describe('the agent, its conversation file and Copy', () => {
     settings = { model: 'acme/free-model:free', effort: '', web: false };
     await chats().send(AGENT, 'Keep this');
     const before = await readFile(store.file(AGENT), 'utf8');
-    const controller = new AgentController(
-      { stateFile: path.join(dir, 'agents.json'), sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined },
-      { version: 1, agents: [{ id: AGENT, kind: 'openrouter', title: 'OpenRouter', openrouter: settings, createdAt: 1 }] },
-    );
+    const state = await openStore(dir, { version: 2, agents: [{ id: AGENT, kind: 'openrouter', title: 'OpenRouter', openrouter: settings, createdAt: 1 }] });
+    const controller = new AgentController({ store: state, sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined });
     await controller.close(AGENT);
     controller.shutdown();
     expect(await readFile(store.file(AGENT), 'utf8')).toBe(before);

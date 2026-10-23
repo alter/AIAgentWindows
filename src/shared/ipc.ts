@@ -79,6 +79,8 @@ export interface AgentsSnapshot {
   roomOpen: boolean;
 }
 
+export type AddAgentResult = { ok: true } | { ok: false; error: string };
+
 export interface PtyDataEvent {
   id: string;
   data: string;
@@ -163,7 +165,7 @@ export type Validation<T> = { ok: true; value: T } | { ok: false; error: string 
 
 export interface AppApi {
   listAgents(): Promise<AgentsSnapshot>;
-  addAgent(kind: AgentKind): Promise<void>;
+  addAgent(kind: AgentKind): Promise<AddAgentResult>;
   selectAgent(id: string): Promise<void>;
   closeAgent(id: string): Promise<void>;
   restartAgent(id: string): Promise<boolean>;

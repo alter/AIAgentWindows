@@ -20,7 +20,11 @@ const sidebar = new Sidebar({
   onRoomNew: () => content.roomNew(),
   onRoomRename: (id, title) => content.roomRename(id, title),
   onRoomDelete: (id) => content.roomDelete(id),
-  onAdd: (kind) => void api.addAgent(kind),
+  onAdd: (kind) =>
+    void api
+      .addAgent(kind)
+      .then((result) => sidebar.showNotice(result.ok ? '' : result.error))
+      .catch(() => sidebar.showNotice('The agent could not be added.')),
   onClose: (id) => void api.closeAgent(id),
   onRename: (id, title) => void api.renameAgent(id, title),
   onTheme: (choice) => void api.themeSet(choice),

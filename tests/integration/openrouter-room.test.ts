@@ -12,7 +12,7 @@ import { testSecretBox } from '../../src/main/openrouter/test-mode';
 import { readRecord } from '../../src/main/room-archive';
 import { Room } from '../../src/main/room';
 import { createRoomDrivers } from '../../src/main/room-drivers';
-import { emptyState } from '../../src/shared/agents';
+import { openStore } from '../unit/helpers/app-state';
 import type { ModelItem, OpenRouterStatus } from '../../src/shared/openrouter';
 import { historyNonce } from '../../src/shared/room-history';
 import type { RoomConfig, RoomEntry, RoomParticipant } from '../../src/shared/room-model';
@@ -79,10 +79,7 @@ beforeEach(async () => {
   roomsDir = path.join(dir, 'rooms');
   statuses = [];
   fake = await startFakeOpenRouter();
-  controller = new AgentController(
-    { stateFile: path.join(dir, 'agents.json'), sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined },
-    emptyState(),
-  );
+  controller = new AgentController({ store: await openStore(dir), sharedDir: path.join(dir, 'shared'), platform: 'darwin', env: {}, pickFolder: async () => null, emit: () => undefined });
   service = build(fake.base);
   await service.paste(fake.key);
 });

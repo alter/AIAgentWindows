@@ -66,7 +66,7 @@ async function send(page: Page, text: string): Promise<void> {
 }
 
 function storedAgentId(): string {
-  const state = JSON.parse(readFileSync(path.join(base, 'profile', 'agents.json'), 'utf8')) as { agents: { id: string; kind: string }[] };
+  const state = JSON.parse(readFileSync(path.join(base, 'profile', 'state.json'), 'utf8')) as { agents: { id: string; kind: string }[] };
   return state.agents.find((agent) => agent.kind === 'openrouter')?.id ?? '';
 }
 

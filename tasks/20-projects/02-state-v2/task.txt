@@ -1,0 +1,73 @@
+TASK: state v2 — state.json with one owner, the partition map and the migration
+
+GOAL
+  App state version 2 in `<userData>/state.json`, held in memory by one owner
+  that AgentController writes its slices through; a tolerant migration from a
+  version-1 agents.json that keeps every site login (one partition per site
+  kind) and never writes or reopens agents.json afterwards; SiteViews and the
+  capture read the partition map; an unreadable file is never rewritten and
+  adding agents or changing the key is refused with the file path
+  (docs/plans/projects.md D3, D18, D19, AC3, T05). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/shared/agents.ts
+  src/shared/legacy-state.ts
+  src/main/state-file.ts
+  src/main/store/app-state.ts
+  src/main/agent-controller.ts
+  src/main/index.ts
+  src/main/site-views.ts
+  src/main/capture-auto-main.ts
+  src/main/openrouter/service.ts
+  src/shared/ipc.ts
+  src/renderer/sidebar.ts
+  tests/unit/legacy-state.test.ts
+  tests/unit/app-state.test.ts
+  tests/integration/state-v2-controller.test.ts
+  tests/full/state-v2.spec.ts
+  AGENTS.md
+  docs/PROJECT.md
+  src/preload/index.ts
+  src/renderer/index.ts
+  src/renderer/styles.css
+  src/shared/openrouter.ts
+  tests/unit/helpers/app-state.ts
+  tests/unit/state-file.test.ts
+  tests/unit/state-store.test.ts
+  tests/integration/agent-controller.test.ts
+  tests/integration/openrouter-chat.test.ts
+  tests/integration/openrouter-room.test.ts
+  tests/integration/openrouter-signin.test.ts
+  tests/integration/restore-controller.test.ts
+  tests/integration/room-wiring.test.ts
+  tests/full/agent-identity.spec.ts
+  tests/full/capture-auto.spec.ts
+  tests/full/openrouter-account.spec.ts
+  tests/full/openrouter-chat.spec.ts
+  tests/full/sidebar-resize.spec.ts
+
+SCOPE
+  + store/app-state.ts (read, update(slice, fn), fail-closed refusals), shared/legacy-state.ts, partition map in AppState
+  + AgentController on the agents, theme, sidebar and key slices; add refused while fail-closed, readable error to the renderer
+  + SiteViews (view and popup) and capture-auto-main on the partition map
+  + tests with synthetic fixtures only; smoke observable of AC3 on a temp userData
+  − the project index and `projectId` on agents — 04-projects-service and 06-project-agents
+  − agents.json is never written, deleted or reopened once state.json exists
+  − the owner's real data folder: tests and smoke use a temp userData
+  − weakening an existing assertion: existing tests change only imports and renamed shapes
+
+OUTCOME
+  src/main/store/app-state.ts exists and tests/unit/app-state.test.ts passes.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/legacy-state.test.ts, tests/unit/app-state.test.ts and tests/integration/state-v2-controller.test.ts pass; reverse controls in NOTES.md
+  3. [full] electron-smoke exit 0, 69/69 or more, including tests/full/state-v2.spec.ts (Partitions/<old agentId>/ changes after the view opens)
+  4. [fast] python3 scripts/neutrality_check.py 663e326 tasks/20-projects/02-state-v2/vitest-list.json-before exits 0 or fails only on declared renames
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

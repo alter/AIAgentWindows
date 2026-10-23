@@ -31,7 +31,7 @@ async function names(page: Page): Promise<string[]> {
 }
 
 function stateFile(userData: string): string {
-  return readFileSync(path.join(userData, 'agents.json'), 'utf8');
+  return readFileSync(path.join(userData, 'state.json'), 'utf8');
 }
 
 async function watchEvents(page: Page): Promise<void> {

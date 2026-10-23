@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   EVENT_CHANNELS,
   INVOKE_CHANNELS,
+  type AddAgentResult,
   type AgentsSnapshot,
   type AppApi,
   type OpenRouterModels,
@@ -28,7 +29,7 @@ function subscribe<T>(channel: string, listener: (event: T) => void): () => void
 
 const api: AppApi = {
   listAgents: () => ipcRenderer.invoke(INVOKE_CHANNELS.listAgents) as Promise<AgentsSnapshot>,
-  addAgent: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.addAgent, { kind }) as Promise<void>,
+  addAgent: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.addAgent, { kind }) as Promise<AddAgentResult>,
   selectAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.selectAgent, { id }) as Promise<void>,
   closeAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.closeAgent, { id }) as Promise<void>,
   restartAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.restartAgent, { id }) as Promise<boolean>,
