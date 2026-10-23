@@ -14,6 +14,7 @@ CONTEXT
   src/shared/cli-args.ts (buildRoomTurnSpawn)
   src/main/room-drivers.ts
   src/renderer/room-pane.ts
+  src/renderer/styles.css
   docs/tech/claude-code@2.1.306.md
   docs/tech/codex@0.163.0.md
 
@@ -43,6 +44,7 @@ WRITE-SET
   src/main/room-drivers.ts
   src/main/room-service.ts
   src/renderer/room-pane.ts
+  src/renderer/styles.css
   tests/unit/room-model.test.ts
   tests/unit/room-view.test.ts
   tests/unit/room-archive.test.ts

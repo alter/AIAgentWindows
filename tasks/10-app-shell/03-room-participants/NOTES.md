@@ -39,3 +39,5 @@ tests/unit/room-sessions.test.ts and tests/integration/room.test.ts added to WRI
 ## T04 write set
 
 Added to WRITE-SET of task.txt: src/shared/cli-models.ts (parsers), src/main/cli-models.ts (reader), src/shared/ipc.ts, src/preload/index.ts, src/main/ipc-handlers.ts, src/main/index.ts (the validated `room:models` channel and its wiring), tests/unit/cli-models.test.ts, tests/unit/ipc-validate.test.ts, tests/integration/cli-models.test.ts, tests/integration/room-wiring.test.ts, tests/fixtures/ (the stub CLI answers `--help` and `debug models`). `buildInfoSpawn` in cli-args.ts reuses the binary resolution and login-shell wrapper of the turn spawn; `MODEL_PATTERN` and `EFFORT_PATTERN` of room-model.ts are exported so suggestions are filtered by the same shape as validation.
+
+- T05: src/renderer/styles.css added to WRITE-SET: the compact participant rows need their own rules.
