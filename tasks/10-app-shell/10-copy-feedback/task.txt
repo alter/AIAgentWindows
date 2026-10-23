@@ -1,0 +1,56 @@
+TASK: copy feedback — the final's Copy buttons read Copied and rest for 3 s instead of a status line
+
+GOAL
+  A click on Copy of the final result shows its outcome on the button itself:
+  the button reads Copied and is inactive for 3 seconds, then returns; the
+  "Final result copied." line under the pane goes. Owner's request of
+  2026-10-23 ("целая строка под это зачем? ... кнопка должна стать неактивной
+  на 3с и в ней текст должен поменяться с Copy, на Copied"). Serves no gate.
+
+CONTEXT
+  src/renderer/room-feed.ts:6-31 (copyButton, the final's two Copy buttons)
+  src/renderer/room-pane.ts:347 (onCopyFinal writes the message line)
+  src/renderer/styles.css (disabled controls: dashed outline, palette tokens)
+  tests/full/room.spec.ts:461 (both Copy buttons put the final into the clipboard)
+
+SCOPE
+  + S1 a successful copy sets both Copy buttons of the final to "Copied" and inactive (aria-disabled, the disabled look of the palette, clicks ignored) for 3000 ms, then back to "Copy" and active; the focus stays on the pressed button
+  + S2 the success line "Final result copied." is no longer written; a failed copy ("There is no final result to copy.") keeps the message line, because nothing on the button can say why
+  + S3 a feed reload during the 3 s (new entry, room switch) leaves no timer touching removed buttons
+  − the clipboard path (room:copyFinal) — unchanged, 10-app-shell/02-room
+  − Copy buttons anywhere else — none exist
+  indivisible: one button behaviour in one file and its smoke
+
+WRITE-SET
+  src/renderer/room-feed.ts
+  src/renderer/room-pane.ts
+  src/renderer/styles.css
+  src/shared/room-view.ts
+  tests/unit/room-view.test.ts
+  tests/full/room.spec.ts
+  docs/PROJECT.md
+  tasks/10-app-shell/10-copy-feedback/
+
+DATA
+  (none)
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  A smoke run clicks Copy on the final, finds the clipboard holding the whole
+  final text, both Copy buttons with aria-disabled=true and data-copied set,
+  then after 3 s both active again; every task of
+  tasks/10-app-shell/10-copy-feedback/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [full] electron-smoke: click Copy → clipboard holds the final, both buttons inactive with data-copied; after the rest both active, data-copied gone; the message line is empty after a successful copy
+  3. [fast] reverse control: drop the inactive state in room-feed → tests/full/room.spec.ts::the final's Copy rests for 3 s after a copy
+  4. [fast] HUMAN: the owner copies a final and looks at the button
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/09-room-resume
