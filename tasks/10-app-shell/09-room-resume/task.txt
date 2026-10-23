@@ -1,0 +1,70 @@
+TASK: room resume — a stopped run continues from its first unanswered turn
+
+GOAL
+  After Stop (or an app quit mid-run) the owner presses the start button with
+  the same prompt and the same setup and the run goes on from the first turn
+  that has no answer; answered turns are not asked again. Owner's request of
+  2026-10-23 ("нажал stop и затем continue - почему все с нуля началось? у нас
+  же промпт тот же, ответы от моделей уже имеются"). Serves no gate.
+
+CONTEXT
+  src/main/room.ts:236-345 (Room.start, execute, relay, broadcast, RunState, RoomContinuation)
+  src/main/room-service.ts (start with continueId, record read, app start rewrites running as stopped)
+  src/shared/room-model.ts:31-75 (RoomEntry round/state, RoomRecord), :141 relaySchedule
+  src/shared/ipc.ts:98,131,228 (room:start request and its parser)
+  src/renderer/room-pane.ts (onStart, renderState: Start/Continue label)
+  tasks/10-app-shell/04-room-archive/PLAN.md (continue = new prompt in the same room)
+
+SCOPE
+  + S1 resume point (pure, src/shared): from a room record, the last run segment (entries after the last owner prompt) is resumable when the record status is stopped or failed and the segment has no final entry; done turns are the (authorId, round) pairs of the segment's reply and error entries without state stopped; the result names the segment prompt and the done turns
+  + S2 room:start takes an optional `resume: true` with continueId; the main process computes the resume point from the stored record and refuses when there is none or when the requested prompt, mode, rounds, participants or finalizer differ from the record's (turn timeout and site debug may change); the renderer is never trusted for which turns are done
+  + S3 a resumed run appends no new owner prompt, skips the done turns (relay: in schedule order; broadcast: the missing participants of the interrupted round with the entries seen at that round's start, then the remaining rounds), then the finalizer; progress counts start at the done turns; the turn cut by Stop is asked again; CLI sessions start fresh and get the earlier entries as on continue today
+  + S4 the button reads Resume when the opened room is resumable and the prompt box and setup equal the stopped run's; editing the prompt or the setup turns it back to Continue (a new prompt, as today); refused resume shows its error
+  − a new prompt in the same room (Continue) — unchanged, 10-app-shell/04-room-archive
+  − resuming after the setup was changed (participants added or removed) — the button falls back to Continue
+  − partial text of the turn cut by Stop — discarded as today
+  indivisible: the resume point, the run loop and the button rule share one contract and the same smoke specs
+
+WRITE-SET
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/room-service.ts
+  src/main/room.ts
+  src/renderer/room-pane.ts
+  tests/unit/room-model.test.ts
+  tests/unit/room-view.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/integration/
+  tests/full/
+  docs/PROJECT.md
+  tasks/10-app-shell/09-room-resume/
+
+DATA
+  start.resume: dir=in; type=boolean; size=one value; null=yes; interpretable=no; validated=tests/unit/ipc-validate.test.ts::room start accepts resume only as a boolean with a continue id; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  An integration run on stub CLIs stops a relay after two answered turns,
+  resumes it and finds in <shared>/rooms/<id>.json exactly one owner prompt for
+  that segment, no second answer from the two answered participants in the
+  same round, and a final entry; every task of
+  tasks/10-app-shell/09-room-resume/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/room-model.test.ts: resume point for relay and broadcast segments, none after a final, none for a done record, stopped entries not counted
+  3. [fast] tests/integration/room-archive.test.ts: stop after two turns, resume, no repeated (author, round) pair, one prompt in the segment, final present; a resume with a changed prompt or participants is refused
+  4. [fast] reverse control: resume ignores the done turns in room.ts → tests/integration/room-archive.test.ts::a resumed relay skips the answered turns
+  5. [full] electron-smoke: stop a relay on stubs, the button reads Resume, press it, the history has no repeated answer and ends with the final
+  6. [fast] HUMAN: the owner stops a real room mid-run and resumes it
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/08-room-setup-collapse
