@@ -1,0 +1,10 @@
+phase:app-shell
+role:APP
+type:feature
+priority:P1
+status:todo
+verify:pending
+depends:10-app-shell/03-room-participants
+milestone:M2
+format:2
+capability:Themes and contrast: light and dark by the system setting, WCAG 2 AA and APCA

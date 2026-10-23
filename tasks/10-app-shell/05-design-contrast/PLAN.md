@@ -1,0 +1,53 @@
+---
+status: running
+created: 2026-10-23
+---
+# Design contrast — light and dark palettes by the system setting, WCAG 2 AA and APCA
+
+## Goal
+Every colour pair the app draws passes WCAG 2 AA and APCA in a light and a dark palette chosen by the system setting; no pair is two shades of one hue; spoilers get the standard disclosure arrow. Owner, 2026-10-23: "обудим про дизайн в виде WCAG 2 AA и APAC ... цвета различающиеся тоном мы друг на друге не делаем (Сервый шрифт на черный фон, красный шрифт на другого оттенка красную заливку) ... ну поставь ты иконку стандартную для всех выпадающих списков со стрелками вниз".
+
+## Acceptance criteria
+- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0, `python3 scripts/contrast_check.py` among them
+- [ ] AC2 Gate math: `python3 -m unittest tests.scripts.test_contrast_check` exit 0 — the published APCA reference pairs (docs/tech/apca-w3@<pinned>.md) and WCAG ratios reproduced; a same-hue pair, a translucent token, a colour literal outside the token blocks and opacity 0.5 each fail with their rule; reverse control: one APCA exponent changed in a scratch copy turns `test_apca_reference_pairs` red (output in NOTES.md)
+- [ ] AC3 Gate on the product: `python3 scripts/contrast_check.py` exit 0 over both palettes of src/renderer/styles.css; the dark body text token set to #808080 in a scratch copy makes it exit non-zero naming that pair (output in NOTES.md)
+- [ ] AC4 Smoke: electron-smoke exit 0; with the scheme forced light and then dark, the body and terminal backgrounds are that palette's tokens; a Room feed entry opens on a click on its head — windows hidden
+- [ ] AC5 HUMAN (excluded from /run): the owner looks at both palettes (system setting light, then dark) and records in NOTES.md whether every text, icon and arrow is readable and no pair is two shades of one hue
+
+## Stack
+Electron 44.6.0, xterm 6.0.0, TypeScript 6.0.3, Python 3 for gate scripts (docs/PROJECT.md §1). APCA is new to the project: docs/tech/apca-w3@<pinned>.md is written in T01 before any design against it. No new runtime dependency; the gate implements the published APCA-W3 formula in Python and is held to the published reference values.
+
+## Decisions
+- D1 Standard -> WCAG 2 AA (2.2 success criteria 1.4.3, 1.4.11, 2.4.7, 2.5.8) and APCA together; a pair passes only when it passes both (owner, 2026-10-23).
+- D2 Themes -> light and dark, chosen by the system setting, no switch in the app (owner, 2026-10-23: "Обе, по настройке системы").
+- D3 No pair of two shades of one hue (owner, 2026-10-23).
+- D4 Spoilers -> the standard disclosure arrow, right when closed, down when open (owner, 2026-10-23).
+- Branch: `room`. Commit per task, never push.
+
+## Assumptions
+- APCA levels (Bronze, by use; exact values from T01's doc): body text of the feed and inputs at the "body text" level, other text at the "content text" level, headings at the "large text" level, icons, arrows, borders of controls and the focus ring at the "non-text / spot" level that applies; the WCAG floors on top: text 4.5:1, controls, icons and focus ring 3:1.
+- Same-hue rule as the gate enforces it: in OKLCH, when both colours have chroma ≥ 0.03, their hues differ by at least 40°; when both are neutral (chroma < 0.03), the text colour is #ffffff or #000000. Text on a neutral surface is therefore white or black only; secondary text is told apart by size and weight, never by grey.
+- Statuses (error, done, stopped, running) are solid fills with white or black text, whichever passes; colour is never the only signal — the status word stays.
+- Disabled controls: dashed outline, no fill, text keeps its colour, `cursor: default`, `disabled`/`aria-disabled` set (disabled controls are exempt from 1.4.3, but the owner's no-grey rule holds anyway).
+- The sidebar stays aubergine in both palettes with white text (Slack's light theme does the same); selected item is a fill that passes with white.
+- Pair manifest `src/renderer/contrast-pairs.json`: `{fg token, bg token, use}` per pair, checked in both palettes; the gate also fails on a token used in styles.css as a foreground or background that no pair covers.
+- CSS has no comments besides the first line; the token blocks are `:root { … }` (dark, the default) and `@media (prefers-color-scheme: light) { :root { … } }`.
+- UI language stays English, as the rest of the app.
+
+## Out of scope
+- Colours inside CLI output beyond `minimumContrastRatio`
+- Remote site pages
+- A theme switch in the app
+- Rooms tree and participants table (10-app-shell/06-room-layout)
+
+## Tasks
+- [x] T00 Baseline: the coordinator's run at 03-room-participants T06 verification on 0fad474 (fast tier 11 commands exit 0, coverage 910/910 100 %, electron-smoke 35/35) is this plan's baseline — verify: the Log line exists
+- [ ] T01 Evidence (S1, ARCH): `docs/tech/apca-w3@<pinned npm version>.md` (algorithm version string, constants, Bronze Lc levels by use and font size, published reference pairs with their Lc, polarity, every item with its URL from the official APCA repository, npm page or readability-criterion page); `docs/tech/wcag@2.2.md` (SC 1.4.3, 1.4.11, 2.4.7, 2.5.8, W3C URLs); `docs/tech/xterm@6.0.0.md` gets `ITheme`, live `options.theme` reassignment and `minimumContrastRatio` from the 6.0.0 sources; `docs/tech/electron@44.6.0.md` gets how `prefers-color-scheme` follows `nativeTheme` (themeSource `system`) and which way a Playwright test can force each scheme on this version (a scratch spike under .claude/scratch, result recorded), and the existing items without URLs (lines 27, 28, 32, 35, 36, 37, 43) get their URLs; EVIDENCE rows for what is confirmed — verify: `python3 scripts/evidence_check.py` exit 0 and `python3 tasks/check.py` shows fewer problems than 35 and none new
+- [ ] T02 Contrast gate (S2): `scripts/contrast_check.py [--css PATH] [--pairs PATH]` — parses the dark and light token blocks, the pair manifest and every rule of styles.css; computes WCAG 2 ratio and APCA Lc; rules `contrast-wcag`, `contrast-apca`, `same-hue`, `translucent-token`, `literal-colour`, `opacity`, `uncovered-token`; output `path:line [rule] message`, exit 1 on any finding; tests red first in `tests/scripts/test_contrast_check.py` (reference pairs from T01's doc, one test per rule on synthetic CSS); AC2's reverse control in NOTES.md; the gate is NOT added to §6 yet (the current CSS fails it; record its finding count in NOTES.md) — verify: `python3 -m unittest tests.scripts.test_contrast_check` exit 0 + fast tier
+- [ ] T03 Palettes (S3, S4): styles.css rewritten onto opaque tokens for dark and light; no rgba, no literal colours outside the token blocks, opacity only 0 or 1 (hover-revealed close buttons use visibility), statuses as solid fills, disabled as dashed outline, focus ring on every control (`:focus-visible`), context menus, confirm bar, nav bar, Room pane, chips and banners in both palettes; contrast-pairs.json complete; `python3 scripts/contrast_check.py` exit 0; the gate added to docs/PROJECT.md §6 fast tier and to `.claude/scratch/gates.sh`; AC3's mutation run recorded in NOTES.md — verify: contrast_check exit 0 + fast tier + electron-smoke
+- [ ] T04 Terminal palette (S6): `src/renderer/terminal-theme.ts` pure `terminalTheme(scheme)` from the palette values (background, foreground, cursor, selection), `minimumContrastRatio: 4.5`; terminal-pane applies it at creation and on `matchMedia('(prefers-color-scheme: light)')` change; tests red first in `tests/unit/terminal-theme.test.ts` (`terminal theme follows the scheme`); smoke step for AC4 forcing each scheme the way T01 found — verify: `npx vitest run tests/unit/terminal-theme.test.ts` + fast tier + electron-smoke
+- [ ] T05 Disclosure arrows (S5): every `<summary>` of the Room feed draws an arrow (right closed, down open; CSS on `[open]`, no text glyph read by screen readers twice), the whole head row is the click target with `cursor: pointer`, the arrow's colour pair is in the manifest; same arrow on any other collapsible section of the app; smoke step: a click on an entry's head opens it (outcome: `open` set and the text visible) — verify: contrast_check exit 0 + fast tier + electron-smoke
+- [ ] T06 Ledger and notes: docs/PROJECT.md themes row says what is built; NOTES.md summary with the finding count before T03 and 0 after; task labels `status:review` when AC1-AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem + fast tier
+
+## Log
+- 2026-10-23 coordinator: T00 baseline taken from the 03-room-participants T06 verification run on 0fad474 (fast tier 11 commands exit 0, coverage 910/910 100 %, electron-smoke 35/35); tasks/check.py 35 problems at task creation (28 pre-existing + the same 7 electron@44.6.0.md items now also listed under this task, fixed by T01)

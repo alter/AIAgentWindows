@@ -1,0 +1,78 @@
+TASK: design contrast — light and dark palettes by the system setting, WCAG 2 AA and APCA, held by a gate
+
+GOAL
+  Every colour pair the app draws (text, icon, border, focus ring on its
+  background) passes WCAG 2 AA and APCA, in a light and a dark palette that
+  follow the system setting; no pair is two shades of one hue (grey text on
+  black, red text on a red fill). Spoilers get the standard disclosure arrow.
+  Owner's request of 2026-10-23 (docs/PROJECT.md §3, themes row). Serves no gate.
+
+CONTEXT
+  src/renderer/styles.css (every colour today; rgba surfaces and opacity at lines 30-356)
+  src/renderer/terminal-pane.ts:41 (hard-coded dark xterm theme)
+  src/renderer/room-feed.ts (summary entries, .room-entry-head is display:flex so no native marker)
+  docs/tech/xterm@6.0.0.md
+  docs/tech/electron@44.6.0.md
+  docs/PROJECT.md §6 (gate checks)
+
+SCOPE
+  + S1 evidence first (ARCH): docs/tech/apca-w3@<pinned>.md from the official APCA sources (algorithm version and constants, Bronze Lc levels by use, published reference pairs) with URLs; WCAG 2.2 SC 1.4.3, 1.4.11, 2.4.7, 2.5.8 with W3C URLs; xterm 6.0.0 `theme` (live reassignment) and `minimumContrastRatio`; how Electron 44.6.0 feeds `prefers-color-scheme` from `nativeTheme` and how a test forces each scheme
+  + S2 contrast gate scripts/contrast_check.py: reads the light and dark token blocks of styles.css and a pair manifest, computes the WCAG 2 ratio and APCA Lc of each pair against the level of its use, fails on a same-hue pair, on a translucent token, on a colour literal outside the token blocks and on opacity other than 0 or 1; output `path:line [rule] message`, exit non-zero; listed in docs/PROJECT.md §6 fast tier
+  + S3 two palettes as opaque tokens, chosen by `prefers-color-scheme`; every rule of styles.css uses tokens; text on neutral surfaces is white or black only; statuses are solid fills with the text colour that passes; disabled controls change shape (dashed outline, no fill), never fade
+  + S4 visible keyboard focus on every control, the ring passing 3:1 against its surface in both palettes
+  + S5 disclosure arrow on every collapsible entry of the Room feed and on collapsible sections: right when closed, down when open, the whole head row clickable
+  + S6 terminals follow the palette and switch live with the system setting; `minimumContrastRatio` raises ANSI colours of CLI output to 4.5:1
+  − colours inside the CLIs' own output beyond what minimumContrastRatio adjusts — the CLIs own them
+  − remote site pages (ChatGPT, Grok, DeepSeek) — their sites own them
+  − a theme switch inside the app — the system setting decides (owner, 2026-10-23)
+  − sidebar Rooms tree, participants table — 10-app-shell/06-room-layout
+  indivisible: the palette, the gate that reads it and every rule of the one stylesheet change together
+
+WRITE-SET
+  docs/tech/apca-w3@0.1.9.md
+  docs/tech/wcag@2.2.md
+  docs/tech/xterm@6.0.0.md
+  docs/tech/electron@44.6.0.md
+  docs/EVIDENCE.md
+  scripts/contrast_check.py
+  tests/scripts/test_contrast_check.py
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  src/renderer/terminal-pane.ts
+  src/renderer/terminal-theme.ts
+  src/renderer/room-feed.ts
+  src/renderer/room-pane.ts
+  src/renderer/sidebar.ts
+  src/renderer/nav-bar.ts
+  src/main/index.ts
+  src/main/window.ts
+  tests/unit/terminal-theme.test.ts
+  tests/full/
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/05-design-contrast/
+  .claude/scratch/gates.sh
+
+DATA
+  system colour scheme: dir=in; type=enum light|dark from the OS through nativeTheme and prefers-color-scheme; range=2 values; null=no; interpretable=no; validated=tests/unit/terminal-theme.test.ts::terminal theme follows the scheme; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/native-theme.md
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  `python3 scripts/contrast_check.py` exits 0 over both palettes of
+  src/renderer/styles.css and is a fast-tier line of docs/PROJECT.md §6; every
+  task of tasks/10-app-shell/05-design-contrast/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0, contrast_check.py among them
+  2. [fast] reverse control: change one APCA exponent in a scratch copy of scripts/contrast_check.py → tests/scripts/test_contrast_check.py::test_apca_reference_pairs; and the dark body text token set to #808080 in a scratch copy of styles.css makes `python3 scripts/contrast_check.py --css <copy>` exit non-zero naming the pair
+  3. [fast] tests/scripts/test_contrast_check.py: published APCA reference pairs and WCAG ratios reproduced; a same-hue pair, an rgba token, a literal colour outside the token blocks and opacity 0.5 each fail with their rule
+  4. [full] electron-smoke: with the scheme forced light and then dark, body and terminal background are the palette's own tokens; a feed entry opens on a click on its head
+  5. [fast] HUMAN: the owner looks at both palettes (system setting light, then dark) and records in NOTES.md whether every text, icon and arrow is readable and no pair is two shades of one hue
+
+ROLE
+  ARCH, APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/03-room-participants

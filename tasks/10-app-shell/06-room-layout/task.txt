@@ -1,0 +1,77 @@
+TASK: room layout — saved rooms as a tree under # Rooms in the sidebar, rename, participants as a table
+
+GOAL
+  Saved rooms are listed in the sidebar under "# Rooms" like Slack channels and
+  open with one click; a room is named from its first prompt and can be
+  renamed; participants are a table, one row per participant, in relay order,
+  with a button to add a row. Owner's request of 2026-10-23 (docs/PROJECT.md §3,
+  Room row). Serves no gate.
+
+CONTEXT
+  tasks/10-app-shell/04-room-archive/PLAN.md (record, list, reopen)
+  tasks/10-app-shell/03-room-participants/PLAN.md (rows, ids, finalizer)
+  src/renderer/sidebar.ts (Room item, agent list)
+  src/renderer/room-pane.ts (rooms select, participant rows, finalizer select)
+  src/shared/room-model.ts (RoomRecord, parseRoomRecord, relaySchedule follows the participants order)
+  src/shared/room-view.ts
+  src/main/room-service.ts (atomic record write after every entry)
+
+SCOPE
+  + S1 room title: a record carries an optional title (1..80 characters, no control characters); without one the title is derived from the first prompt; old records parse unchanged
+  + S2 rename through room-service (`room:rename`, validated id and title), so a rename during a run is carried by the next record write and never lost to it; an unreadable record is refused and never rewritten
+  + S3 sidebar tree: "# Rooms" header with a collapse arrow and "+" (new room); below it every saved room by title, newest first, the opened one marked selected; click opens; context menu "Rename" edits the title in place (Enter saves, Escape cancels); the list refreshes on start, rename, open and app start; the select in the Room pane is removed
+  + S4 participants table: columns #, Agent, Model, Effort, Final (radio), actions (move up, move down, remove); one "Add participant" menu with Claude Code, Codex, ChatGPT, Grok, DeepSeek; a site already in the table or without an adapter is disabled in the menu; row order is relay order; removing the final writer's row falls back by the existing default rule
+  + S5 keyboard and screen reader: table headers with scope, action buttons named with the instance label, move up disabled on the first row and move down on the last, focus kept on the moved row's button or a neighbour after move and remove, tree header with aria-expanded, the opened room with aria-current
+  − colours, palettes, arrows of spoilers — 10-app-shell/05-design-contrast
+  − deleting a saved room — not requested; absent in the ledger
+  − drag-and-drop reordering — buttons only, keyboard operable
+  indivisible: the room list moves from the pane to the sidebar and the rows move to the table in the same pane; both rewrite the same smoke specs
+
+WRITE-SET
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/room-service.ts
+  src/renderer/index.ts
+  src/renderer/sidebar.ts
+  src/renderer/room-pane.ts
+  src/renderer/room-table.ts
+  src/renderer/room-tree.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/
+  tests/integration/
+  tests/full/
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/06-room-layout/
+
+DATA
+  room.title: dir=in; type=string typed by the owner or derived from the first prompt; size=1..80 chars, no control characters; null=yes; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+  rename.id: dir=in; type=string; size=the isRoomId pattern; null=no; interpretable=no; validated=tests/unit/ipc-validate.test.ts::room rename rejects a malformed id or title; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink sidebar-room-tree: consumes room.title; protection=textContent only, never innerHTML; test=tests/full/room-layout.spec.ts::markup in a room title is shown as text
+  sink room-pane-title: consumes room.title; protection=textContent only; test=tests/full/room-layout.spec.ts::markup in a room title is shown as text
+
+OUTCOME
+  A smoke run reorders three participant rows in the table, starts a relay and
+  finds the authors in <shared>/rooms/<id>.md in the table's order; a renamed
+  room keeps its title in <shared>/rooms/<id>.json after an app restart and
+  opens from the sidebar tree; every task of
+  tasks/10-app-shell/06-room-layout/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] reverse control: drop the title from the record write in room-service → tests/integration/room-archive test `a rename during a run survives the next entry` goes red
+  3. [fast] tests/unit/room-view.test.ts: move up, move down and remove keep ids unique, keep the final writer or fall back by the default rule, and refuse moves past the ends
+  4. [full] electron-smoke: reorder, relay, history author order equals table order; rename, restart, the title is in the record and the tree opens the room
+  5. [fast] HUMAN: the owner opens rooms from the tree, renames one, builds Fable / Opus high / Sonnet medium in the table and records in NOTES.md whether it reads as a table and works from the keyboard
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/05-design-contrast
