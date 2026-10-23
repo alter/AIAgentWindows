@@ -1,5 +1,5 @@
 ---
-status: todo
+status: running
 created: 2026-10-23
 ---
 # Room layout — saved rooms as a tree under # Rooms, rename, participants as a table
@@ -39,10 +39,11 @@ As tasks/10-app-shell/05-design-contrast/PLAN.md; palette tokens and the contras
 - Drag-and-drop reordering
 
 ## Tasks
-- [ ] T00 Baseline: the coordinator's last verified run of 05-design-contrast is this plan's baseline — verify: the Log line exists
+- [x] T00 Baseline: the coordinator's last verified run of 05-design-contrast is this plan's baseline — verify: the Log line exists
 - [ ] T01 Title and rename (S1, S2): `title?` on RoomRecord with parse rules, `roomTitle(record)`, RoomService `rename(id, title)`, validated IPC `room:rename` through ipc/preload/handlers; tests red first in room-model, ipc-validate, integration room-archive — verify: AC2 command + fast tier
 - [ ] T02 Rooms tree (S3, S5): `src/renderer/room-tree.ts` rendered inside the sidebar from the pane's list; header with arrow and "+", items by title (textContent), selected/aria-current, click opens, context menu Rename with in-place input; pane select removed; 04-room-archive smoke specs rewritten onto the tree; smoke for rename + restart + markup title — verify: fast tier + electron-smoke
 - [ ] T03 Participants table (S4, S5): `src/renderer/room-table.ts` (`<table>`, headers with scope, rows from room-view pure logic `moveRow`, existing add/remove, finalizer radio), Add participant menu with five kinds, focus kept after move/remove, accessible names with the instance label; pure logic red first in room-view.test.ts; smoke: reorder three rows, relay, history author order — verify: AC3 command + fast tier + electron-smoke
 - [ ] T04 Ledger and notes: docs/PROJECT.md Room row (tree, rename, table); NOTES.md summary; labels `status:review` when AC1-AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem + fast tier
 
 ## Log
+- 2026-10-23 coordinator: T00 baseline = 05-design-contrast T05 verification run on c56b372 (fast tier 12 commands exit 0, coverage 920/920 100 %, electron-smoke 38/38)
