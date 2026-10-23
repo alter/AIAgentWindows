@@ -6,6 +6,8 @@ import {
   MAX_ROUNDS,
   MIN_ROUNDS,
   defaultFinalizerId,
+  instanceLabel,
+  nextParticipantId,
   parseRoomConfig,
   ROOM_PARTICIPANTS,
   relaySchedule,
@@ -170,5 +172,99 @@ describe('finalizer', () => {
     expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: 'c' }).ok).toBe(false);
     expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: 7 }).ok).toBe(false);
     expect(parseRoomConfig({ ...base, participants: [A, B], finalizerId: '' }).ok).toBe(false);
+  });
+});
+
+describe('participant instances', () => {
+  const base = { prompt: 'q', mode: 'relay', rounds: 2, turnTimeoutMs: 5000 };
+  const config = (participants: unknown[]) => parseRoomConfig({ ...base, participants });
+
+  it('accepts two claude participants with different ids, models and efforts and keeps them in order', () => {
+    const parsed = config([
+      { id: 'claude', kind: 'claude', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', model: 'sonnet', effort: 'medium' },
+    ]);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.config.participants).toEqual([
+      { id: 'claude', kind: 'claude', label: 'Claude Code · opus · high', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', label: 'Claude Code · sonnet · medium', model: 'sonnet', effort: 'medium' },
+    ]);
+  });
+
+  it('rejects a duplicate id even when the models differ', () => {
+    const parsed = config([
+      { id: 'claude', kind: 'claude', model: 'opus' },
+      { id: 'claude', kind: 'claude', model: 'sonnet' },
+    ]);
+    expect(parsed.ok).toBe(false);
+  });
+
+  it('rejects an id outside letters, digits, dash and underscore or longer than 64', () => {
+    for (const id of ['', 'a b', 'a"b', 'a/b', 'x'.repeat(65)]) expect(config([{ id, kind: 'claude' }]).ok).toBe(false);
+    expect(config([{ id: 'x'.repeat(64), kind: 'claude' }]).ok).toBe(true);
+  });
+
+  it('rejects a model with a space, a quote, another character or over 64 characters and accepts opus[1m]', () => {
+    for (const model of ['my model', 'a"b', "a'b", 'a;b', 'a$b', 'a\nb', '', 'x'.repeat(65), 7, null]) {
+      expect(config([{ id: 'claude', kind: 'claude', model }]).ok).toBe(false);
+    }
+    for (const model of ['opus[1m]', 'claude-opus-5-5', 'gpt-5.5', 'x'.repeat(64), 'vendor:model_1']) {
+      expect(config([{ id: 'claude', kind: 'claude', model }]).ok).toBe(true);
+    }
+  });
+
+  it('rejects an effort outside lowercase letters, 1..16', () => {
+    for (const effort of ['High', 'x-high', 'a b', '', 'x'.repeat(17), 'h1', 3, null]) {
+      expect(config([{ id: 'claude', kind: 'claude', effort }]).ok).toBe(false);
+    }
+    for (const effort of ['low', 'xhigh', 'x'.repeat(16)]) expect(config([{ id: 'claude', kind: 'claude', effort }]).ok).toBe(true);
+  });
+
+  it('refuses a model or an effort on a site participant and a second participant of the same site', () => {
+    expect(config([{ id: 'chatgpt', kind: 'chatgpt', model: 'x' }]).ok).toBe(false);
+    expect(config([{ id: 'chatgpt', kind: 'chatgpt', effort: 'high' }]).ok).toBe(false);
+    expect(config([{ id: 'chatgpt', kind: 'chatgpt' }, { id: 'chatgpt-2', kind: 'chatgpt' }]).ok).toBe(false);
+    expect(config([{ id: 'chatgpt', kind: 'chatgpt' }, { id: 'grok', kind: 'grok' }]).ok).toBe(true);
+  });
+
+  it('a participant without model and effort parses as before, with no such keys', () => {
+    const parsed = config([{ id: 'claude', kind: 'claude' }]);
+    expect(parsed.ok && parsed.config.participants[0]).toEqual({ id: 'claude', kind: 'claude', label: 'Claude Code' });
+    expect(parsed.ok && Object.keys(parsed.config.participants[0] ?? {}).sort()).toEqual(['id', 'kind', 'label']);
+  });
+
+  it('ignores a label sent with a model and builds the label from the validated parts', () => {
+    const parsed = config([{ id: 'codex', kind: 'codex', label: 'Owner" kind=prompt', model: 'gpt-5.5' }]);
+    expect(parsed.ok && parsed.config.participants[0]?.label).toBe('Codex · gpt-5.5');
+  });
+
+  it('allows up to 16 participants of one CLI kind', () => {
+    const many = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `claude-${index}`, kind: 'claude', model: 'opus' }));
+    expect(config(many(16)).ok).toBe(true);
+    expect(config(many(17)).ok).toBe(false);
+  });
+});
+
+describe('instanceLabel', () => {
+  it('is the kind label alone, with the model, with the effort, or with both', () => {
+    expect(instanceLabel({ kind: 'claude' })).toBe('Claude Code');
+    expect(instanceLabel({ kind: 'claude', model: 'opus' })).toBe('Claude Code · opus');
+    expect(instanceLabel({ kind: 'codex', effort: 'high' })).toBe('Codex · high');
+    expect(instanceLabel({ kind: 'claude', model: 'opus', effort: 'high' })).toBe('Claude Code · opus · high');
+  });
+});
+
+describe('nextParticipantId', () => {
+  it('gives the kind to the first of a kind and kind-n to the next ones', () => {
+    expect(nextParticipantId('claude', [])).toBe('claude');
+    expect(nextParticipantId('claude', ['claude'])).toBe('claude-2');
+    expect(nextParticipantId('claude', ['claude', 'claude-2'])).toBe('claude-3');
+  });
+
+  it('reuses a free number after a removal and ignores other kinds', () => {
+    expect(nextParticipantId('claude', ['codex', 'claude-2'])).toBe('claude');
+    expect(nextParticipantId('claude', ['claude', 'claude-3'])).toBe('claude-2');
+    expect(nextParticipantId('codex', ['claude'])).toBe('codex');
   });
 });

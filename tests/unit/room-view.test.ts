@@ -296,6 +296,63 @@ describe('participants without an adapter', () => {
   });
 });
 
+describe('formToConfig with participant rows', () => {
+  const form: RoomFormValues = {
+    prompt: 'hello',
+    mode: 'relay',
+    rounds: '2',
+    timeoutMinutes: '10',
+    checked: ['claude', 'claude-2', 'codex', 'grok'],
+    rows: [
+      { id: 'claude', kind: 'claude', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', model: ' sonnet ', effort: '' },
+      { id: 'codex', kind: 'codex', model: '', effort: '' },
+    ],
+  };
+
+  it('carries every ticked row in row order with trimmed model and effort, then the ticked sites', () => {
+    const result = formToConfig(form);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.participants).toEqual([
+      { id: 'claude', kind: 'claude', label: 'Claude Code \u00b7 opus \u00b7 high', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', label: 'Claude Code \u00b7 sonnet', model: 'sonnet' },
+      { id: 'codex', kind: 'codex', label: 'Codex' },
+      { id: 'grok', kind: 'grok', label: 'Grok' },
+    ]);
+  });
+
+  it('leaves out a row that is not ticked and ignores a ticked id that is no row and no site', () => {
+    const result = formToConfig({ ...form, checked: ['claude-2', 'nobody'] });
+    expect(result.ok && result.config.participants.map((item) => item.id)).toEqual(['claude-2']);
+  });
+
+  it('refuses a bad model or effort in a row', () => {
+    const bad = (row: object) => formToConfig({ ...form, rows: [{ id: 'claude', kind: 'claude', ...row }], checked: ['claude'] });
+    expect(bad({ model: 'a b' }).ok).toBe(false);
+    expect(bad({ effort: 'HIGH' }).ok).toBe(false);
+    expect(bad({ model: 'opus[1m]' }).ok).toBe(true);
+  });
+
+  it('without rows the fixed Claude Code and Codex rows apply, as before', () => {
+    const result = formToConfig({ prompt: 'q', mode: 'relay', rounds: '1', timeoutMinutes: '1', checked: ['codex', 'claude'] });
+    expect(result.ok && result.config.participants.map((item) => item.id)).toEqual(['claude', 'codex']);
+  });
+
+  it('the finalizer may be a second instance of a kind and falls back to the first Claude instance', () => {
+    const chosen = formToConfig({ ...form, finalizerId: 'claude-2' });
+    expect(chosen.ok && chosen.config.finalizerId).toBe('claude-2');
+    const stale = formToConfig({ ...form, checked: ['codex', 'claude-2'], finalizerId: 'claude' });
+    expect(stale.ok && stale.config.finalizerId).toBe('claude-2');
+    expect(resolveFinalizer(['claude-2', 'codex'], '', form.rows)).toBe('claude-2');
+  });
+
+  it('two sites of one kind cannot come from the form: a row of a site kind duplicates the site', () => {
+    const rows = [{ id: 'x', kind: 'chatgpt' as const }];
+    expect(formToConfig({ ...form, rows, checked: ['x', 'chatgpt'] }).ok).toBe(false);
+  });
+});
+
 describe('finalizer choice', () => {
   const form: RoomFormValues = { prompt: 'hello', mode: 'relay', rounds: '1', timeoutMinutes: '10', checked: ['codex', 'claude', 'grok'] };
 
@@ -730,7 +787,32 @@ describe('snapshot from a record', () => {
 
   it('prefills the settings of the last run and leaves the prompt empty', () => {
     const form = formFromRecord(record([prompt()], 'done', { ...CONFIG, mode: 'broadcast', rounds: 3, debugSites: true }));
-    expect(form).toEqual({ prompt: '', mode: 'broadcast', rounds: '3', timeoutMinutes: '1.5', checked: ['a', 'b'], finalizerId: 'a', debugSites: true });
+    expect(form).toEqual({
+      prompt: '',
+      mode: 'broadcast',
+      rounds: '3',
+      timeoutMinutes: '1.5',
+      checked: ['a', 'b'],
+      finalizerId: 'a',
+      debugSites: true,
+      rows: [{ id: 'a', kind: 'claude' }, { id: 'b', kind: 'codex' }],
+    });
+  });
+
+  it('prefills a row per CLI participant with its model and effort and none for a site, and turns back into the same config', () => {
+    const participants = [
+      { id: 'claude', kind: 'claude' as const, label: 'Claude Code \u00b7 opus \u00b7 high', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude' as const, label: 'Claude Code \u00b7 sonnet', model: 'sonnet' },
+      { id: 'grok', kind: 'grok' as const, label: 'Grok' },
+    ];
+    const config = { ...CONFIG, participants, finalizerId: 'claude-2' };
+    const form = formFromRecord(record([prompt()], 'done', config));
+    expect(form.checked).toEqual(['claude', 'claude-2', 'grok']);
+    expect(form.rows).toEqual([
+      { id: 'claude', kind: 'claude', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', model: 'sonnet' },
+    ]);
+    expect(formToConfig({ ...form, prompt: 'again' })).toEqual({ ok: true, config: { ...config, prompt: 'again' } });
   });
 
   it('the prefilled settings turn back into the same config', () => {

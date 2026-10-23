@@ -1,11 +1,12 @@
 // room-view.ts
-import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
+import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type AgentKind, type SiteKind } from './agents';
 import { renderCarryHistory } from './room-history';
 import {
   OWNER_ID,
   ROOM_ID,
   ROOM_PARTICIPANTS,
   defaultFinalizerId,
+  instanceLabel,
   roomPlan,
   parseRoomConfig,
   type RoomConfigResult,
@@ -44,12 +45,20 @@ export interface RoomSnapshot {
 
 export type RoomStartResult = { ok: true; roomId: string; historyPath: string; debugDir: string | null } | { ok: false; error: string };
 
+export interface FormRow {
+  id: string;
+  kind: AgentKind;
+  model?: string;
+  effort?: string;
+}
+
 export interface RoomFormValues {
   prompt: string;
   mode: RoomMode;
   rounds: string;
   timeoutMinutes: string;
   checked: readonly string[];
+  rows?: readonly FormRow[];
   finalizerId?: string;
   debugSites?: boolean;
 }
@@ -123,13 +132,28 @@ export function carryText(snapshot: RoomSnapshot, what: CarryWhat): string | nul
   return last === undefined || last.text.length === 0 ? null : last.text;
 }
 
-export function resolveFinalizer(checked: readonly string[], previous: string): string {
-  const ticked = ROOM_PARTICIPANTS.filter((item) => checked.includes(item.id));
+const DEFAULT_ROWS: readonly FormRow[] = ROOM_PARTICIPANTS.filter((item) => !isSiteKind(item.kind)).map(({ id, kind }) => ({ id, kind }));
+
+function rowParticipant(row: FormRow): RoomParticipant {
+  const model = row.model?.trim() ?? '';
+  const effort = row.effort?.trim() ?? '';
+  const parts = { kind: row.kind, ...(model === '' ? {} : { model }), ...(effort === '' ? {} : { effort }) };
+  return { id: row.id, ...parts, label: instanceLabel(parts) };
+}
+
+function tickedParticipants(checked: readonly string[], rows: readonly FormRow[]): RoomParticipant[] {
+  const sites = ROOM_PARTICIPANTS.filter((item) => isSiteKind(item.kind) && checked.includes(item.id));
+  return [...rows.filter((row) => checked.includes(row.id)).map(rowParticipant), ...sites];
+}
+
+export function resolveFinalizer(checked: readonly string[], previous: string, rows: readonly FormRow[] = DEFAULT_ROWS): string {
+  const ticked = tickedParticipants(checked, rows);
   return ticked.some((item) => item.id === previous) ? previous : defaultFinalizerId(ticked);
 }
 
 export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): RoomConfigResult {
-  const participants = ROOM_PARTICIPANTS.filter((item) => form.checked.includes(item.id));
+  const rows = form.rows ?? DEFAULT_ROWS;
+  const participants = tickedParticipants(form.checked, rows);
   const unavailable = participants.find((item) => !participantAvailability(item, withAdapter).available);
   if (unavailable !== undefined) return { ok: false, error: participantAvailability(unavailable, withAdapter).note };
   const rounds = Number(form.rounds);
@@ -139,7 +163,7 @@ export function formToConfig(form: RoomFormValues, withAdapter: readonly SiteKin
     mode: form.mode,
     rounds,
     participants,
-    finalizerId: resolveFinalizer(form.checked, form.finalizerId ?? ''),
+    finalizerId: resolveFinalizer(form.checked, form.finalizerId ?? '', rows),
     turnTimeoutMs: Math.round(minutes * MS_PER_MINUTE),
     debugSites: form.debugSites ?? false,
   });
@@ -294,6 +318,7 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
     rounds: String(config.rounds),
     timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
     checked: config.participants.map((participant) => participant.id),
+    rows: config.participants.filter((participant) => !isSiteKind(participant.kind)).map(({ id, kind, model, effort }) => ({ id, kind, ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }) })),
     finalizerId: config.finalizerId,
     debugSites: config.debugSites,
   };

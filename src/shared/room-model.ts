@@ -1,5 +1,5 @@
 // room-model.ts
-import { AGENT_KINDS, AGENT_LABELS, type AgentKind } from './agents';
+import { AGENT_KINDS, AGENT_LABELS, isSiteKind, type AgentKind } from './agents';
 
 export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 50;
@@ -18,6 +18,9 @@ const TRUNCATION_RESERVE = 64;
 export const OWNER_ID = 'owner';
 export const ROOM_ID = 'room';
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const PARTICIPANT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const MODEL_PATTERN = /^[A-Za-z0-9._:[\]-]{1,64}$/;
+const EFFORT_PATTERN = /^[a-z]{1,16}$/;
 const ENTRY_KINDS: readonly RoomEntryKind[] = ['prompt', 'reply', 'final', 'error'];
 const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stopped', 'failed'];
 
@@ -28,6 +31,8 @@ export interface RoomParticipant {
   id: string;
   kind: AgentKind;
   label: string;
+  model?: string;
+  effort?: string;
 }
 
 export interface RoomConfig {
@@ -100,6 +105,17 @@ export const ROOM_PARTICIPANTS: readonly RoomParticipant[] = AGENT_KINDS.map((ki
   label: AGENT_LABELS[kind],
 }));
 
+export function instanceLabel(parts: { kind: AgentKind; model?: string; effort?: string }): string {
+  return [AGENT_LABELS[parts.kind], parts.model, parts.effort].filter((part) => part !== undefined).join(' \u00b7 ');
+}
+
+export function nextParticipantId(kind: AgentKind, existing: readonly string[]): string {
+  if (!existing.includes(kind)) return kind;
+  let number = 2;
+  while (existing.includes(`${kind}-${number}`)) number += 1;
+  return `${kind}-${number}`;
+}
+
 export function defaultFinalizerId(participants: readonly RoomParticipant[]): string {
   const claude = participants.find((participant) => participant.kind === 'claude');
   return (claude ?? participants[0])?.id ?? '';
@@ -145,20 +161,35 @@ function isAgentKind(value: unknown): value is AgentKind {
   return typeof value === 'string' && (AGENT_KINDS as readonly string[]).includes(value);
 }
 
+function parseShaped(value: unknown, pattern: RegExp): string | null | undefined {
+  if (value === undefined) return undefined;
+  return typeof value === 'string' && pattern.test(value) ? value : null;
+}
+
 function parseParticipant(value: unknown): RoomParticipant | null {
   if (!isRecord(value)) return null;
   const { id, kind } = value;
-  if (!isBoundedString(id, MAX_ID_CHARS) || !isAgentKind(kind)) return null;
-  return { id, kind, label: AGENT_LABELS[kind] };
+  if (typeof id !== 'string' || !PARTICIPANT_ID_PATTERN.test(id) || !isAgentKind(kind)) return null;
+  const model = parseShaped(value['model'], MODEL_PATTERN);
+  const effort = parseShaped(value['effort'], EFFORT_PATTERN);
+  if (model === null || effort === null) return null;
+  if (isSiteKind(kind) && (model !== undefined || effort !== undefined)) return null;
+  const parts = { kind, ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }) };
+  return { id, ...parts, label: instanceLabel(parts) };
 }
 
 function parseParticipants(value: unknown): RoomParticipant[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_PARTICIPANTS) return null;
   const parsed: RoomParticipant[] = [];
   const seen = new Set<string>();
+  const sites = new Set<AgentKind>();
   for (const item of value) {
     const participant = parseParticipant(item);
     if (!participant || seen.has(participant.id)) return null;
+    if (isSiteKind(participant.kind)) {
+      if (sites.has(participant.kind)) return null;
+      sites.add(participant.kind);
+    }
     seen.add(participant.id);
     parsed.push(participant);
   }
@@ -173,7 +204,7 @@ export function parseRoomConfig(value: unknown): RoomConfigResult {
   if (!isInRange(rounds, MIN_ROUNDS, MAX_ROUNDS)) return { ok: false, error: `rounds must be ${MIN_ROUNDS}..${MAX_ROUNDS}` };
   if (!isInRange(turnTimeoutMs, MIN_TURN_TIMEOUT_MS, MAX_TURN_TIMEOUT_MS)) return { ok: false, error: 'turn timeout out of range' };
   const parsed = parseParticipants(participants);
-  if (!parsed) return { ok: false, error: 'participants must be 1..16 unique known agents' };
+  if (!parsed) return { ok: false, error: 'participants must be 1..16 unique known agents with valid model and effort' };
   const finalizerId = value['finalizerId'] === undefined ? defaultFinalizerId(parsed) : value['finalizerId'];
   if (typeof finalizerId !== 'string' || !parsed.some((participant) => participant.id === finalizerId)) {
     return { ok: false, error: 'finalizer must be one of the participants' };

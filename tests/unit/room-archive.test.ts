@@ -181,6 +181,20 @@ describe('parseRoomRecord', () => {
     for (const config of bads) expect(parseRoomRecord({ ...base, config })).toBeNull();
   });
 
+  it('keeps model and effort of the participants and parses an old record without them unchanged', () => {
+    const base = record();
+    const rich = { ...base.config, participants: [{ id: 'claude', kind: 'claude', label: 'Claude Code', model: 'opus', effort: 'high' }, { id: 'claude-2', kind: 'claude', label: 'x', model: 'sonnet' }], finalizerId: 'claude' };
+    const parsed = parseRoomRecord({ ...base, config: rich });
+    expect(parsed?.config.participants).toEqual([
+      { id: 'claude', kind: 'claude', label: 'Claude Code \u00b7 opus \u00b7 high', model: 'opus', effort: 'high' },
+      { id: 'claude-2', kind: 'claude', label: 'Claude Code \u00b7 sonnet', model: 'sonnet' },
+    ]);
+    const old = parseRoomRecord(JSON.parse(JSON.stringify(base)));
+    expect(old?.config.participants).toEqual([CLAUDE, CODEX]);
+    expect(parseRoomRecord({ ...base, config: { ...base.config, participants: [{ ...CLAUDE, model: 'a b' }] } })).toBeNull();
+    expect(parseRoomRecord({ ...base, config: { ...base.config, participants: [{ id: 'grok', kind: 'grok', label: 'Grok', effort: 'high' }], finalizerId: 'grok' } })).toBeNull();
+  });
+
   it('drops a prompt stored in the config', () => {
     const parsed = parseRoomRecord({ ...record(), config: { ...record().config, prompt: 'leak' } });
     expect(parsed?.config).not.toHaveProperty('prompt');
