@@ -39,6 +39,7 @@ WRITE-SET
   src/renderer/room-pane.ts
   tests/unit/room-model.test.ts
   tests/unit/room-view.test.ts
+  tests/unit/room-archive.test.ts
   tests/unit/cli-args.test.ts
   tests/full/room.spec.ts
   docs/tech/claude-code@2.1.306.md

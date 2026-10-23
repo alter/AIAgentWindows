@@ -15,3 +15,7 @@ Collected by the coordinator while 04-room-archive runs, for S1 of this task. On
 - Codex: `-m` is global on `exec`; effort is `model_reasoning_effort` (free string, the catalog gives each model's levels); source shows both reach a resumed thread (ThreadResumeParams.model, TurnStart effort), unconfirmed by a real turn (CX40 open). `codex debug models` may fetch online when the cache (300 s) is stale: the main-process reader in T04 keeps its 10 s timeout and an empty result on failure.
 
 - T01 write set gains docs/EVIDENCE.md: every confirmed or open claim about the pinned CLIs is a row there (scripts/evidence_check.py is T01's verify command).
+
+## T02 write set
+
+tests/unit/room-archive.test.ts added to WRITE-SET of task.txt: PLAN T02 names it for the record round-trip of model and effort (old records without them still parse).
