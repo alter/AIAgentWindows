@@ -64,3 +64,13 @@ Mutation 2: `writeRecord` returns before writing (src/main/room-archive.ts). Bot
 ```
 
 T06 write set: tests/full/room-archive.spec.ts added (the plan allowed a new spec file; the restart tests need their own launch helper that reuses the profile directory).
+
+## Summary — what 04-room-archive built (2026-10-23)
+
+- Record `<shared>/rooms/<id>.json` (`src/main/room-archive.ts`, parser `parseRoomRecord` in `src/shared/room-model.ts`): written after every entry and at finish through the same queue as the markdown history; ids `[A-Za-z0-9_-]{1,64}` checked at the IPC boundary and before every path join.
+- Continuation: `Room.start(config, from)` reuses id, history file and nonce; earlier entries reach the participants; a continued run's rounds restart at 1 and the feed groups per owner prompt.
+- Restore: `snapshotFromRecord` replays the record through the live reducer, so the reopened feed, chips and banner equal the live ones (unit tests compare them).
+- Pane: Rooms select, New room (also clears the service snapshot), Start → Continue on the room on screen.
+- App start: running records → stopped, then the most recent record is opened; a failing rooms directory leaves the Room empty and usable.
+- Not done here: deleting or renaming rooms; resuming CLI sessions across starts; model and effort per participant (03-room-participants).
+
