@@ -57,6 +57,7 @@ WRITE-SET
   tests/unit/ipc-validate.test.ts
   tests/fixtures/
   tests/full/room.spec.ts
+  tests/full/room-participants.spec.ts
   docs/tech/claude-code@2.1.306.md
   docs/tech/codex@0.163.0.md
   docs/PROJECT.md
