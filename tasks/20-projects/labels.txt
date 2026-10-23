@@ -1,0 +1,8 @@
+phase:projects
+role:APP
+type:feature
+priority:P0
+status:in_progress
+verify:pending
+depends:10-app-shell
+milestone:M3

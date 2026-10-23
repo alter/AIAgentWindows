@@ -1,0 +1,42 @@
+TASK: projects and project rooms
+
+GOAL
+  The app is organised by projects: agents and PLAN-mode rooms work in a code
+  folder, the final plan is saved into it. Execution plan: docs/plans/projects.md
+  (acceptance criteria AC1–AC7, decisions D1–D27). Serves milestone M3.
+
+CONTEXT
+  docs/PROJECT.md
+  docs/plans/projects.md
+  tasks/DECISIONS.md
+
+SCOPE
+  + 01-file-store — atomic file and JSON store, state-file on it, fail-closed
+  + 02-state-v2 — state.json version 2, one state owner, migration, partition per site kind
+  + 03-sidebar-tree — sidebar tree reducer (behaviour-neutral)
+  + 04-projects-main — git runner, project service, IPC, create, rename, delete
+  + 05-project-tree — project nodes in the sidebar
+  + 06-project-agents — agents inside a project, Codex claim in a shared folder
+  + 07-room-fixes — declared fixes of today's room
+  + 08-room-run-context — per-run room context, rooms per project
+  + 09-project-room-profile — turn profile, deny list, CLI isolation in a project room
+  + 10-room-seats — site seat by project, one run at a time
+  + 11-save-plan — Save plan into the project
+  + 12-context-pack — kind capabilities and context pack (behaviour-neutral)
+  + 13-project-map — project map module and git ls-files
+  + 14-room-map — map for web and OpenRouter participants, digest, disclosure
+  − roles, worktrees, write modes, orchestrator, kind descriptors, driver registry, scenario fixtures — docs/plans/roles.md
+  − pushing, pull requests, releases; several app windows; migration of existing agents
+
+OUTCOME
+  Every child task closed; docs/plans/projects.md has every non-HUMAN item [x].
+
+VERIFY (QA)
+  1. python3 tasks/check.py — no new problem
+  2. reverse control: a child task listed in SCOPE whose directory is removed → check.py or the plan's T18 goes red
+
+ROLE
+  APP
+
+DEPENDS
+  10-app-shell

@@ -103,3 +103,19 @@ turn. Writing into `logs/sites.log`: that log is text-free on purpose.
 Redesigning the detection before a failure is recorded: it would be the same
 guess again.
 
+## D5. Room CLIs run in the project folder with no settings file applied — 2026-10-24, decided by the owner's request, mechanism by the agent (plan D5, D8, D22 of `docs/plans/projects.md`)
+
+**Decided.** A room turn of a CLI participant in a project runs with the project's realpath as cwd, in its read-only mode, with no user, project or local settings file applied (`claude --restricted`; Codex per the study of T03), the project's secrets denied by `Read` rules from one deny list, no web tools, and nothing written into the project folder.
+
+**Why.** `-p` skips the trust dialog, so a cloned repository's settings would apply untrusted; the owner's SessionStart hooks (`worktree-gc.py`, `stop-guard.sh`) act on the cwd's repository and would delete worktrees or re-prompt.
+
+**Rejected.** `disableAllHooks` alone (leaves `env`, `apiKeyHelper` and the bare `Read` allow); `--add-dir <shared>` in project rooms (opens other rooms); a history file in the project (a write into the owner's repository).
+
+## D6. Seams are cut before their consumer, in the plan that consumes them — 2026-10-24, agent's decision (plan D15 of `docs/plans/projects.md`)
+
+**Decided.** A seam is a behaviour-neutral task, never bundled with a feature or a fix; a seam whose first consumer is in another plan is cut in that plan. Fixes found on the way are their own task.
+
+**Why.** Neutral tasks are checked by "no behaviour changed"; a fix inside one makes that check unanswerable. Three review rounds found seams with no consumer in the plan that carried them.
+
+**Rejected.** Kind descriptors, the driver registry and scenario fixtures in the projects plan (their consumer is roles).
+

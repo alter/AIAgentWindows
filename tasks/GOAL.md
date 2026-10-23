@@ -26,6 +26,7 @@ described before code is written against it.
 |---|---|---|
 | **M1** | the design rests on evidence, not reasoning | now |
 | **M2** | the app runs: window, CLI and web agents, restart restores them | gate 1 passed |
+| **M3** | the app is organised by projects: agents and PLAN rooms in a project folder, the final plan saved into it | M2 |
 
 ## Signs that we are getting closer
 

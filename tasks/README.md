@@ -22,6 +22,7 @@ each.
 |---|---|
 | `05-feasibility` | evidence that the product can be built as `docs/PROJECT.md` describes, before any product code |
 | `10-app-shell` | the application: window, agents, panes, forwarding, shared directory |
+| `20-projects` | projects as code folders, project agents and project rooms in PLAN mode (docs/plans/projects.md) |
 
 ## Task format
 
@@ -69,7 +70,7 @@ a boundary somebody will cross.
 ## Labels
 
 ```
-phase:      feasibility | app-shell
+phase:      feasibility | app-shell | projects
 role:       ARCH | APP | QA | HUMAN
 type:       feature | fix | research | decision | chore
 priority:   P0 | P1 | P2 | P3
