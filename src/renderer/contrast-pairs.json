@@ -1,0 +1,6 @@
+[
+  {"fg": "--content-text", "bg": "--content-bg", "use": "body"},
+  {"fg": "--sidebar-text", "bg": "--aubergine", "use": "text"},
+  {"fg": "--sidebar-text", "bg": "--aubergine-hover", "use": "text"},
+  {"fg": "--sidebar-text", "bg": "--aubergine-select", "use": "text"}
+]
