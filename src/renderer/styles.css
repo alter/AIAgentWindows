@@ -348,7 +348,19 @@ select:disabled, input[type="text"]:disabled, input[type="number"]:disabled, .ro
 .room-entry.kind-final { background: var(--ok-bg); }
 .room-section { display: flex; flex-direction: column; gap: 6px; }
 .room-section-title { margin: 6px 0 0; font-size: 13px; }
-.room-entry-head { display: flex; gap: 8px; font-size: 12px; cursor: pointer; }
+.room-entry-head { display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; list-style: none; }
+.room-entry-head::-webkit-details-marker { display: none; }
+.room-entry-head::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 0 2px;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  transform: rotate(-45deg);
+}
+.room-entry[open] > .room-entry-head::before { transform: rotate(45deg); }
 .room-entry[open] > .room-entry-head { margin-bottom: 4px; }
 .room-copy { margin: 4px 0; }
 .room-entry-author { font-weight: 700; }

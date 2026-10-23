@@ -40,3 +40,12 @@
   - `src/renderer/contrast-pairs.json:2 [contrast-apca] dark: --text on --content-bg (body) Lc -33.1 below 75`
   - `src/renderer/contrast-pairs.json:2 [same-hue] dark: --text on --content-bg (body) grey text on a neutral surface, text there is #ffffff or #000000`
   The real stylesheet stays at 0 findings.
+
+## T05 disclosure arrows (2026-10-23)
+
+- `.room-entry-head` (the `<summary>` of every Room feed entry; the only collapsible in the app: sidebar.ts has just `aria-expanded` on the add button, which is a menu) draws the arrow itself: `list-style: none` and `::-webkit-details-marker` hidden, a `::before` chevron made of two `--text` borders (7px, empty `content`, so a screen reader reads no glyph), `rotate(-45deg)` closed (points right), `rotate(45deg)` under `.room-entry[open]` (points down). The whole head row keeps `cursor: pointer`; the keyboard ring is the global `:focus-visible` rule.
+- Manifest: four non-text pairs `--text` on `--surface`, `--info-bg`, `--ok-bg`, `--err-bg` (the entry backgrounds) added; `python3 scripts/contrast_check.py` -> `contrast_check: 0 findings`, exit 0, both palettes.
+- Smoke step (tests/full/design-contrast.spec.ts, "a click on the head of a Room feed entry opens it and the head draws an arrow that turns when open"): a two-participant broadcast on the stub CLIs; first reply entry `open` false and text hidden; the `::before` computed `content` is set and `transform` differs between closed and open; click on the head -> `open` true and text visible; second click closes and the transform returns.
+- Red first: before the CSS, the step fails at the arrow check: `Expected: true Received: false` at `expect(closed.drawn).toBe(true)`; green after the CSS (1 passed). Opening on click is native `<details>` behaviour and was green from the start in tests/full/room.spec.ts.
+- Reverse control for the click part: `.room-entry-head { pointer-events: none; }` appended to styles.css, rebuilt, same step -> red: `TimeoutError: locator.click: Timeout 30000ms exceeded ... <details ... class="room-entry kind-reply"> intercepts pointer events`. The line was removed and the build redone; styles.css holds only the arrow rules.
+- Gates: fast tier 12 commands exit 0 (920 tests, coverage 100.00 % floor 100.00), electron-smoke 38/38, 0 failures.

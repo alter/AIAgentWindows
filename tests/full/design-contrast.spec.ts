@@ -66,3 +66,55 @@ test('the body and terminal backgrounds follow the system colour scheme live, li
     await app.close();
   }
 });
+
+test('a click on the head of a Room feed entry opens it and the head draws an arrow that turns when open', async () => {
+  const base = mkdtempSync(path.join(tmpdir(), 'aiaw-contrast-room-'));
+  const app = await electron.launch({
+    args: [root],
+    env: {
+      ...process.env,
+      AIAW_USER_DATA: path.join(base, 'profile'),
+      AIAW_ROOM_FAST: '1',
+      AIAW_CLAUDE_BIN: stubCli,
+      AIAW_CODEX_BIN: stubCli,
+      AIAW_TEST_FOLDER: mkdtempSync(path.join(base, 'folder-')),
+      CLAUDE_CONFIG_DIR: path.join(base, 'claude'),
+      CODEX_HOME: path.join(base, 'codex'),
+    },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.locator('[data-room="open"]').click();
+    await expect(page.locator('[data-room="pane"]')).toBeVisible();
+    await page.locator('[data-room="prompt"]').fill('arrow question');
+    for (const id of ['claude', 'codex']) await page.locator(`input[data-participant="${id}"]`).check();
+    await page.locator('[data-room="mode"]').selectOption('broadcast');
+    await page.locator('[data-room="rounds"]').fill('1');
+    await page.locator('[data-room="start"]').click();
+    await expect(page.locator('[data-room="status"]')).toContainText('done', { timeout: 40000 });
+
+    const entry = page.locator('details.room-entry.kind-reply').first();
+    const head = entry.locator('summary.room-entry-head');
+    const text = entry.locator('.room-entry-text');
+    const arrow = (): Promise<{ drawn: boolean; transform: string }> =>
+      head.evaluate((node) => {
+        const style = getComputedStyle(node, '::before');
+        return { drawn: style.content !== 'none' && style.content !== 'normal', transform: style.transform };
+      });
+    await expect(entry).toHaveJSProperty('open', false);
+    await expect(text).toBeHidden();
+    const closed = await arrow();
+    expect(closed.drawn).toBe(true);
+    await head.click();
+    await expect(entry).toHaveJSProperty('open', true);
+    await expect(text).toBeVisible();
+    const open = await arrow();
+    expect(open.drawn).toBe(true);
+    expect(open.transform).not.toBe(closed.transform);
+    await head.click();
+    await expect(entry).toHaveJSProperty('open', false);
+    expect((await arrow()).transform).toBe(closed.transform);
+  } finally {
+    await app.close();
+  }
+});
