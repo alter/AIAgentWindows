@@ -89,6 +89,27 @@ class ArchCheckTest(unittest.TestCase):
         self.put("src/shared/a.ts", "import path from 'node:path';\n")
         self.assertEqual(arch_check.check(self.root), [])
 
+    def test_shared_imports_main_or_renderer(self) -> None:
+        self.put("src/shared/a.ts", "import { m } from '../main/pty-manager';\n")
+        self.put("src/shared/sub/b.ts", "import { r } from '../../renderer/dom';\nexport * from '../../main';\n")
+        self.assertEqual(self.codes(), {"shared-layer"})
+        self.assertEqual(len(arch_check.check(self.root)), 3)
+
+    def test_shared_relative_imports_inside_shared_are_fine(self) -> None:
+        self.put("src/shared/a.ts", "import { x } from './b';\nimport { y } from '../shared/b';\nimport { z } from './main-like';\n")
+        self.put("src/shared/b.ts", "export const x = 1;\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
+    def test_renderer_uses_the_ipc_table(self) -> None:
+        self.put("src/renderer/a.ts", "import { INVOKE_CHANNELS } from '../shared/ipc';\nconst c = EVENT_CHANNELS.length;\nvalidateRequest('x', 1);\n")
+        self.assertEqual(self.codes(), {"renderer-ipc-table"})
+        self.assertEqual(len(arch_check.check(self.root)), 3)
+
+    def test_renderer_type_imports_from_ipc_and_main_side_table_are_fine(self) -> None:
+        self.put("src/renderer/a.ts", "import type { AgentsSnapshot } from '../shared/ipc';\n// validateRequest INVOKE_CHANNELS\n")
+        self.put("src/main/ipc-handlers.ts", "import { INVOKE_CHANNELS, validateRequest } from '../shared/ipc';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
     def test_web_contents_view_with_preload(self) -> None:
         self.put("src/main/views.ts", "const v = new WebContentsView({\n  webPreferences: { preload: p },\n});\n")
         problems = arch_check.check(self.root)

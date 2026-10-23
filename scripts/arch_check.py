@@ -23,6 +23,7 @@ PRELOAD = re.compile(r"\bpreload\b")
 SITE_MARK = re.compile(r"\bpartition\b|persist:")
 DELETE_CALL = re.compile(r"\b(?:rm|rmdir|unlink|rmSync|rmdirSync|unlinkSync|clearStorageData|clearCache)\s*\(")
 DELETE_HOME = "src/main/store/atomic-file.ts"
+IPC_TABLE = re.compile(r"\b(?:INVOKE_CHANNELS|EVENT_CHANNELS|validateRequest)\b")
 COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
 
@@ -77,6 +78,8 @@ def renderer_problems(rel: str, text: str) -> list[str]:
             out.append(f"{rel}:{line} [renderer-node] renderer imports Node builtin {spec}")
         elif resolves_into(rel, spec, "src/main"):
             out.append(f"{rel}:{line} [renderer-main] renderer imports main-process module {spec}")
+    for m in IPC_TABLE.finditer(text):
+        out.append(f"{rel}:{line_of(text, m.start())} [renderer-ipc-table] renderer uses {m.group(0)}")
     return out
 
 
@@ -85,6 +88,8 @@ def shared_problems(rel: str, text: str) -> list[str]:
     for line, spec in specifiers(text):
         if is_package(spec, "electron") or is_package(spec, "node-pty"):
             out.append(f"{rel}:{line} [shared-native] shared code imports {spec}")
+        elif resolves_into(rel, spec, "src/main") or resolves_into(rel, spec, "src/renderer"):
+            out.append(f"{rel}:{line} [shared-layer] shared code imports {spec}")
     return out
 
 

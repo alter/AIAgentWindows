@@ -1,6 +1,7 @@
 // room-tree.ts
 import { pointAnchor } from '../shared/popup-place';
 import { renameTitle, type RoomTreeRow } from '../shared/room-view';
+import { ROOMS_SECTION, type TreeItem, type TreeSection } from '../shared/sidebar-tree';
 import { el } from './dom';
 import { hidePopup, showPopup } from './popup';
 
@@ -8,6 +9,7 @@ export interface RoomTreeHandlers {
   onPane(): void;
   onOpen(id: string): void;
   onNew(): void;
+  onToggle(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
 }
@@ -37,9 +39,7 @@ export class RoomTree {
   private readonly confirmText = el('span', 'rooms-confirm-text');
   private readonly confirmYes = el('button', 'rooms-confirm-yes', 'Delete');
   private readonly confirmNo = el('button', 'rooms-confirm-no', 'Cancel');
-  private state: RoomTreeState = { rows: [], busy: false };
-  private paneOpen = false;
-  private expanded = true;
+  private section: TreeSection = { key: ROOMS_SECTION, collapsible: true, expanded: true, busy: false, items: [] };
   private menuId: string | null = null;
   private pendingId: string | null = null;
   private editing: Editing | null = null;
@@ -51,7 +51,10 @@ export class RoomTree {
     this.toggle.dataset['room'] = 'tree-toggle';
     this.toggle.setAttribute('aria-label', 'Rooms');
     this.toggle.setAttribute('aria-controls', 'rooms-list');
-    this.toggle.addEventListener('click', () => this.setExpanded(!this.expanded));
+    this.toggle.addEventListener('click', () => {
+      this.hideMenu();
+      this.handlers.onToggle();
+    });
     this.title.type = 'button';
     this.title.dataset['room'] = 'open';
     this.title.addEventListener('click', () => this.handlers.onPane());
@@ -111,45 +114,33 @@ export class RoomTree {
     this.render();
   }
 
-  setState(state: RoomTreeState): void {
-    this.state = state;
-    this.render();
-  }
-
-  setPaneOpen(open: boolean): void {
-    if (open === this.paneOpen) return;
-    this.paneOpen = open;
-    this.render();
-  }
-
-  private setExpanded(expanded: boolean): void {
-    this.expanded = expanded;
-    this.hideMenu();
+  setSection(section: TreeSection): void {
+    this.section = section;
     this.render();
   }
 
   private render(): void {
-    this.toggle.setAttribute('aria-expanded', String(this.expanded));
-    this.add.disabled = this.state.busy;
-    this.list.hidden = !this.expanded;
-    if (this.pendingId !== null && (this.state.busy || !this.state.rows.some((row) => row.id === this.pendingId))) this.setPending(null);
-    if (!this.expanded) {
+    this.toggle.setAttribute('aria-expanded', String(this.section.expanded));
+    this.add.disabled = this.section.busy;
+    this.list.hidden = !this.section.expanded;
+    if (this.pendingId !== null && (this.section.busy || !this.section.items.some((row) => row.id === this.pendingId))) this.setPending(null);
+    if (!this.section.expanded) {
       this.editing = null;
       this.list.replaceChildren();
       return;
     }
-    if (this.editing !== null && !this.state.rows.some((row) => row.id === this.editing?.id)) this.editing = null;
-    if (this.state.rows.length === 0) {
+    if (this.editing !== null && !this.section.items.some((row) => row.id === this.editing?.id)) this.editing = null;
+    if (this.section.items.length === 0) {
       this.list.replaceChildren(el('li', 'rooms-empty', 'No saved rooms yet.'));
       return;
     }
     this.rebuilding = true;
-    this.list.replaceChildren(...this.state.rows.map((row) => this.item(row)));
+    this.list.replaceChildren(...this.section.items.map((row) => this.item(row)));
     this.rebuilding = false;
     if (this.editing !== null) this.focusInput(false);
   }
 
-  private item(row: RoomTreeRow): HTMLLIElement {
+  private item(row: TreeItem): HTMLLIElement {
     const item = el('li');
     if (this.editing?.id === row.id) {
       item.append(this.input(this.editing));
@@ -161,12 +152,11 @@ export class RoomTree {
     button.title = row.label;
     button.disabled = row.unreadable;
     button.append(el('span', 'rooms-item-label', row.label));
-    const current = row.current && this.paneOpen;
-    button.classList.toggle('selected', current);
-    if (current) button.setAttribute('aria-current', 'true');
-    if (this.state.busy) button.setAttribute('aria-disabled', 'true');
+    button.classList.toggle('selected', row.selected);
+    if (row.selected) button.setAttribute('aria-current', 'true');
+    if (this.section.busy) button.setAttribute('aria-disabled', 'true');
     button.addEventListener('click', () => {
-      if (!this.state.busy) this.handlers.onOpen(row.id);
+      if (!this.section.busy) this.handlers.onOpen(row.id);
     });
     button.addEventListener('keydown', (event) => {
       if (event.key === 'F2' && !row.unreadable) {
@@ -215,7 +205,7 @@ export class RoomTree {
   }
 
   private startRename(id: string): void {
-    const row = this.state.rows.find((item) => item.id === id);
+    const row = this.section.items.find((item) => item.id === id);
     if (row === undefined || row.unreadable) return;
     this.editing = { id, draft: row.label };
     this.render();
@@ -226,7 +216,7 @@ export class RoomTree {
     const editing = this.editing;
     if (editing === null) return;
     this.editing = null;
-    const row = this.state.rows.find((item) => item.id === editing.id);
+    const row = this.section.items.find((item) => item.id === editing.id);
     const next = commit && row !== undefined ? renameTitle(row.label, editing.draft) : null;
     this.render();
     this.focusItem(editing.id);
@@ -247,8 +237,8 @@ export class RoomTree {
   }
 
   private askDelete(id: string): void {
-    const row = this.state.rows.find((item) => item.id === id);
-    if (row === undefined || row.unreadable || this.state.busy) return;
+    const row = this.section.items.find((item) => item.id === id);
+    if (row === undefined || row.unreadable || this.section.busy) return;
     this.hideMenu();
     this.setPending(id);
     this.confirmNo.focus();
@@ -262,14 +252,14 @@ export class RoomTree {
 
   private setPending(id: string | null): void {
     this.pendingId = id;
-    const row = this.state.rows.find((item) => item.id === id);
+    const row = this.section.items.find((item) => item.id === id);
     this.confirm.hidden = row === undefined;
     this.confirmText.textContent = row === undefined ? '' : `Delete ${row.label}? It moves to the Trash.`;
   }
 
   private showMenu(id: string, x: number, y: number): void {
     this.menuId = id;
-    this.deleteItem.disabled = this.state.busy;
+    this.deleteItem.disabled = this.section.busy;
     showPopup(this.menu, () => pointAnchor(x, y));
     this.renameItem.focus();
   }

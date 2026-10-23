@@ -1,0 +1,36 @@
+TASK: sidebar tree reducer — the room tree and the Agents list on it
+
+GOAL
+  The sidebar as data: one reducer (project → section → item, collapse,
+  selection) that the room tree and the Agents list render from, with every
+  `data-room` attribute kept. Behaviour-neutral (docs/plans/projects.md D21,
+  AC6, T06). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/shared/sidebar-tree.ts
+  src/renderer/room-tree.ts
+  src/renderer/sidebar.ts
+  scripts/neutrality_check.py
+  scripts/arch_check.py
+
+SCOPE
+  + shared/sidebar-tree.ts, room-tree.ts and the Agents DOM on it
+  + arch_check rules renderer-ipc-table (D21) and shared-layer (D23) with tests
+  + scripts/neutrality_check.py with its red fixture test (AC6)
+  − project nodes in the sidebar — 05-project-tree
+  − any change of behaviour, of a `data-room` attribute or of an existing assertion
+
+OUTCOME
+  src/shared/sidebar-tree.ts exists and tests/unit/sidebar-tree.test.ts passes.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] python3 scripts/neutrality_check.py 3b1e720 tasks/20-projects/03-sidebar-tree/vitest-list.json-before exits 0
+  3. [full] electron-smoke exit 0, 69/69 or more
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

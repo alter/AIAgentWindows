@@ -1,7 +1,18 @@
 // sidebar.ts
-import { parseAgentTitle, MAX_AGENT_TITLE_CHARS, type Agent, type AgentKind } from '../shared/agents';
+import { parseAgentTitle, MAX_AGENT_TITLE_CHARS, type AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
 import { pointAnchor, type PopupAnchor } from '../shared/popup-place';
+import {
+  AGENTS_SECTION,
+  ROOMS_SECTION,
+  initialSidebarTree,
+  reduceSidebarTree,
+  sameSection,
+  sidebarSections,
+  type SidebarTreeAction,
+  type TreeItem,
+  type TreeSection,
+} from '../shared/sidebar-tree';
 import type { ThemeChoice } from '../shared/theme';
 import { el } from './dom';
 import { kindIcon } from './icons';
@@ -55,8 +66,8 @@ export class Sidebar {
   private readonly confirmText = el('span', 'close-confirm-text');
   private readonly confirmYes = el('button', 'confirm-yes', 'Close agent');
   private readonly confirmNo = el('button', 'confirm-no', 'Cancel');
-  private agents: Agent[] = [];
-  private snapshot: AgentsSnapshot = { agents: [], selectedId: null, roomOpen: false };
+  private tree = initialSidebarTree();
+  private roomsView: TreeSection = this.section(ROOMS_SECTION);
   private pendingId: string | null = null;
   private contextId: string | null = null;
   private menuOpen = false;
@@ -70,6 +81,7 @@ export class Sidebar {
       onNew: () => this.handlers.onRoomNew(),
       onRename: (id, title) => this.handlers.onRoomRename(id, title),
       onDelete: (id) => this.handlers.onRoomDelete(id),
+      onToggle: () => this.dispatch({ type: 'toggle', key: ROOMS_SECTION }),
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     this.header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
@@ -103,24 +115,48 @@ export class Sidebar {
   }
 
   setRooms(state: RoomTreeState): void {
-    this.rooms.setState(state);
+    this.dispatch({ type: 'rooms', rows: state.rows, busy: state.busy });
   }
 
   render(snapshot: AgentsSnapshot): void {
-    this.agents = snapshot.agents;
-    this.snapshot = snapshot;
-    this.rooms.setPaneOpen(snapshot.roomOpen);
-    if (this.pendingId !== null && !snapshot.agents.some((agent) => agent.id === this.pendingId)) this.setPending(null);
-    if (this.editing !== null && !snapshot.agents.some((agent) => agent.id === this.editing?.id)) this.editing = null;
+    this.dispatch({ type: 'agents', agents: snapshot.agents, selectedId: snapshot.selectedId, roomOpen: snapshot.roomOpen });
+    const items = this.section(AGENTS_SECTION).items;
+    if (this.pendingId !== null && !items.some((agent) => agent.id === this.pendingId)) this.setPending(null);
+    if (this.editing !== null && !items.some((agent) => agent.id === this.editing?.id)) this.editing = null;
+    this.renderAgents();
+  }
+
+  private dispatch(action: SidebarTreeAction): void {
+    this.tree = reduceSidebarTree(this.tree, action);
+    const rooms = this.section(ROOMS_SECTION);
+    if (sameSection(rooms, this.roomsView)) return;
+    this.roomsView = rooms;
+    this.rooms.setSection(rooms);
+  }
+
+  private section(key: string): TreeSection {
+    const found = sidebarSections(this.tree).find((item) => item.key === key);
+    if (found === undefined) throw new Error(`no sidebar section ${key}`);
+    return found;
+  }
+
+  private agentItems(): readonly TreeItem[] {
+    return this.section(AGENTS_SECTION).items;
+  }
+
+  private renderAgents(): void {
+    const agents = this.agentItems();
     this.rebuilding = true;
     this.list.replaceChildren();
-    if (snapshot.agents.length === 0) {
+    if (agents.length === 0) {
       this.list.append(el('li', 'agent-empty', 'No agents yet. Use + to add one.'));
     }
-    for (const agent of snapshot.agents) {
+    for (const agent of agents) {
+      const kind = agent.kind;
+      if (kind === null) continue;
       const item = el('li');
       if (this.editing?.id === agent.id) {
-        item.append(kindIcon(agent.kind), this.input(this.editing));
+        item.append(kindIcon(kind), this.input(this.editing));
         item.classList.add('agent-editing');
         this.list.append(item);
         continue;
@@ -128,9 +164,9 @@ export class Sidebar {
       const button = el('button', 'agent-item');
       button.type = 'button';
       button.dataset['agentId'] = agent.id;
-      button.title = agent.title;
-      if (!snapshot.roomOpen && agent.id === snapshot.selectedId) button.classList.add('selected');
-      button.append(kindIcon(agent.kind), el('span', 'agent-title', agent.title));
+      button.title = agent.label;
+      if (agent.selected) button.classList.add('selected');
+      button.append(kindIcon(kind), el('span', 'agent-title', agent.label));
       button.addEventListener('click', () => this.handlers.onSelect(agent.id));
       button.addEventListener('keydown', (event) => {
         if (event.key !== 'F2') return;
@@ -140,7 +176,7 @@ export class Sidebar {
       const close = el('button', 'agent-close', '×');
       close.type = 'button';
       close.title = 'Close agent';
-      close.setAttribute('aria-label', `Close ${agent.title}`);
+      close.setAttribute('aria-label', `Close ${agent.label}`);
       close.addEventListener('click', (event) => {
         event.stopPropagation();
         this.setPending(agent.id);
@@ -182,10 +218,10 @@ export class Sidebar {
   }
 
   private startRename(id: string): void {
-    const agent = this.agents.find((item) => item.id === id);
+    const agent = this.agentItems().find((item) => item.id === id);
     if (agent === undefined) return;
-    this.editing = { id, draft: agent.title };
-    this.render(this.snapshot);
+    this.editing = { id, draft: agent.label };
+    this.renderAgents();
     this.focusInput(true);
   }
 
@@ -193,11 +229,11 @@ export class Sidebar {
     const editing = this.editing;
     if (editing === null) return;
     this.editing = null;
-    const agent = this.agents.find((item) => item.id === editing.id);
+    const agent = this.agentItems().find((item) => item.id === editing.id);
     const next = commit && agent !== undefined ? parseAgentTitle(editing.draft) : null;
-    this.render(this.snapshot);
+    this.renderAgents();
     this.focusItem(editing.id);
-    if (next !== null && agent !== undefined && next !== agent.title) this.handlers.onRename(editing.id, next);
+    if (next !== null && agent !== undefined && next !== agent.label) this.handlers.onRename(editing.id, next);
   }
 
   private focusInput(selectAll: boolean): void {
@@ -248,9 +284,9 @@ export class Sidebar {
 
   private setPending(id: string | null): void {
     this.pendingId = id;
-    const agent = this.agents.find((item) => item.id === id);
+    const agent = this.agentItems().find((item) => item.id === id);
     this.confirm.hidden = agent === undefined;
-    this.confirmText.textContent = agent === undefined ? '' : `Close ${agent.title}? Its session files stay on disk.`;
+    this.confirmText.textContent = agent === undefined ? '' : `Close ${agent.label}? Its session files stay on disk.`;
   }
 
   private showContextMenu(id: string, x: number, y: number): void {
