@@ -1,0 +1,56 @@
+TASK: popup placement — every menu stays inside the window and scrolls
+
+GOAL
+  Owner, 2026-10-23 (screenshot): the Room "Add participant" menu opens below
+  the button, runs past the bottom of the window and cannot be scrolled ("он
+  уходит вниз за приложение, не скролится ... так интерфейсы делать нельзя").
+  Every popup of the app is placed without regard to the window edges, so the
+  fix is one placement rule for all of them. Serves no gate.
+
+CONTEXT
+  src/renderer/styles.css (.room-add-menu top: 100%, .add-menu fixed top 124px, .context-menu and .rooms-menu at the pointer)
+  src/renderer/room-table.ts (Add participant menu), src/renderer/sidebar.ts:254 (agent context menu, "+" menu), src/renderer/room-tree.ts:270 (room context menu)
+  tests/full/room-layout.spec.ts (Add participant menu), tests/full/smoke.spec.ts (agent "+" menu)
+
+SCOPE
+  + S1 one pure rule in src/shared/popup-place.ts: given the anchor (a rect or a point), the popup's natural size and the viewport, return top, left and max-height — below when it fits, else above when more room is there, clamped to an 8 px margin on every side, max-height equal to the room on the chosen side
+  + S2 one renderer helper applies it (position fixed, overflow-y auto) and is used by all four popups: Room "Add participant", the agents "+" menu, the agent context menu, the room context menu; it re-places on window resize while open
+  + S3 keyboard focus moving through a scrolled menu keeps the focused item visible
+  − the OpenRouter model list (a native select) — the system draws it
+  − other menus added later — they use the same helper
+  indivisible: one rule, one helper, four call sites changed together
+
+WRITE-SET
+  src/shared/popup-place.ts
+  src/renderer/popup.ts
+  src/renderer/room-table.ts
+  src/renderer/sidebar.ts
+  src/renderer/room-tree.ts
+  src/renderer/styles.css
+  tests/unit/
+  tests/full/
+  tasks/10-app-shell/21-popup-placement/
+
+DATA
+  (none)
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  tests/full/popup-placement.spec.ts passes on a window 900 x 560: each of the
+  four popups lies inside the viewport and its last item can be reached;
+  tasks/10-app-shell/21-popup-placement/PLAN.md has every non-HUMAN item [x].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/popup-place.test.ts: below when it fits, above when more room, clamped at both sides, max-height on the chosen side, a popup taller than the window gets max-height and scrolls
+  3. [full] electron-smoke tests/full/popup-placement.spec.ts `every popup stays inside the window and its last item is reachable`: small window, each popup's bounding box inside the viewport, last item focused or clicked
+  4. [fast] reverse control: the helper returns the anchor bottom unchanged (no flip, no max-height) → tests/full/popup-placement.spec.ts::every popup stays inside the window and its last item is reachable
+  5. [fast] HUMAN: the owner opens Add participant with the setup expanded at the bottom of the window
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/20-openrouter-chat-retry

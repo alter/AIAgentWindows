@@ -1,9 +1,11 @@
 // sidebar.ts
 import { parseAgentTitle, MAX_AGENT_TITLE_CHARS, type Agent, type AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
+import { pointAnchor, type PopupAnchor } from '../shared/popup-place';
 import type { ThemeChoice } from '../shared/theme';
 import { el } from './dom';
 import { kindIcon } from './icons';
+import { hidePopup, showPopup } from './popup';
 import { OpenRouterAccount } from './openrouter-account';
 import { RoomTree, type RoomTreeState } from './room-tree';
 import { ThemeSwitch } from './theme-switch';
@@ -20,6 +22,8 @@ export interface SidebarHandlers {
   onRename(id: string, title: string): void;
   onTheme(choice: ThemeChoice): void;
 }
+
+const MENU_INSET = 12;
 
 const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
   { kind: 'claude', label: 'Claude Code' },
@@ -41,6 +45,7 @@ export class Sidebar {
   private readonly theme: ThemeSwitch;
   private readonly account = new OpenRouterAccount();
   private readonly list = el('ul', 'agent-list');
+  private readonly header = el('div', 'sidebar-header');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
   private readonly contextMenu = el('div', 'context-menu');
@@ -67,8 +72,7 @@ export class Sidebar {
       onDelete: (id) => this.handlers.onRoomDelete(id),
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
-    const header = el('div', 'sidebar-header');
-    header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
+    this.header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
     this.addButton.type = 'button';
     this.addButton.title = 'Add agent';
     this.addButton.setAttribute('aria-haspopup', 'menu');
@@ -77,7 +81,7 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
+    this.element.append(this.rooms.element, this.header, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
@@ -251,14 +255,12 @@ export class Sidebar {
 
   private showContextMenu(id: string, x: number, y: number): void {
     this.contextId = id;
-    this.contextMenu.style.left = `${x}px`;
-    this.contextMenu.style.top = `${y}px`;
-    this.contextMenu.hidden = false;
+    showPopup(this.contextMenu, () => pointAnchor(x, y));
   }
 
   private hideContextMenu(): void {
     this.contextId = null;
-    this.contextMenu.hidden = true;
+    hidePopup(this.contextMenu);
   }
 
   private menuItem(kind: AgentKind, label: string): HTMLButtonElement {
@@ -274,9 +276,15 @@ export class Sidebar {
     return button;
   }
 
+  private menuAnchor(): PopupAnchor {
+    const box = this.header.getBoundingClientRect();
+    return { left: box.left + MENU_INSET, top: box.top, right: box.right - MENU_INSET, bottom: box.bottom };
+  }
+
   private setMenuOpen(open: boolean): void {
     this.menuOpen = open;
-    this.menu.hidden = !open;
+    if (open) showPopup(this.menu, () => this.menuAnchor(), () => this.header.getBoundingClientRect().width - 2 * MENU_INSET);
+    else hidePopup(this.menu);
     this.addButton.setAttribute('aria-expanded', String(open));
   }
 }

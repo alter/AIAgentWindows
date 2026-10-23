@@ -17,6 +17,7 @@ import {
 } from '../shared/room-view';
 import { api } from './api';
 import { el } from './dom';
+import { hidePopup, rectAnchor, showPopup } from './popup';
 import { OpenRouterCells } from './room-openrouter-row';
 
 type RowAction = 'up' | 'down' | 'remove';
@@ -370,14 +371,14 @@ export class RoomTable {
         return item;
       }),
     );
-    this.menu.hidden = false;
+    showPopup(this.menu, () => rectAnchor(this.trigger, 4));
     this.trigger.setAttribute('aria-expanded', 'true');
     this.items()[0]?.focus();
   }
 
   private closeMenu(refocus: boolean): void {
     if (this.menu.hidden) return;
-    this.menu.hidden = true;
+    hidePopup(this.menu);
     this.trigger.setAttribute('aria-expanded', 'false');
     if (refocus) this.trigger.focus();
   }

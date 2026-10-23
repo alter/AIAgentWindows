@@ -1,6 +1,8 @@
 // room-tree.ts
+import { pointAnchor } from '../shared/popup-place';
 import { renameTitle, type RoomTreeRow } from '../shared/room-view';
 import { el } from './dom';
+import { hidePopup, showPopup } from './popup';
 
 export interface RoomTreeHandlers {
   onPane(): void;
@@ -267,15 +269,13 @@ export class RoomTree {
 
   private showMenu(id: string, x: number, y: number): void {
     this.menuId = id;
-    this.menu.style.left = `${x}px`;
-    this.menu.style.top = `${y}px`;
     this.deleteItem.disabled = this.state.busy;
-    this.menu.hidden = false;
+    showPopup(this.menu, () => pointAnchor(x, y));
     this.renameItem.focus();
   }
 
   private hideMenu(): void {
     this.menuId = null;
-    this.menu.hidden = true;
+    hidePopup(this.menu);
   }
 }
