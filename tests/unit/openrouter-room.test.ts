@@ -1,5 +1,7 @@
 // openrouter-room.test.ts
 import { describe, expect, it } from 'vitest';
+import { failedStatus, readAnswer } from '../../src/main/openrouter/chat';
+import { rateLimitText } from '../../src/shared/openrouter-chat';
 import {
   GATEWAY_EFFORTS,
   effortSupported,
@@ -180,5 +182,34 @@ describe('prompt for an openrouter participant', () => {
     expect(prompt.text).toContain(participant.label);
     expect(prompt.text).not.toContain('xxxxx');
     expect(prompt.text).not.toContain('attached file');
+  });
+});
+
+describe('429 text of a room turn and of a chat reply', () => {
+  const RESET_NOW = Date.parse('2026-10-23T12:00:00Z');
+  const reset = String(RESET_NOW + 30 * 60_000);
+  const providerError = { code: 429, message: 'Upstream busy', metadata: { provider_name: 'Acme Cloud', provider_code: 429 } };
+  const platformError = { code: 429, message: 'Rate limit exceeded', metadata: { error_type: 'rate_limit_exceeded' } };
+  const thrown = (error: unknown, header: string | null): string => {
+    try {
+      readAnswer(429, JSON.stringify({ error }), header, RESET_NOW);
+    } catch (caught) {
+      return (caught as Error).message;
+    }
+    return '';
+  };
+
+  it('is the one text of the shared function, with the reset header of the answer', () => {
+    expect(thrown(providerError, reset)).toBe(rateLimitText(providerError, reset, RESET_NOW));
+    expect(thrown(platformError, reset)).toBe(rateLimitText(platformError, reset, RESET_NOW));
+    expect(thrown(platformError, null)).toBe(rateLimitText(platformError, null, RESET_NOW));
+    expect(thrown(platformError, reset)).not.toBe(thrown(platformError, null));
+    expect(thrown(providerError, null)).not.toBe(thrown(platformError, null));
+  });
+
+  it('a status answer reads the same text from an already parsed body', () => {
+    expect(failedStatus(429, { error: providerError }, reset, RESET_NOW).message).toBe(rateLimitText(providerError, reset, RESET_NOW));
+    expect(failedStatus(429, undefined, null, RESET_NOW).code).toBe('failed');
+    expect(failedStatus(429, { error: platformError }).message).toBeTruthy();
   });
 });

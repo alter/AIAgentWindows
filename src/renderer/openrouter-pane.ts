@@ -1,14 +1,17 @@
 // openrouter-pane.ts
 import type { Agent } from '../shared/agents';
 import { emptyOpenRouterSettings, type ModelItem } from '../shared/openrouter';
-import { MAX_MESSAGE_CHARS, userEntry, type ChatEntry } from '../shared/openrouter-chat';
+import { MAX_MESSAGE_CHARS, dismissFailed, retryTarget, userEntry, type ChatEntry, type ChatSend } from '../shared/openrouter-chat';
 import { api } from './api';
 import { el } from './dom';
+import { setNotice } from './openrouter-account';
 import { OpenRouterCells } from './room-openrouter-row';
 
 const EMPTY_HINT = 'Choose a model, then write a message. Enter sends, Shift+Enter starts a new line.';
 const SEND_FAILED_TEXT = 'The message could not be sent.';
 const COPIED_MS = 1500;
+const RETRY_LABEL = 'Retry';
+const RETRY_ICON = '\u21BB';
 const STATUS_LABELS: Readonly<Record<string, string>> = { stopped: 'stopped', failed: 'failed', streaming: 'writing' };
 
 export class OpenRouterPane {
@@ -30,7 +33,7 @@ export class OpenRouterPane {
     const settings = agent.openrouter ?? emptyOpenRouterSettings();
     this.cells = new OpenRouterCells(
       { id: agent.id, kind: 'openrouter', model: settings.model, effort: settings.effort, web: settings.web, ...(settings.modelName === undefined ? {} : { modelName: settings.modelName }) },
-      () => void api.openrouterSettings(agent.id, this.cells.value()),
+      () => void this.settingsChanged(),
     );
     this.cells.name('this chat');
     this.element.hidden = true;
@@ -40,6 +43,7 @@ export class OpenRouterPane {
     this.log.setAttribute('role', 'log');
     this.notice.dataset['or'] = 'notice';
     this.notice.setAttribute('role', 'status');
+    setNotice(this.notice, '');
     this.input.dataset['or'] = 'input';
     this.input.setAttribute('aria-label', 'Message');
     this.input.maxLength = MAX_MESSAGE_CHARS;
@@ -105,7 +109,7 @@ export class OpenRouterPane {
       this.blocked = true;
       this.input.disabled = true;
       this.sendButton.disabled = true;
-      this.notice.textContent = result === null ? SEND_FAILED_TEXT : result.error;
+      setNotice(this.notice, result === null ? SEND_FAILED_TEXT : result.error);
       return;
     }
     this.entries = result.entries;
@@ -124,11 +128,12 @@ export class OpenRouterPane {
       this.log.replaceChildren(el('div', 'or-empty', EMPTY_HINT));
       return;
     }
-    this.log.replaceChildren(...this.entries.map((entry, index) => this.message(entry, index)));
+    const target = retryTarget(this.entries);
+    this.log.replaceChildren(...this.entries.map((entry, index) => this.message(entry, index, target)));
     this.log.scrollTop = this.log.scrollHeight;
   }
 
-  private message(entry: ChatEntry | { role: 'assistant'; status: 'streaming'; text: string }, index: number): HTMLElement {
+  private message(entry: ChatEntry | { role: 'assistant'; status: 'streaming'; text: string }, index: number, target: number | null = null): HTMLElement {
     const node = el('article', 'or-msg');
     node.dataset['role'] = entry.role;
     node.dataset['status'] = entry.status;
@@ -137,6 +142,7 @@ export class OpenRouterPane {
     const label = STATUS_LABELS[entry.status];
     if (label !== undefined) head.append(el('span', 'or-msg-state', label));
     if (entry.role === 'assistant' && entry.status !== 'streaming' && entry.text !== '') head.append(this.copyButton(index));
+    if (entry.role === 'user' && index === target) head.append(this.retryButton(index));
     node.append(head, el('pre', 'or-msg-text', entry.text));
     if ('error' in entry && entry.error !== undefined) node.append(el('p', 'or-msg-error', entry.error));
     return node;
@@ -158,8 +164,29 @@ export class OpenRouterPane {
     return button;
   }
 
+  private retryButton(index: number): HTMLButtonElement {
+    const button = el('button', 'room-button or-retry', RETRY_ICON);
+    button.type = 'button';
+    button.dataset['or'] = 'retry';
+    button.setAttribute('aria-label', RETRY_LABEL);
+    button.title = RETRY_LABEL;
+    button.disabled = this.busy;
+    button.addEventListener('click', () => void this.retry(index));
+    return button;
+  }
+
+  private async settingsChanged(): Promise<void> {
+    await api.openrouterSettings(this.agent.id, this.cells.value());
+    if (this.busy || this.blocked) return;
+    const kept = dismissFailed(this.entries);
+    if (kept.length === this.entries.length) return;
+    this.entries = kept;
+    this.renderAll();
+  }
+
   private setBusy(busy: boolean): void {
     this.busy = busy;
+    for (const button of this.log.querySelectorAll<HTMLButtonElement>('[data-or="retry"]')) button.disabled = busy;
     this.sendButton.hidden = busy;
     this.stopButton.hidden = !busy;
     this.cells.setBusy(busy);
@@ -169,7 +196,7 @@ export class OpenRouterPane {
     const text = this.input.value;
     if (this.busy || this.blocked || text.trim() === '') return;
     this.setBusy(true);
-    this.notice.textContent = '';
+    setNotice(this.notice, '');
     this.input.value = '';
     const asked = userEntry(text, Date.now());
     const asking = this.message(asked, this.entries.length);
@@ -182,15 +209,38 @@ export class OpenRouterPane {
     this.liveText = null;
     if (result.ok) {
       this.entries.push(asked, result.entry);
-      writing.replaceWith(this.message(result.entry, this.entries.length - 1));
+      this.renderAll();
     } else {
       asking.remove();
       writing.remove();
       this.input.value = text;
-      this.notice.textContent = result.error;
+      setNotice(this.notice, result.error);
       if (this.entries.length === 0) this.renderAll();
     }
     this.setBusy(false);
     this.input.focus();
+  }
+
+  private async retry(index: number): Promise<void> {
+    if (this.busy || this.blocked || retryTarget(this.entries) !== index) return;
+    this.setBusy(true);
+    setNotice(this.notice, '');
+    this.entries = dismissFailed(this.entries);
+    this.renderAll();
+    const writing = this.message({ role: 'assistant', status: 'streaming', text: '' }, this.entries.length);
+    this.log.append(writing);
+    this.liveText = writing.querySelector('.or-msg-text');
+    this.log.scrollTop = this.log.scrollHeight;
+    const result: ChatSend = await api.openrouterChatRetry(this.agent.id, index).catch(() => ({ ok: false as const, error: SEND_FAILED_TEXT }));
+    this.liveText = null;
+    if (result.ok) {
+      this.entries.push(result.entry);
+      this.renderAll();
+    } else {
+      writing.remove();
+      setNotice(this.notice, result.error);
+      await this.load();
+    }
+    this.setBusy(false);
   }
 }

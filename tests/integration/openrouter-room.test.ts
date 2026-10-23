@@ -16,7 +16,7 @@ import { emptyState } from '../../src/shared/agents';
 import type { ModelItem, OpenRouterStatus } from '../../src/shared/openrouter';
 import { historyNonce } from '../../src/shared/room-history';
 import type { RoomConfig, RoomEntry, RoomParticipant } from '../../src/shared/room-model';
-import { startFakeOpenRouter, type ChatCall, type ChatScript, type FakeOpenRouter } from '../fixtures/openrouter-fake';
+import { ACCOUNT_LIMITED_MODEL, FAKE_PROVIDER_NAME, PROVIDER_LIMITED_MODEL, startFakeOpenRouter, type ChatCall, type ChatScript, type FakeOpenRouter } from '../fixtures/openrouter-fake';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const STUB_REPLY = 'Stub CLI says hello';
@@ -268,6 +268,17 @@ describe('rate limit', () => {
     const result = await room.start(config([OR_PAID, CLAUDE])).done;
     expect(labels(result.entries).slice(0, 3)).toEqual(['owner:prompt', 'openrouter:error', 'claude:reply']);
     expect(fake.chatCalls).toHaveLength(2);
+  });
+
+  it('the error entry names the provider when it is the provider that limits, and the reset time when it is the account', async () => {
+    const limited = (model: string): RoomParticipant => ({ id: 'openrouter', kind: 'openrouter', label: model, model, web: false });
+    const provider = await newRoom().start(config([limited(PROVIDER_LIMITED_MODEL), CLAUDE])).done;
+    const account = await newRoom().start(config([limited(ACCOUNT_LIMITED_MODEL), CLAUDE])).done;
+    expect(provider.entries[1]).toMatchObject({ kind: 'error' });
+    expect(provider.entries[1]?.text).toContain(FAKE_PROVIDER_NAME);
+    expect(account.entries[1]).toMatchObject({ kind: 'error' });
+    expect(account.entries[1]?.text).not.toContain(FAKE_PROVIDER_NAME);
+    expect(account.entries[1]?.text).toContain('45');
   });
 
   it('a Retry-After longer than the turn is capped by the remaining time: one request, a timeout entry', async () => {

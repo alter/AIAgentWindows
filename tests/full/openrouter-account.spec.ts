@@ -123,10 +123,10 @@ test('a model name with markup is shown as text', async () => {
     await expect(name).toHaveText(FAKE_MODEL_MARKUP);
     expect(await block(page).locator('.or-models img, .or-models b, .or-models script').count()).toBe(0);
     expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
-    await expect(block(page).getByText('Models (4)')).toBeVisible();
+    await expect(block(page).getByText('Models (6)')).toBeVisible();
     await block(page).getByLabel('Show models').selectOption('free');
-    await expect(block(page).getByText('Models (2)')).toBeVisible();
-    await expect.poll(() => names(page)).toEqual(['Acme Free', 'Free Models Router']);
+    await expect(block(page).getByText('Models (4)')).toBeVisible();
+    await expect.poll(() => names(page)).toEqual(['Account Limited', 'Acme Free', 'Free Models Router', 'Provider Limited']);
     await block(page).getByLabel('Show models').selectOption('paid');
     await expect.poll(() => names(page)).toEqual(['Acme Paid', FAKE_MODEL_MARKUP].sort());
   } finally {

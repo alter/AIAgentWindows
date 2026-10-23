@@ -3,14 +3,18 @@ import {
   BUSY_TEXT,
   CHAT_SIGNED_OUT_TEXT,
   NO_MODEL_TEXT,
+  NOTHING_TO_RETRY_TEXT,
   SAVE_FAILED_TEXT,
   UNKNOWN_AGENT_TEXT,
   UNREADABLE_CONVERSATION_TEXT,
   assistantEntry,
   contextMessages,
+  dismissFailed,
+  retryTarget,
   sendProblem,
   userEntry,
   type ChatDelta,
+  type ChatEntry,
   type ChatLoad,
   type ChatSend,
 } from '../../shared/openrouter-chat';
@@ -32,6 +36,8 @@ export interface ChatsDeps {
   now?: () => number;
 }
 
+type Prepare = (entries: ChatEntry[], now: number) => ChatEntry[] | string;
+
 function refused(error: string): ChatSend {
   return { ok: false, error };
 }
@@ -46,7 +52,28 @@ export class OpenRouterChats {
     return loaded.ok ? { ok: true, entries: loaded.conversation.entries } : { ok: false, error: UNREADABLE_CONVERSATION_TEXT };
   }
 
-  async send(agentId: string, text: string): Promise<ChatSend> {
+  send(agentId: string, text: string): Promise<ChatSend> {
+    return this.guarded(agentId, (entries, now) => sendProblem(entries, text) ?? [...entries, userEntry(text, now)]);
+  }
+
+  retry(agentId: string, index: number): Promise<ChatSend> {
+    return this.guarded(agentId, (entries) => (retryTarget(entries) === index ? dismissFailed(entries) : NOTHING_TO_RETRY_TEXT));
+  }
+
+  async dismiss(agentId: string): Promise<boolean> {
+    if (this.active.has(agentId)) return false;
+    this.active.set(agentId, new AbortController());
+    try {
+      const loaded = await this.deps.store.load(agentId);
+      if (!loaded.ok) return false;
+      const entries = dismissFailed(loaded.conversation.entries);
+      return entries.length < loaded.conversation.entries.length && (await this.save({ ...loaded.conversation, entries }));
+    } finally {
+      this.active.delete(agentId);
+    }
+  }
+
+  private async guarded(agentId: string, prepare: Prepare): Promise<ChatSend> {
     const settings = this.deps.settingsOf(agentId);
     if (settings === undefined) return refused(UNKNOWN_AGENT_TEXT);
     if (this.active.has(agentId)) return refused(BUSY_TEXT);
@@ -55,7 +82,7 @@ export class OpenRouterChats {
     const controller = new AbortController();
     this.active.set(agentId, controller);
     try {
-      return await this.run(agentId, text, settings, controller.signal);
+      return await this.run(agentId, prepare, settings, controller.signal);
     } finally {
       this.active.delete(agentId);
     }
@@ -77,14 +104,13 @@ export class OpenRouterChats {
     for (const controller of this.active.values()) controller.abort();
   }
 
-  private async run(agentId: string, text: string, settings: OpenRouterSettings, signal: AbortSignal): Promise<ChatSend> {
+  private async run(agentId: string, prepare: Prepare, settings: OpenRouterSettings, signal: AbortSignal): Promise<ChatSend> {
     const now = this.deps.now ?? Date.now;
     const loaded = await this.deps.store.load(agentId);
     if (!loaded.ok) return refused(UNREADABLE_CONVERSATION_TEXT);
     const { conversation } = loaded;
-    const problem = sendProblem(conversation.entries, text);
-    if (problem !== null) return refused(problem);
-    const entries = [...conversation.entries, userEntry(text, now())];
+    const entries = prepare(conversation.entries, now());
+    if (typeof entries === 'string') return refused(entries);
     if (!(await this.save({ ...conversation, entries }))) return refused(SAVE_FAILED_TEXT);
     const outcome = await this.deps.service.chatStream(
       { model: settings.model, messages: contextMessages(entries), effort: settings.effort === '' ? null : settings.effort, web: settings.web },

@@ -73,6 +73,7 @@ const api: AppApi = {
   openrouterChatLoad: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatLoad, { id }) as Promise<ChatLoad>,
   openrouterChatSend: (id, text) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatSend, { id, text }) as Promise<ChatSend>,
   openrouterChatStop: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatStop, { id }) as Promise<void>,
+  openrouterChatRetry: (id, index) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatRetry, { id, index }) as Promise<ChatSend>,
   openrouterChatCopy: (id, index) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatCopy, { id, index }) as Promise<boolean>,
   openrouterSettings: (id, settings: OpenRouterSettings) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterSettings, { id, settings }) as Promise<boolean>,
   onAgentsChanged: (listener) => subscribe<AgentsSnapshot>(EVENT_CHANNELS.agentsChanged, listener),

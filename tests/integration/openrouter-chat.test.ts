@@ -19,13 +19,14 @@ import {
   INTERRUPTED_TEXT,
   LENGTH_TEXT,
   MODEL_FAILED_TEXT,
+  NOTHING_TO_RETRY_TEXT,
   UNREADABLE_TEXT,
   parseConversation,
   type ChatDelta,
   type ChatEntry,
   type ChatSend,
 } from '../../src/shared/openrouter-chat';
-import { SSE_COMMENT, sseData, sseDelta, sseTail, startFakeOpenRouter, type ChatCall, type ChatScript, type FakeOpenRouter } from '../fixtures/openrouter-fake';
+import { ACCOUNT_LIMITED_MODEL, FAKE_LIMIT_MARKUP, FAKE_PROVIDER_NAME, PROVIDER_LIMITED_MODEL, SSE_COMMENT, sseData, sseDelta, sseTail, startFakeOpenRouter, type ChatCall, type ChatScript, type FakeOpenRouter } from '../fixtures/openrouter-fake';
 
 const AGENT = '0b9a5d6e-3f43-4c1b-9d57-1f6b7a2c8e10';
 
@@ -203,6 +204,19 @@ describe('errors become a failed reply with readable text', () => {
     expect(rate.error).not.toBe(paid.error);
   });
 
+  it('a 429 says whether the model provider or the account cap hit, with the server message', async () => {
+    settings = { ...settings, model: PROVIDER_LIMITED_MODEL };
+    const provider = entryOf(await chats().send(AGENT, 'Question'));
+    expect(provider.status).toBe('failed');
+    expect(provider.error).toContain(FAKE_PROVIDER_NAME);
+    expect(provider.error).toContain(FAKE_LIMIT_MARKUP);
+    settings = { ...settings, model: ACCOUNT_LIMITED_MODEL };
+    const account = entryOf(await chats().send(AGENT, 'Question'));
+    expect(account.error).not.toContain(FAKE_PROVIDER_NAME);
+    expect(account.error).toContain('Rate limit exceeded');
+    expect(account.error).toMatch(/4[45]/);
+  });
+
   it('another status carries its detail', async () => {
     const entry = await failedWith({ status: 503, body: { error: { code: 503, message: 'No provider' } } });
     expect(entry.error).toContain('No provider');
@@ -304,3 +318,47 @@ describe('the agent, its conversation file and Copy', () => {
     expect(await readFile(store.file(AGENT), 'utf8')).toBe(before);
   });
 });
+
+describe('retry and dismissing a failed reply', () => {
+  const NEW_MODEL = 'acme/free-model:free';
+
+  async function failFirst(): Promise<OpenRouterChats> {
+    settings = { ...settings, model: PROVIDER_LIMITED_MODEL };
+    const service1 = chats();
+    expect(entryOf(await service1.send(AGENT, 'Question')).status).toBe('failed');
+    settings = { ...settings, model: NEW_MODEL };
+    return service1;
+  }
+
+  it('retry sends the stored conversation once with the new model and keeps one copy of the message', async () => {
+    const service1 = await failFirst();
+    const entry = entryOf(await service1.retry(AGENT, 0));
+    expect(entry).toMatchObject({ status: 'done', text: `Reply from ${NEW_MODEL} number 2` });
+    expect(fake.chatCalls).toHaveLength(2);
+    expect(fake.chatCalls[1]?.body?.model).toBe(NEW_MODEL);
+    expect(fake.chatCalls[1]?.body?.messages).toEqual([{ role: 'user', content: 'Question' }]);
+    expect((await stored()).map((item) => [item.role, item.status])).toEqual([['user', 'done'], ['assistant', 'done']]);
+    expect(await service1.retry(AGENT, 0)).toEqual({ ok: false, error: NOTHING_TO_RETRY_TEXT });
+    expect(fake.chatCalls).toHaveLength(2);
+  });
+
+  it('a settings change removes the failed reply from the file, the message stays, and the next send carries it once', async () => {
+    const service1 = await failFirst();
+    expect(await service1.dismiss(AGENT)).toBe(true);
+    expect((await stored()).map((item) => item.text)).toEqual(['Question']);
+    entryOf(await service1.send(AGENT, 'Next'));
+    expect(fake.chatCalls[1]?.body?.messages?.map((message) => message.content)).toEqual(['Question', 'Next']);
+  });
+
+  it('retry of a message after a failed reply that follows an answered one resends only that message', async () => {
+    entryOf(await chats().send(AGENT, 'First'));
+    settings = { ...settings, model: PROVIDER_LIMITED_MODEL };
+    const service1 = chats();
+    expect(entryOf(await service1.send(AGENT, 'Second')).status).toBe('failed');
+    settings = { ...settings, model: NEW_MODEL };
+    entryOf(await service1.retry(AGENT, 2));
+    expect(fake.chatCalls.at(-1)?.body?.messages?.map((message) => message.content)).toEqual(['First', 'Reply from acme/free-model:free number 1', 'Second']);
+    expect((await stored()).map((item) => item.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+  });
+});
+

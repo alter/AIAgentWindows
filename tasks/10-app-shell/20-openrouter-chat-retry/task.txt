@@ -1,0 +1,69 @@
+TASK: OpenRouter chat — retry a failed reply, no stale error, no empty notice
+
+GOAL
+  The owner's first real OpenRouter chat (screenshot 2026-10-23 23:04) hit a
+  429 on a free model, switched to another free model and found three defects:
+  an empty yellow bar above the input, the red failed reply still shown after
+  the model was changed, and the unanswered prompt left with no way to send it
+  again ("может быть добавить кнопочку-иконку retry"). The 429 text also blamed
+  "this key" while the account showed 50 of 50 free requests left. Serves no gate.
+
+CONTEXT
+  src/renderer/openrouter-pane.ts (notice :18,:108,:172,:190; message :131-141)
+  src/renderer/styles.css:238-239,596-597 (.or-notice painted when empty)
+  src/main/openrouter/chats.ts (send, run, conversation entries), src/shared/openrouter-chat.ts (ChatEntry, EntryStatus)
+  src/main/openrouter/chat.ts (failedStatus, RATE_TEXT; shared with the Room driver of 17)
+  docs/tech/openrouter@2026-10-23.md (section Errors: codes, 429 platform or upstream, X-RateLimit-* headers)
+
+SCOPE
+  + S1 the notice line takes no space and shows no colour when it has no text (hidden, not an empty painted bar), in the chat pane and in the sidebar OpenRouter block
+  + S2 a failed reply at the end of the conversation is dismissed when the model, effort or Web setting changes (removed from the stored conversation, so it is neither shown nor sent), the owner's unanswered message stays
+  + S3 the owner's last message that has no successful reply carries a Retry icon button (accessible name "Retry"): it resends that message with the current settings without adding a second copy; a failed reply it replaces is removed first; disabled while streaming
+  + S4 the 429 text says which limit hit: the model's provider (error.metadata.provider_name or provider_code present → "this model's provider is rate limiting it, pick another model") or the account's free cap (with the reset time from X-RateLimit-Reset when given); the server's error.message is appended as for 402; one function shared by the chat and the Room driver
+  − Retry in the Room feed — the Room has Resume (09-room-resume)
+  − editing a sent message — not requested
+  indivisible: the conversation rules (dismiss, retry) and the pane controls change together for one entry list
+
+WRITE-SET
+  src/shared/openrouter-chat.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/openrouter/chats.ts
+  src/main/openrouter/chat.ts
+  src/main/openrouter/chat-stream.ts
+  src/renderer/openrouter-pane.ts
+  src/renderer/openrouter-account.ts
+  src/renderer/styles.css
+  tests/unit/
+  tests/integration/
+  tests/full/
+  tests/fixtures/openrouter-fake.ts
+  tasks/10-app-shell/20-openrouter-chat-retry/
+
+DATA
+  openrouter.error: dir=in; type=JSON error object of a non-2xx answer (code, message, metadata.provider_name, metadata.provider_code) and the X-RateLimit-Reset header (ms epoch); size=message cut to 300 chars; null=yes; interpretable=yes; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api_reference/limits.md
+  retry.index: dir=in; type=integer index of the owner's message in the stored conversation; range=0..entries-1; null=no; interpretable=no; validated=tests/unit/ipc-validate.test.ts::openrouter chat retry rejects a malformed request; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink openrouter-pane: consumes openrouter.error; protection=textContent only (existing pane); test=tests/full/openrouter-chat-retry.spec.ts::a failed reply is retried with the new model and the error text is shown as text
+
+OUTCOME
+  A smoke run on the fake server: a 429 from a "provider" model, the model is
+  changed (failed reply gone, no empty notice bar), Retry sends the same message
+  once with the new model and the reply appears; tasks/10-app-shell/20-openrouter-chat-retry/PLAN.md
+  has every non-HUMAN item [x].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit: dismiss rule (only a trailing failed reply, only on a settings change), retry rule (target is the last unanswered owner message, no duplicate), 429 text by source; IPC retry validation
+  3. [fast] integration: retry sends the stored conversation once with the new model; a settings change removes the trailing failed reply from the file
+  4. [full] electron-smoke: tests/full/openrouter-chat-retry.spec.ts — 429, model change, no visible empty notice (bounding box height 0 or hidden), Retry, reply; markup in the error shown as text
+  5. [fast] reverse control: retry appends the owner's message again → tests/integration/openrouter-chat.test.ts retry test goes red (two copies sent)
+  6. [fast] HUMAN: the owner hits a rate limit, switches model and retries
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/18-openrouter-chat

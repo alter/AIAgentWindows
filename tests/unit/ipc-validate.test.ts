@@ -322,6 +322,14 @@ describe('theme channels', () => {
       }
     });
 
+    it('openrouter chat retry rejects a malformed request', () => {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterChatRetry, { id: UUID, index: 0 })).toEqual({ ok: true, value: { id: UUID, index: 0 } });
+      expect(validateRequest(INVOKE_CHANNELS.openrouterChatRetry, { id: UUID, index: 1999 }).ok).toBe(true);
+      for (const payload of [undefined, null, {}, { id: UUID }, { index: 1 }, { id: UUID, index: -1 }, { id: UUID, index: 1.5 }, { id: UUID, index: 2000 }, { id: UUID, index: '1' }, { id: UUID, index: Number.NaN }, { id: 'a1', index: 1 }, { id: '../x', index: 1 }]) {
+        expect(validateRequest(INVOKE_CHANNELS.openrouterChatRetry, payload).ok).toBe(false);
+      }
+    });
+
     it('settings take the model, effort and web flag of the agent', () => {
       const settings = { model: 'acme/m', effort: 'low', web: true };
       expect(validateRequest(INVOKE_CHANNELS.openrouterSettings, { id: UUID, settings })).toEqual({ ok: true, value: { id: UUID, settings } });

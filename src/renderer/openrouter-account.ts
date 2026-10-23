@@ -28,6 +28,11 @@ function modelMeta(model: ModelItem): string {
   return `${price} · ${formatContext(model.contextLength)}`;
 }
 
+export function setNotice(node: HTMLElement, text: string): void {
+  node.textContent = text;
+  node.hidden = text === '';
+}
+
 function button(label: string, className: string, onClick: () => void): HTMLButtonElement {
   const node = el('button', className, label);
   node.type = 'button';
@@ -134,7 +139,7 @@ export class OpenRouterAccount {
     this.stateText.textContent = connected ? 'Connected' : codeMode ? 'Paste the code shown on the OpenRouter page.' : signing ? 'Finish signing in in your browser.' : 'Not connected';
     const free = status.info?.freeRequests ?? null;
     this.freeText.textContent = connected && free !== null ? `Free requests left today: ${free.remaining} of ${free.limit}` : '';
-    this.notice.textContent = noticeText(status.notice);
+    setNotice(this.notice, noticeText(status.notice));
     this.connectButton.hidden = connected || signing;
     this.pasteButton.hidden = connected || signing;
     this.codeButton.hidden = !signing || codeMode;
@@ -143,7 +148,6 @@ export class OpenRouterAccount {
     this.disconnectButton.hidden = !connected;
     this.pasteForm.hidden = connected || !(this.pasteOpen || codeMode);
     this.freeText.hidden = this.freeText.textContent === '';
-    this.notice.hidden = this.notice.textContent === '';
   }
 
   private renderModels(): void {

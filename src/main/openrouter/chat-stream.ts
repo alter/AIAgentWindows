@@ -23,7 +23,7 @@ export function failedOutcome(error: string, text = '', unauthorized = false): K
 
 async function statusOutcome(response: Response): Promise<KeyedOutcome> {
   const bytes = (await response.arrayBuffer()).slice(0, MAX_ERROR_BYTES);
-  const error = failedStatus(response.status, parseJson(new TextDecoder().decode(bytes)));
+  const error = failedStatus(response.status, parseJson(new TextDecoder().decode(bytes)), response.headers.get('x-ratelimit-reset'));
   return failedOutcome(error.message, '', error.code === 'unauthorized');
 }
 

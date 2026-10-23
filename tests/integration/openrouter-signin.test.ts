@@ -14,7 +14,7 @@ import { OpenRouterService } from '../../src/main/openrouter/service';
 import { fetchOpener, testSecretBox } from '../../src/main/openrouter/test-mode';
 import { emptyState } from '../../src/shared/agents';
 import type { OpenRouterStatus } from '../../src/shared/openrouter';
-import { startFakeOpenRouter, type FakeOpenRouter } from '../fixtures/openrouter-fake';
+import { ACCOUNT_LIMITED_MODEL, PROVIDER_LIMITED_MODEL, startFakeOpenRouter, type FakeOpenRouter } from '../fixtures/openrouter-fake';
 
 let dir: string;
 let fake: FakeOpenRouter;
@@ -555,7 +555,7 @@ describe('model list', () => {
     const service = build();
     const first = await service.models(false);
     expect(first.ok).toBe(true);
-    expect(first.models.map((model) => model.id)).toEqual(['acme/free-model:free', 'acme/paid-model', 'openrouter/free', 'acme/markup']);
+    expect(first.models.map((model) => model.id)).toEqual(['acme/free-model:free', 'acme/paid-model', 'openrouter/free', PROVIDER_LIMITED_MODEL, ACCOUNT_LIMITED_MODEL, 'acme/markup']);
     await service.models(false);
     expect(fake.requests.filter((request) => request.path === '/api/v1/models')).toHaveLength(1);
     expect(fake.requests.find((request) => request.path === '/api/v1/models')?.headers.authorization).toBeUndefined();
@@ -564,7 +564,7 @@ describe('model list', () => {
     await fake.close();
     const failed = await service.models(true);
     expect(failed.ok).toBe(false);
-    expect(failed.models).toHaveLength(4);
+    expect(failed.models).toHaveLength(6);
     fake = await startFakeOpenRouter();
   });
 

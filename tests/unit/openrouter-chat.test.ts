@@ -2,7 +2,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ChatRequest } from '../../src/main/openrouter/chat';
 import { OpenRouterChats } from '../../src/main/openrouter/chats';
 import { ConversationStore } from '../../src/main/openrouter/conversation-store';
 import {
@@ -14,18 +15,22 @@ import {
   MAX_ENTRIES,
   MAX_MESSAGE_CHARS,
   MAX_REPLY_CHARS,
+  NOTHING_TO_RETRY_TEXT,
   ReplyStream,
   SseParser,
   UNREADABLE_CONVERSATION_TEXT,
   UNREADABLE_TEXT,
   assistantEntry,
   contextMessages,
+  dismissFailed,
   emptyConversation,
   errorDetail,
   failureText,
   openrouterTitle,
   parseConversation,
+  rateLimitText,
   replyOutcome,
+  retryTarget,
   sendProblem,
   serializeConversation,
   userEntry,
@@ -122,6 +127,88 @@ describe('SSE parser', () => {
     expect(errorDetail([1])).toBe('');
     expect(failureText('Lead', '')).toBe('Lead');
     expect(failureText('Lead', 'why')).toContain('why');
+  });
+});
+
+describe('dismissing a failed reply and the retry target', () => {
+  const ask = (text: string): ChatEntry => userEntry(text, 1);
+  const reply = (status: ChatEntry['status']): ChatEntry => ({ role: 'assistant', text: status === 'failed' ? '' : 'text', status, time: 2 });
+
+  it('only a failed reply at the end is dismissed', () => {
+    const failed = [ask('a'), reply('done'), ask('b'), reply('failed')];
+    expect(dismissFailed(failed)).toEqual(failed.slice(0, 3));
+    for (const kept of [[], [ask('a')], [ask('a'), reply('done')], [ask('a'), reply('stopped')], [ask('a'), reply('failed'), ask('b')]]) {
+      expect(dismissFailed(kept)).toEqual(kept);
+    }
+  });
+
+  it('dismissing leaves the stored list alone', () => {
+    const entries = [ask('a'), reply('failed')];
+    dismissFailed(entries);
+    expect(entries).toHaveLength(2);
+  });
+
+  it('the target is the last owner message that has no successful reply', () => {
+    expect(retryTarget([])).toBeNull();
+    expect(retryTarget([ask('a')])).toBe(0);
+    expect(retryTarget([ask('a'), reply('failed')])).toBe(0);
+    expect(retryTarget([ask('a'), reply('done'), ask('b'), reply('failed')])).toBe(2);
+    expect(retryTarget([ask('a'), reply('failed'), ask('b')])).toBe(2);
+    expect(retryTarget([ask('a'), reply('failed'), ask('b'), reply('failed')])).toBe(2);
+  });
+
+  it('there is none when the last message was answered or stopped', () => {
+    expect(retryTarget([ask('a'), reply('done')])).toBeNull();
+    expect(retryTarget([ask('a'), reply('stopped')])).toBeNull();
+    expect(retryTarget([ask('a'), reply('done'), ask('b'), reply('stopped')])).toBeNull();
+    expect(NOTHING_TO_RETRY_TEXT).toBeTruthy();
+  });
+});
+
+describe('text of a 429 by the source of the limit', () => {
+  const NOW = Date.parse('2026-10-23T12:00:00Z');
+  const provider = { code: 429, message: 'Upstream busy', metadata: { provider_name: 'Acme Cloud', provider_code: 429 } };
+  const platform = { code: 429, message: 'Rate limit exceeded', metadata: { error_type: 'rate_limit_exceeded' } };
+
+  it('a provider limit names the provider and differs from the account cap', () => {
+    const text = rateLimitText(provider, null, NOW);
+    expect(text).toContain('Acme Cloud');
+    expect(text).not.toBe(rateLimitText(platform, null, NOW));
+    expect(rateLimitText({ ...provider, metadata: { provider_code: 429 } }, null, NOW)).not.toBe(rateLimitText(platform, null, NOW));
+    expect(rateLimitText({ ...provider, metadata: { provider_code: 'overloaded' } }, null, NOW)).not.toBe(rateLimitText(platform, null, NOW));
+    expect(rateLimitText({ ...provider, metadata: { provider_name: 'x'.repeat(500) } }, null, NOW)).not.toContain('x'.repeat(65));
+  });
+
+  it('an empty or malformed provider field does not make it a provider limit', () => {
+    const account = rateLimitText(platform, null, NOW);
+    for (const metadata of [{ provider_name: '' }, { provider_name: 5 }, { provider_code: null }, { provider_code: '' }, 'x', null]) {
+      expect(rateLimitText({ ...platform, metadata }, null, NOW)).toBe(account);
+    }
+    expect(rateLimitText(undefined, null, NOW)).toBe(rateLimitText({}, null, NOW));
+    expect(rateLimitText(undefined, null, NOW)).not.toContain('Rate limit exceeded');
+    expect(rateLimitText('Rate limit exceeded', null, NOW)).toContain('Rate limit exceeded');
+  });
+
+  it('the account cap says when it resets, from the header in epoch milliseconds', () => {
+    const none = rateLimitText(platform, null, NOW);
+    const soon = rateLimitText(platform, String(NOW + 30 * 60_000), NOW);
+    expect(soon).not.toBe(none);
+    expect(soon).toContain('30');
+    expect(rateLimitText(platform, String(NOW + 3 * 3_600_000), NOW)).toContain('3');
+    expect(rateLimitText(platform, String(NOW + 20_000), NOW)).not.toBe(none);
+    for (const header of ['', 'soon', String(NOW - 1000), '-5', '1e99', 'Infinity']) expect(rateLimitText(platform, header, NOW)).toBe(none);
+  });
+
+  it('the provider text does not claim a reset time', () => {
+    expect(rateLimitText(provider, String(NOW + 30 * 60_000), NOW)).toBe(rateLimitText(provider, null, NOW));
+  });
+
+  it('the server message is appended, cut to 300 characters', () => {
+    expect(rateLimitText(provider, null, NOW)).toContain('Upstream busy');
+    expect(rateLimitText(platform, null, NOW)).toContain('Rate limit exceeded');
+    const long = rateLimitText({ ...platform, message: 'm'.repeat(500) }, null, NOW);
+    expect(long).toContain('m'.repeat(300));
+    expect(long).not.toContain('m'.repeat(301));
   });
 });
 
@@ -341,15 +428,19 @@ describe('conversation store and chat service', () => {
   let settings: OpenRouterSettings | undefined;
   let streamed: number;
   let signedIn: boolean;
+  let gate: Promise<void> | null;
+  const requests: ChatRequest[] = [];
   const copied: string[] = [];
 
   function chats(): OpenRouterChats {
     return new OpenRouterChats({
       service: {
         status: () => ({ state: signedIn ? 'connected' : 'signed-out', mode: null, notice: null, info: null }),
-        chatStream: () => {
+        chatStream: async (request) => {
           streamed += 1;
-          return Promise.resolve({ status: 'done', text: 'ok', usage: null, error: null, unauthorized: false });
+          requests.push(request);
+          await gate;
+          return { status: 'done', text: 'ok', usage: null, error: null, unauthorized: false };
         },
       },
       store,
@@ -366,6 +457,8 @@ describe('conversation store and chat service', () => {
     settings = { model: 'acme/m', effort: '', web: false };
     streamed = 0;
     signedIn = true;
+    gate = null;
+    requests.length = 0;
     copied.length = 0;
   });
 
@@ -430,5 +523,95 @@ describe('conversation store and chat service', () => {
     expect((await service.send(AGENT, '   ')).ok).toBe(false);
     expect(streamed).toBe(0);
     expect(await store.load(AGENT)).toEqual({ ok: true, conversation: emptyConversation(AGENT) });
+  });
+  describe('retry and dismissing a failed reply', () => {
+    const failedReply = (): ChatEntry => entry('assistant', '', { status: 'failed', error: 'It failed' });
+
+    async function stored(): Promise<ChatEntry[]> {
+      const loaded = await store.load(AGENT);
+      return loaded.ok ? loaded.conversation.entries : [];
+    }
+
+    it('retry sends the existing message once, drops the failed reply and keeps one copy of the message', async () => {
+      await store.save(conversation([entry('user', 'one'), entry('assistant', 'reply one'), entry('user', 'two'), failedReply()]));
+      const result = await chats().retry(AGENT, 2);
+      expect(result).toMatchObject({ ok: true, entry: { role: 'assistant', status: 'done', text: 'ok' } });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.messages).toEqual([
+        { role: 'user', content: 'one' },
+        { role: 'assistant', content: 'reply one' },
+        { role: 'user', content: 'two' },
+      ]);
+      expect((await stored()).map((item) => [item.role, item.text])).toEqual([['user', 'one'], ['assistant', 'reply one'], ['user', 'two'], ['assistant', 'ok']]);
+    });
+
+    it('retry answers a message that has no reply at all', async () => {
+      await store.save(conversation([entry('user', 'lonely')]));
+      expect((await chats().retry(AGENT, 0)).ok).toBe(true);
+      expect((await stored()).map((item) => item.text)).toEqual(['lonely', 'ok']);
+    });
+
+    it('retry refuses any other message and leaves the file as it is', async () => {
+      await store.save(conversation([entry('user', 'one'), entry('assistant', 'reply one'), entry('user', 'two'), failedReply()]));
+      const before = await readFile(store.file(AGENT), 'utf8');
+      for (const index of [0, 1, 3, 4, 2000, -1, 1.5]) expect(await chats().retry(AGENT, index)).toEqual({ ok: false, error: NOTHING_TO_RETRY_TEXT });
+      expect(await readFile(store.file(AGENT), 'utf8')).toBe(before);
+      await store.save(conversation([entry('user', 'one'), entry('assistant', 'reply one')]));
+      expect(await chats().retry(AGENT, 0)).toEqual({ ok: false, error: NOTHING_TO_RETRY_TEXT });
+      expect(streamed).toBe(0);
+    });
+
+    it('retry is refused like a send: unknown agent, no model, signed out, unreadable file, busy', async () => {
+      await store.save(conversation([entry('user', 'one')]));
+      const service = chats();
+      expect((await service.retry(OTHER, 0)).ok).toBe(false);
+      settings = { model: '', effort: '', web: false };
+      expect((await service.retry(AGENT, 0)).ok).toBe(false);
+      settings = { model: 'acme/m', effort: '', web: false };
+      signedIn = false;
+      expect(await service.retry(AGENT, 0)).toEqual({ ok: false, error: CHAT_SIGNED_OUT_TEXT });
+      signedIn = true;
+      expect(streamed).toBe(0);
+      let release: () => void = () => undefined;
+      gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const running = service.retry(AGENT, 0);
+      await vi.waitFor(() => expect(streamed).toBe(1));
+      expect((await service.retry(AGENT, 0)).ok).toBe(false);
+      release();
+      expect((await running).ok).toBe(true);
+      await plant('{broken');
+      expect(await service.retry(AGENT, 0)).toEqual({ ok: false, error: UNREADABLE_CONVERSATION_TEXT });
+    });
+
+    it('dismiss removes a trailing failed reply from the file and nothing else', async () => {
+      await store.save(conversation([entry('user', 'one'), failedReply()]));
+      const service = chats();
+      expect(await service.dismiss(AGENT)).toBe(true);
+      expect((await stored()).map((item) => item.text)).toEqual(['one']);
+      expect(await service.dismiss(AGENT)).toBe(false);
+      await store.save(conversation([entry('user', 'one'), entry('assistant', 'part', { status: 'stopped' })]));
+      expect(await service.dismiss(AGENT)).toBe(false);
+      expect(await stored()).toHaveLength(2);
+    });
+
+    it('dismiss does nothing for a file that cannot be read, a missing file and a running reply', async () => {
+      const service = chats();
+      expect(await service.dismiss(AGENT)).toBe(false);
+      const file = await plant('{broken');
+      expect(await service.dismiss(AGENT)).toBe(false);
+      expect(await readFile(file, 'utf8')).toBe('{broken');
+      await store.save(conversation([entry('user', 'one'), failedReply()]));
+      let release: () => void = () => undefined;
+      gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const running = service.send(AGENT, 'next');
+      await vi.waitFor(() => expect(streamed).toBe(1));
+      expect(await service.dismiss(AGENT)).toBe(false);
+      release();
+      await running;
+    });
   });
 });

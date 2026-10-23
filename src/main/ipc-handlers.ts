@@ -58,9 +58,14 @@ function buildHandlers(controller: AgentController, room: RoomService, openroute
     [INVOKE_CHANNELS.openrouterModels]: ({ refresh }) => openrouter.models(refresh),
     [INVOKE_CHANNELS.openrouterChatLoad]: ({ id }) => chats.load(id),
     [INVOKE_CHANNELS.openrouterChatSend]: ({ id, text }) => chats.send(id, text),
+    [INVOKE_CHANNELS.openrouterChatRetry]: ({ id, index }) => chats.retry(id, index),
     [INVOKE_CHANNELS.openrouterChatStop]: ({ id }) => chats.stop(id),
     [INVOKE_CHANNELS.openrouterChatCopy]: ({ id, index }) => chats.copy(id, index),
-    [INVOKE_CHANNELS.openrouterSettings]: ({ id, settings }) => controller.setOpenrouterSettings(id, settings),
+    [INVOKE_CHANNELS.openrouterSettings]: async ({ id, settings }) => {
+      const saved = await controller.setOpenrouterSettings(id, settings);
+      if (saved) await chats.dismiss(id);
+      return saved;
+    },
   };
 }
 

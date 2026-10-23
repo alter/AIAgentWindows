@@ -237,7 +237,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .or-title { margin: 0 0 4px; font-size: inherit; font-weight: 700; }
 .or-state, .or-free, .or-notice { margin: 0 0 6px; overflow-wrap: anywhere; }
 .or-notice { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn-bg); color: var(--text); }
-.or-account [hidden] { display: none; }
+.or-account [hidden], .or-notice[hidden] { display: none; }
 .or-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .or-button, .or-button-plain { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; cursor: pointer; }
 .or-button { background: var(--button-bg); color: var(--on-fill); }
@@ -592,9 +592,9 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .or-msg-author { font-weight: 700; }
 .or-msg-text { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .or-msg-error { margin: 6px 0 0; font-size: 12px; }
-.or-copy { padding: 2px 10px; font-size: 12px; }
+.or-copy, .or-retry { padding: 2px 10px; font-size: 12px; }
+.or-retry:focus-visible { outline-color: var(--text); }
 .or-notice { font-size: 12px; min-height: 16px; }
-.or-notice:empty { min-height: 0; }
 .or-composer { display: flex; align-items: flex-end; gap: 8px; }
 .or-input { flex: 1; min-height: 56px; resize: vertical; padding: 8px 10px; }
 .or-buttons { display: flex; gap: 8px; }

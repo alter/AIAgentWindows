@@ -1,7 +1,7 @@
 // chat.ts
 import { setTimeout as delay } from 'node:timers/promises';
 import { attributionHeaders } from '../../shared/openrouter';
-import { LENGTH_TEXT, MODEL_FAILED_TEXT, UNREADABLE_TEXT, errorDetail, failureText } from '../../shared/openrouter-chat';
+import { LENGTH_TEXT, MODEL_FAILED_TEXT, UNREADABLE_TEXT, errorDetail, failureText, rateLimitText } from '../../shared/openrouter-chat';
 
 export type ChatErrorCode = 'unauthorized' | 'timeout' | 'failed';
 
@@ -43,6 +43,7 @@ export interface ChatDeps {
 interface Answer {
   status: number;
   retryAfter: string | null;
+  reset: string | null;
   text: string;
 }
 
@@ -53,7 +54,6 @@ const WEB_TOOL = { type: 'openrouter:web_search', parameters: { max_results: 3, 
 export const NOT_SIGNED_IN_TEXT = 'OpenRouter is not signed in. Sign in, then run the room again.';
 const STOPPED_TEXT = 'The turn was stopped.';
 export const UNREACHABLE_TEXT = 'OpenRouter could not be reached.';
-const RATE_TEXT = 'OpenRouter is rate limiting this key (free models have a per-minute and a per-day cap). Try again later or pick another model.';
 export const REJECTED_TEXT = 'OpenRouter no longer accepts the saved key. You are signed out: sign in again.';
 
 export function requestBody(request: ChatRequest, stream: boolean): Record<string, unknown> {
@@ -107,11 +107,11 @@ function withDetail(lead: string, error: unknown): ChatError {
   return new ChatError('failed', failureText(lead, errorDetail(error)));
 }
 
-export function failedStatus(status: number, value: unknown): ChatError {
+export function failedStatus(status: number, value: unknown, reset: string | null = null, now: number = Date.now()): ChatError {
   const error = isRecord(value) ? value['error'] : undefined;
   if (status === 401) return new ChatError('unauthorized', REJECTED_TEXT);
   if (status === 402) return withDetail(`OpenRouter says the account is out of credits${limitSource(error)}. Add credits or use a free model`, error);
-  if (status === 429) return new ChatError('failed', RATE_TEXT);
+  if (status === 429) return new ChatError('failed', rateLimitText(error, reset, now));
   return withDetail(`OpenRouter answered HTTP ${status}`, error);
 }
 
@@ -127,9 +127,9 @@ function contentOf(choice: Record<string, unknown>): string | null {
   return typeof content === 'string' && content.trim() !== '' ? content : null;
 }
 
-export function readAnswer(status: number, text: string): string | null {
+export function readAnswer(status: number, text: string, reset: string | null = null, now: number = Date.now()): string | null {
   const value = parseJson(text);
-  if (status < 200 || status >= 300) throw failedStatus(status, value);
+  if (status < 200 || status >= 300) throw failedStatus(status, value, reset, now);
   if (!isRecord(value)) throw new ChatError('failed', UNREADABLE_TEXT);
   const choice = firstChoice(value);
   const error = value['error'] ?? choice?.['error'];
@@ -164,7 +164,7 @@ async function post(deps: ChatDeps, key: string, body: string, options: ChatOpti
     });
     const bytes = await response.arrayBuffer();
     if (bytes.byteLength > MAX_ANSWER_BYTES) throw new ChatError('failed', UNREADABLE_TEXT);
-    return { status: response.status, retryAfter: response.headers.get('retry-after'), text: new TextDecoder().decode(bytes) };
+    return { status: response.status, retryAfter: response.headers.get('retry-after'), reset: response.headers.get('x-ratelimit-reset'), text: new TextDecoder().decode(bytes) };
   } catch (error) {
     if (error instanceof ChatError) throw error;
     if (options.signal.aborted) throw new ChatError('failed', STOPPED_TEXT);
@@ -188,5 +188,5 @@ export async function runChat(deps: ChatDeps, key: string, input: ChatInput, opt
     await pause(Math.min(waitMs(answer.retryAfter), Math.max(0, deadline - Date.now())), options);
     answer = await post(deps, key, body, options, deadline);
   }
-  return readAnswer(answer.status, answer.text);
+  return readAnswer(answer.status, answer.text, answer.reset);
 }

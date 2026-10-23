@@ -39,5 +39,6 @@
   {"fg": "--focus", "bg": "--input-bg", "use": "non-text"},
   {"fg": "--focus", "bg": "--menu-bg", "use": "non-text"},
   {"fg": "--focus", "bg": "--hover-bg", "use": "non-text"},
-  {"fg": "--focus", "bg": "--warn-bg", "use": "non-text"}
+  {"fg": "--focus", "bg": "--warn-bg", "use": "non-text"},
+  {"fg": "--border", "bg": "--info-bg", "use": "non-text"}
 ]

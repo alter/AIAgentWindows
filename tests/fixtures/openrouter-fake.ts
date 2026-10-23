@@ -5,6 +5,11 @@ import type { AddressInfo } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 
 export const FAKE_MODEL_MARKUP = '<img src=x onerror="window.__pwned=1">Evil <b>bold</b>';
+export const PROVIDER_LIMITED_MODEL = 'acme/provider-limited:free';
+export const ACCOUNT_LIMITED_MODEL = 'acme/account-limited:free';
+export const FAKE_PROVIDER_NAME = 'Acme Cloud';
+export const FAKE_LIMIT_MARKUP = '<img src=x onerror="window.__pwned=4">busy <b>now</b>';
+export const ACCOUNT_RESET_MS = 45 * 60 * 1000;
 
 export type AuthBehavior = 'approve' | 'wrong-state' | 'deny';
 
@@ -90,11 +95,13 @@ export function fakeModels(): unknown {
       entry('acme/free-model:free', 'Acme Free', '0', '0'),
       entry('acme/paid-model', 'Acme Paid', '0.000003', '0.000015', { reasoning: { supported_efforts: ['high', 'medium', 'low'] } }),
       entry('openrouter/free', 'Free Models Router', '0', '0'),
+      entry(PROVIDER_LIMITED_MODEL, 'Provider Limited', '0', '0'),
+      entry(ACCOUNT_LIMITED_MODEL, 'Account Limited', '0', '0'),
       entry('acme/markup', FAKE_MODEL_MARKUP, '0.000001', '0.000002'),
       entry('acme/image-only', 'Image Maker', '0.000001', '0.000002', { architecture: { output_modalities: ['image'] } }),
       entry('acme/expired', 'Expired', '0.000001', '0.000002', { expiration_date: '2020-01-01' }),
     ],
-    total_count: 6,
+    total_count: 8,
     links: { next: null },
   };
 }
@@ -190,8 +197,23 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     if (!hold) response.end();
   };
 
+  const limitedReply = (model: string | undefined): ChatScript | undefined => {
+    if (model === PROVIDER_LIMITED_MODEL) {
+      const metadata = { error_type: 'rate_limit_exceeded', provider_name: FAKE_PROVIDER_NAME, provider_code: 429 };
+      return { status: 429, body: { error: { code: 429, message: FAKE_LIMIT_MARKUP, metadata } } };
+    }
+    if (model === ACCOUNT_LIMITED_MODEL) {
+      const reset = String(Date.now() + ACCOUNT_RESET_MS);
+      const headers = { 'X-RateLimit-Limit': '20', 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': reset };
+      return { status: 429, headers, body: { error: { code: 429, message: 'Rate limit exceeded', metadata: { error_type: 'rate_limit_exceeded' } } } };
+    }
+    return undefined;
+  };
+
   const chatReply = (call: ChatCall, response: http.ServerResponse): void => {
-    const script = fake.chat(call);
+    const scripted = fake.chat(call);
+    const plain = scripted === undefined || (scripted.status === undefined && scripted.body === undefined && scripted.stream === undefined && scripted.hang !== true);
+    const script = plain ? (limitedReply(call.body?.model) ?? scripted) : scripted;
     if (script?.hang === true) return;
     if (call.body?.stream === true && script?.status === undefined && script?.body === undefined) {
       void streamReply(script?.stream?.parts ?? defaultStream(call), script?.stream?.delayMs ?? 5, script?.stream?.hold === true, response);

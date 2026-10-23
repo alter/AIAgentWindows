@@ -27,6 +27,9 @@ export const BUSY_TEXT = 'A reply is still being written. Stop it first.';
 export const UNKNOWN_AGENT_TEXT = 'This agent no longer exists.';
 export const UNREADABLE_CONVERSATION_TEXT = 'The saved conversation of this agent cannot be read, so nothing was changed. Its file is kept as it is.';
 export const SAVE_FAILED_TEXT = 'The conversation could not be saved.';
+export const NOTHING_TO_RETRY_TEXT = 'There is nothing to send again: only the last message without a reply can be retried.';
+export const MAX_PROVIDER_CHARS = 64;
+const MAX_RESET_AHEAD_MS = 7 * 24 * 3_600_000;
 
 export type EntryStatus = 'done' | 'stopped' | 'failed';
 
@@ -103,6 +106,44 @@ export function errorDetail(error: unknown): string {
 
 export function failureText(lead: string, detail: string): string {
   return detail === '' ? lead : `${lead}: ${detail}`;
+}
+
+function providerOf(error: unknown): string | null {
+  const metadata = isRecord(error) ? error['metadata'] : undefined;
+  if (!isRecord(metadata)) return null;
+  const name = metadata['provider_name'];
+  if (typeof name === 'string' && name.trim() !== '') return name.trim().slice(0, MAX_PROVIDER_CHARS);
+  const code = metadata['provider_code'];
+  return (typeof code === 'string' && code.trim() !== '') || typeof code === 'number' ? '' : null;
+}
+
+function resetWait(header: string | null, now: number): string {
+  const at = header === null || header.trim() === '' ? Number.NaN : Number(header);
+  const ahead = at - now;
+  if (!Number.isFinite(ahead) || ahead <= 0 || ahead > MAX_RESET_AHEAD_MS) return '';
+  const minutes = Math.max(1, Math.ceil(ahead / 60_000));
+  if (minutes < 60) return ` (the cap resets in about ${minutes} ${minutes === 1 ? 'minute' : 'minutes'})`;
+  const hours = Math.round(minutes / 60);
+  return ` (the cap resets in about ${hours} ${hours === 1 ? 'hour' : 'hours'})`;
+}
+
+export function rateLimitText(error: unknown, resetHeader: string | null, now: number): string {
+  const provider = providerOf(error);
+  const lead =
+    provider === null
+      ? `OpenRouter is rate limiting this account${resetWait(resetHeader, now)}: free models have a per-minute and a per-day cap. Try again later or pick another model`
+      : `${provider === '' ? "This model's provider" : `The model's provider (${provider})`} is rate limiting it, not your account. Pick another model or try again later`;
+  return failureText(lead, errorDetail(error));
+}
+
+export function dismissFailed(entries: readonly ChatEntry[]): ChatEntry[] {
+  const last = entries.at(-1);
+  return last?.role === 'assistant' && last.status === 'failed' ? entries.slice(0, -1) : [...entries];
+}
+
+export function retryTarget(entries: readonly ChatEntry[]): number | null {
+  const kept = dismissFailed(entries);
+  return kept.at(-1)?.role === 'user' ? kept.length - 1 : null;
 }
 
 function streamUsage(raw: unknown): ChatUsage | null {

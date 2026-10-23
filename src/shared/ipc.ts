@@ -49,6 +49,7 @@ export const INVOKE_CHANNELS = {
   openrouterModels: 'openrouter:models',
   openrouterChatLoad: 'openrouter:chat-load',
   openrouterChatSend: 'openrouter:chat-send',
+  openrouterChatRetry: 'openrouter:chat-retry',
   openrouterChatStop: 'openrouter:chat-stop',
   openrouterChatCopy: 'openrouter:chat-copy',
   openrouterSettings: 'openrouter:settings',
@@ -149,6 +150,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.openrouterModels]: { refresh: boolean };
   [INVOKE_CHANNELS.openrouterChatLoad]: { id: string };
   [INVOKE_CHANNELS.openrouterChatSend]: { id: string; text: string };
+  [INVOKE_CHANNELS.openrouterChatRetry]: { id: string; index: number };
   [INVOKE_CHANNELS.openrouterChatStop]: { id: string };
   [INVOKE_CHANNELS.openrouterChatCopy]: { id: string; index: number };
   [INVOKE_CHANNELS.openrouterSettings]: { id: string; settings: OpenRouterSettings };
@@ -200,6 +202,7 @@ export interface AppApi {
   openrouterModels(refresh: boolean): Promise<OpenRouterModels>;
   openrouterChatLoad(id: string): Promise<ChatLoad>;
   openrouterChatSend(id: string, text: string): Promise<ChatSend>;
+  openrouterChatRetry(id: string, index: number): Promise<ChatSend>;
   openrouterChatStop(id: string): Promise<void>;
   openrouterChatCopy(id: string, index: number): Promise<boolean>;
   openrouterSettings(id: string, settings: OpenRouterSettings): Promise<boolean>;
@@ -249,6 +252,11 @@ function parseRoomStart(payload: unknown): RoomStartRequest | null {
 
 function withUuid<T extends object>(payload: unknown, build: (record: Record<string, unknown>, id: string) => T | null): T | null {
   return withId(payload, (record, id) => (isUuid(id) ? build(record, id) : null));
+}
+
+function entryIndex(record: Record<string, unknown>, id: string): { id: string; index: number } | null {
+  const index = record['index'];
+  return typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < MAX_ENTRIES ? { id, index } : null;
 }
 
 function noPayload(payload: unknown): undefined | null {
@@ -357,12 +365,9 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       const text = record['text'];
       return typeof text === 'string' && text.length >= 1 && text.length <= MAX_MESSAGE_CHARS ? { id, text } : null;
     }),
+  [INVOKE_CHANNELS.openrouterChatRetry]: (payload) => withUuid(payload, entryIndex),
   [INVOKE_CHANNELS.openrouterChatStop]: (payload) => withUuid(payload, (_record, id) => ({ id })),
-  [INVOKE_CHANNELS.openrouterChatCopy]: (payload) =>
-    withUuid(payload, (record, id) => {
-      const index = record['index'];
-      return typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < MAX_ENTRIES ? { id, index } : null;
-    }),
+  [INVOKE_CHANNELS.openrouterChatCopy]: (payload) => withUuid(payload, entryIndex),
   [INVOKE_CHANNELS.openrouterSettings]: (payload) =>
     withUuid(payload, (record, id) => {
       const settings = parseOpenRouterSettings(record['settings']);
