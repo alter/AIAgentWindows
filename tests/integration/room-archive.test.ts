@@ -127,3 +127,159 @@ describe('room rename in the service', () => {
     expect(await readFile(file, 'utf8')).toBe('{ not json');
   });
 });
+
+describe('room resume in the service', () => {
+  const roomsDir = (): string => path.join(dir, 'rooms');
+
+  interface Call {
+    id: string;
+    text: string;
+  }
+
+  interface Script {
+    calls: Call[];
+    hold: (call: Call, count: number) => boolean;
+  }
+
+  function scripted(script: Script): DriverFactory {
+    return async (participant): Promise<ParticipantDriver> => ({
+      turn: async (request) => {
+        const call = { id: participant.id, text: request.text };
+        script.calls.push(call);
+        if (script.hold(call, script.calls.length)) return new Promise<string | null>(() => undefined);
+        return `reply of ${participant.label}`;
+      },
+      reset: async () => undefined,
+      dispose: () => undefined,
+    });
+  }
+
+  async function finishedCount(seen: RoomEvent[], count: number): Promise<void> {
+    await vi.waitFor(() => expect(seen.filter((event) => event.type === 'finished')).toHaveLength(count));
+  }
+
+  async function stopAfterCalls(room: RoomService, script: Script, count: number): Promise<void> {
+    await vi.waitFor(() => expect(script.calls.length).toBe(count));
+    room.stop();
+  }
+
+  function turnPairs(entries: { authorId: string; kind: string; round?: number }[]): string[] {
+    return entries.filter((entry) => entry.round !== undefined && (entry.kind === 'reply' || entry.kind === 'error')).map((entry) => `${entry.authorId}:${entry.round}`);
+  }
+
+  it('a resumed relay skips the answered turns', async () => {
+    const script: Script = { calls: [], hold: (_call, count) => count === 3 };
+    const { room, seen } = service(scripted(script));
+    const wanted = config({ rounds: 2 });
+    const started = await room.start(wanted);
+    const id = started.ok ? started.roomId : '';
+    await stopAfterCalls(room, script, 3);
+    await finishedCount(seen, 1);
+    const stopped = await readRecord(roomsDir(), id);
+    expect(stopped?.status).toBe('stopped');
+    expect(turnPairs(stopped?.entries ?? [])).toEqual(['claude:1', 'codex:1']);
+
+    script.hold = () => false;
+    const resumed = await room.start({ ...wanted, turnTimeoutMs: 7000 }, id, true);
+    expect(resumed.ok).toBe(true);
+    await finishedCount(seen, 2);
+
+    const record = await readRecord(roomsDir(), id);
+    expect(record?.status).toBe('done');
+    expect(record?.config.turnTimeoutMs).toBe(7000);
+    expect(script.calls.slice(3).map((call) => call.id)).toEqual(['claude', 'codex', 'claude']);
+    const entries = record?.entries ?? [];
+    expect(entries.filter((entry) => entry.kind === 'prompt')).toHaveLength(1);
+    const pairs = turnPairs(entries);
+    expect(pairs).toEqual(['claude:1', 'codex:1', 'claude:2', 'codex:2']);
+    expect(new Set(pairs).size).toBe(pairs.length);
+    expect(entries.filter((entry) => entry.kind === 'final')).toHaveLength(1);
+    const snapshot = room.state();
+    expect(snapshot.phase).toBe('done');
+    expect(snapshot.completed).toBe(snapshot.total);
+  });
+
+  it('a relay stopped while the finalizer works resumes with the final only', async () => {
+    const script: Script = { calls: [], hold: (_call, count) => count === 3 };
+    const { room, seen } = service(scripted(script));
+    const started = await room.start(config());
+    const id = started.ok ? started.roomId : '';
+    await stopAfterCalls(room, script, 3);
+    await finishedCount(seen, 1);
+    script.hold = () => false;
+    expect((await room.start(config(), id, true)).ok).toBe(true);
+    await finishedCount(seen, 2);
+    expect(script.calls.slice(3).map((call) => call.id)).toEqual(['claude']);
+    const record = await readRecord(roomsDir(), id);
+    expect(record?.status).toBe('done');
+    expect(turnPairs(record?.entries ?? [])).toEqual(['claude:1', 'codex:1']);
+    expect(record?.entries.filter((entry) => entry.kind === 'final')).toHaveLength(1);
+  });
+
+  it('a broadcast stopped mid-round resumes only the missing participants, who do not see the replies of their own round', async () => {
+    const script: Script = { calls: [], hold: (call, count) => count <= 2 && call.id === CODEX.id };
+    const { room, seen } = service(scripted(script));
+    const wanted = config({ mode: 'broadcast', rounds: 2 });
+    const started = await room.start(wanted);
+    const id = started.ok ? started.roomId : '';
+    await vi.waitFor(async () => expect(turnPairs((await readRecord(roomsDir(), id))?.entries ?? [])).toEqual(['claude:1']));
+    room.stop();
+    await finishedCount(seen, 1);
+
+    script.hold = () => false;
+    expect((await room.start(wanted, id, true)).ok).toBe(true);
+    await finishedCount(seen, 2);
+
+    const resumedCalls = script.calls.slice(2);
+    expect(resumedCalls.map((call) => call.id).sort()).toEqual(['claude', 'claude', 'codex', 'codex']);
+    expect(resumedCalls[0]?.id).toBe('codex');
+    expect(resumedCalls[0]?.text).not.toContain('reply of Claude Code');
+    expect(resumedCalls[1]?.text).toContain('reply of Claude Code');
+    const record = await readRecord(roomsDir(), id);
+    const pairs = turnPairs(record?.entries ?? []);
+    expect([...pairs].sort()).toEqual(['claude:1', 'claude:2', 'codex:1', 'codex:2']);
+    expect(record?.entries.filter((entry) => entry.kind === 'prompt')).toHaveLength(1);
+    expect(record?.entries.filter((entry) => entry.kind === 'final')).toHaveLength(1);
+  });
+
+  it('refuses a resume whose prompt or setup differs, one with nothing to resume or for another room, and writes nothing', async () => {
+    const script: Script = { calls: [], hold: (_call, count) => count === 3 };
+    const { room, seen } = service(scripted(script));
+    const wanted = config({ rounds: 2 });
+    const started = await room.start(wanted);
+    const id = started.ok ? started.roomId : '';
+    await stopAfterCalls(room, script, 3);
+    await finishedCount(seen, 1);
+    const file = path.join(roomsDir(), `${id}.json`);
+    const history = path.join(roomsDir(), `${id}.md`);
+    const before = [await readFile(file, 'utf8'), await readFile(history, 'utf8')];
+    const events = seen.length;
+    const calls = script.calls.length;
+
+    const differing: RoomConfig[] = [
+      { ...wanted, prompt: 'another question' },
+      { ...wanted, mode: 'broadcast' },
+      { ...wanted, rounds: 3 },
+      { ...wanted, participants: [CLAUDE] },
+      { ...wanted, participants: [CODEX, CLAUDE] },
+      { ...wanted, participants: [CLAUDE, { ...CODEX, model: 'gpt-x', label: 'Codex \u00b7 gpt-x' }] },
+      { ...wanted, finalizerId: CODEX.id },
+    ];
+    for (const candidate of differing) {
+      const refused = await room.start(candidate, id, true);
+      expect(refused.ok).toBe(false);
+    }
+    expect((await room.start(wanted, 'room-elsewhere', true)).ok).toBe(false);
+    expect([await readFile(file, 'utf8'), await readFile(history, 'utf8')]).toEqual(before);
+    expect(seen).toHaveLength(events);
+    expect(script.calls).toHaveLength(calls);
+    expect(room.state().phase).toBe('stopped');
+
+    script.hold = () => false;
+    expect((await room.start(wanted, id, true)).ok).toBe(true);
+    await finishedCount(seen, 2);
+    const refusedDone = await room.start(wanted, id, true);
+    expect(refusedDone.ok).toBe(false);
+    expect((await readRecord(roomsDir(), id))?.status).toBe('done');
+  });
+});

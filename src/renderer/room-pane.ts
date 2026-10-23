@@ -13,6 +13,8 @@ import {
   setupDigest,
   setupOpenAfterStart,
   setupOpenOnRoom,
+  startAction,
+  startLabel,
   type CarryWhat,
   type RoomFormValues,
   type RoomSnapshot,
@@ -278,8 +280,15 @@ export class RoomPane {
       this.refreshDigest();
       this.renderState();
     });
-    this.rounds.addEventListener('input', () => this.refreshDigest());
-    this.table.onChange(() => this.refreshDigest());
+    this.rounds.addEventListener('input', () => {
+      this.refreshDigest();
+      this.renderStart();
+    });
+    this.prompt.addEventListener('input', () => this.renderStart());
+    this.table.onChange(() => {
+      this.refreshDigest();
+      this.renderStart();
+    });
     this.refreshDigest();
     this.carryFinal.addEventListener('click', () => void this.onCarry('final'));
     this.carryHistory.addEventListener('click', () => void this.onCarry('history'));
@@ -290,9 +299,8 @@ export class RoomPane {
     this.table.setModels(await api.roomModels().catch(() => emptyRoomModels()));
   }
 
-  private async onStart(): Promise<void> {
-    this.message.textContent = '';
-    const result = formToConfig({
+  private formConfig(): ReturnType<typeof formToConfig> {
+    return formToConfig({
       prompt: this.prompt.value,
       mode: this.mode.value as RoomMode,
       rounds: this.rounds.value,
@@ -302,12 +310,23 @@ export class RoomPane {
       finalizerId: this.table.finalizerId(),
       debugSites: this.debugSites.checked,
     });
+  }
+
+  private renderStart(): void {
+    const action = startAction(this.openedId !== null, this.snapshot, this.formConfig());
+    this.start.textContent = startLabel(action);
+    this.start.dataset['roomAction'] = action;
+  }
+
+  private async onStart(): Promise<void> {
+    this.message.textContent = '';
+    const result = this.formConfig();
     if (!result.ok) {
       this.message.textContent = result.error;
       return;
     }
     this.debugDir = null;
-    const started = await api.roomStart(result.config, this.openedId ?? undefined);
+    const started = await api.roomStart(result.config, this.openedId ?? undefined, startAction(this.openedId !== null, this.snapshot, result) === 'resume');
     this.setup.open = setupOpenAfterStart(this.setup.open, started.ok);
     if (!started.ok) this.message.textContent = started.error;
     else this.debugDir = started.debugDir;
@@ -376,7 +395,7 @@ export class RoomPane {
     const busy = phase === 'running';
     this.publishRooms();
     this.start.disabled = busy;
-    this.start.textContent = this.openedId === null ? 'Start' : 'Continue';
+    this.renderStart();
     this.stop.disabled = !busy;
     this.prompt.disabled = busy;
     this.mode.disabled = busy;

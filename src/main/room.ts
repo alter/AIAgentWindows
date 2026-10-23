@@ -14,11 +14,13 @@ import {
   MAX_ERROR_CHARS,
   MAX_HISTORY_CHARS,
   MAX_REPLY_CHARS,
+  entriesBeforeRound,
   relaySchedule,
   roomPlan,
   OWNER_ID,
   ROOM_ID,
   truncateText,
+  type DoneTurn,
   type RoomConfig,
   type RoomEntry,
   type RoomEntryKind,
@@ -84,6 +86,7 @@ export interface RoomContinuation {
   nonce: string;
   createdAt: number;
   title?: string;
+  done?: readonly DoneTurn[];
 }
 
 export interface RoomRun {
@@ -148,6 +151,7 @@ type HistoryState = 'create' | 'reopen' | 'append';
 class RunState {
   readonly entries: RoomEntry[];
   readonly previous: RoomEntry[] | undefined;
+  readonly resumed: readonly DoneTurn[] | undefined;
   readonly controller = new AbortController();
   completed = 0;
   chars: number;
@@ -174,6 +178,7 @@ class RunState {
     this.finalizer = config.participants.find((participant) => participant.id === config.finalizerId) ?? config.participants[0] ?? FALLBACK_FINALIZER;
     this.entries = from === undefined ? [] : [...from.entries];
     this.previous = from === undefined ? undefined : [...from.entries];
+    this.resumed = from?.done;
     this.chars = this.entries.reduce((sum, entry) => sum + entry.text.length, 0);
     this.nonce = from?.nonce ?? newNonce(random);
     this.createdAt = from?.createdAt ?? now();
@@ -183,6 +188,10 @@ class RunState {
 
   get signal(): AbortSignal {
     return this.controller.signal;
+  }
+
+  isDone(participant: RoomParticipant, round: number): boolean {
+    return this.resumed?.some((turn) => turn.authorId === participant.id && turn.round === round) === true;
   }
 
   add(entry: RoomEntry): void {
@@ -299,7 +308,8 @@ export class Room {
         plan: roomPlan(run.config),
         ...(run.previous === undefined ? {} : { previous: run.previous }),
       });
-      this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
+      if (run.resumed === undefined) this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
+      else this.replayDone(run, run.resumed);
       await run.flushed();
       if (run.config.mode === 'relay') await this.relay(run);
       else await this.broadcast(run);
@@ -332,19 +342,32 @@ export class Room {
     }
   }
 
+  private replayDone(run: RunState, done: readonly DoneTurn[]): void {
+    for (const turn of done) {
+      for (const participant of run.config.participants.filter((item) => item.id === turn.authorId)) {
+        this.progress(run, participant, 'running');
+        this.progress(run, participant, turn.state);
+      }
+    }
+  }
+
   private async relay(run: RunState): Promise<void> {
     const schedule = relaySchedule(run.config.participants, run.config.rounds);
     for (const [index, participant] of schedule.entries()) {
       if (run.signal.aborted) return;
-      await this.step(run, participant, [...run.entries], false, Math.floor(index / run.config.participants.length) + 1);
+      const round = Math.floor(index / run.config.participants.length) + 1;
+      if (run.isDone(participant, round)) continue;
+      await this.step(run, participant, [...run.entries], false, round);
     }
   }
 
   private async broadcast(run: RunState): Promise<void> {
-    for (let round = 0; round < run.config.rounds; round += 1) {
+    for (let index = 0; index < run.config.rounds; index += 1) {
       if (run.signal.aborted) return;
-      const seen = [...run.entries];
-      await Promise.all(run.config.participants.map((participant) => this.step(run, participant, seen, round > 0, round + 1)));
+      const round = index + 1;
+      const seen = entriesBeforeRound(run.entries, round);
+      const missing = run.config.participants.filter((participant) => !run.isDone(participant, round));
+      await Promise.all(missing.map((participant) => this.step(run, participant, seen, index > 0, round)));
     }
   }
 

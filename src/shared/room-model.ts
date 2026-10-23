@@ -322,3 +322,60 @@ export function parseRoomRecord(value: unknown): RoomRecord | null {
   }
   return record;
 }
+
+export interface DoneTurn {
+  authorId: string;
+  round: number;
+  state: Exclude<StepState, 'running'>;
+}
+
+export interface ResumePoint {
+  prompt: string;
+  done: DoneTurn[];
+}
+
+function doneState(entry: RoomEntry): DoneTurn['state'] {
+  if (entry.kind !== 'error') return 'replied';
+  return entry.state === 'timeout' ? 'timeout' : 'failed';
+}
+
+export function resumePoint(record: Pick<RoomRecord, 'status' | 'entries'>): ResumePoint | null {
+  if (record.status !== 'stopped' && record.status !== 'failed') return null;
+  const start = record.entries.map((entry) => entry.kind).lastIndexOf('prompt');
+  const prompt = record.entries[start];
+  if (prompt === undefined) return null;
+  const done: DoneTurn[] = [];
+  for (const entry of record.entries.slice(start + 1)) {
+    if (entry.kind === 'final') return null;
+    if (entry.authorId === OWNER_ID || entry.authorId === ROOM_ID || entry.state === 'stopped') continue;
+    if (entry.round === undefined) {
+      if (entry.kind === 'reply') return null;
+      continue;
+    }
+    done.push({ authorId: entry.authorId, round: entry.round, state: doneState(entry) });
+  }
+  return { prompt: prompt.text, done };
+}
+
+function sameParticipant(a: RoomParticipant, b: RoomParticipant): boolean {
+  return a.id === b.id && a.kind === b.kind && a.model === b.model && a.effort === b.effort;
+}
+
+function sameSetup(a: Pick<RoomConfig, 'mode' | 'rounds' | 'finalizerId' | 'participants'>, b: Pick<RoomConfig, 'mode' | 'rounds' | 'finalizerId' | 'participants'>): boolean {
+  return (
+    a.mode === b.mode &&
+    a.rounds === b.rounds &&
+    a.finalizerId === b.finalizerId &&
+    a.participants.length === b.participants.length &&
+    a.participants.every((participant, index) => sameParticipant(participant, b.participants[index] as RoomParticipant))
+  );
+}
+
+export function resumeMatches(point: ResumePoint, run: Pick<RoomConfig, 'mode' | 'rounds' | 'finalizerId' | 'participants'>, config: RoomConfig): boolean {
+  return point.prompt === config.prompt && sameSetup(run, config);
+}
+
+export function entriesBeforeRound(entries: readonly RoomEntry[], round: number): RoomEntry[] {
+  const start = entries.map((entry) => entry.kind).lastIndexOf('prompt');
+  return entries.filter((entry, index) => index <= start || entry.round !== round);
+}

@@ -34,6 +34,7 @@ WRITE-SET
   src/main/room-service.ts
   src/main/room.ts
   src/renderer/room-pane.ts
+  src/renderer/room-table.ts
   tests/unit/room-model.test.ts
   tests/unit/room-view.test.ts
   tests/unit/ipc-validate.test.ts

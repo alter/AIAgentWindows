@@ -77,6 +77,7 @@ export interface SiteStateEvent {
 export interface RoomStartRequest {
   config: RoomConfig;
   continueId?: string;
+  resume?: boolean;
 }
 
 export interface InvokeRequests {
@@ -128,7 +129,7 @@ export interface AppApi {
   roomRename(id: string, title: string): Promise<boolean>;
   roomNew(): Promise<boolean>;
   roomSelect(): Promise<void>;
-  roomStart(config: RoomConfig, continueId?: string): Promise<RoomStartResult>;
+  roomStart(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult>;
   roomStop(): Promise<void>;
   roomCarry(id: string, what: CarryWhat): Promise<boolean>;
   roomResume(): Promise<void>;
@@ -171,9 +172,12 @@ function parseRoomStart(payload: unknown): RoomStartRequest | null {
   if (!isRecord(payload)) return null;
   const parsed = parseRoomConfig(payload['config']);
   if (!parsed.ok) return null;
-  if (!Object.hasOwn(payload, 'continueId')) return { config: parsed.config };
+  if (!Object.hasOwn(payload, 'continueId')) return Object.hasOwn(payload, 'resume') ? null : { config: parsed.config };
   const continueId = payload['continueId'];
-  return isRoomId(continueId) ? { config: parsed.config, continueId } : null;
+  if (!isRoomId(continueId)) return null;
+  if (!Object.hasOwn(payload, 'resume')) return { config: parsed.config, continueId };
+  const resume = payload['resume'];
+  return typeof resume === 'boolean' ? { config: parsed.config, continueId, resume } : null;
 }
 
 function noPayload(payload: unknown): undefined | null {

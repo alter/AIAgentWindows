@@ -131,6 +131,17 @@ describe('room channels', () => {
     }
   });
 
+  it('room start accepts resume only as a boolean with a continue id', () => {
+    const continueId = 'room-1_a';
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, continueId, resume: true })).toEqual({ ok: true, value: { config, continueId, resume: true } });
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, continueId, resume: false })).toEqual({ ok: true, value: { config, continueId, resume: false } });
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, resume: true }).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, resume: false }).ok).toBe(false);
+    for (const resume of ['true', 1, 0, null, {}, []]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomStart, { config, continueId, resume }).ok).toBe(false);
+    }
+  });
+
   it('opens a room by a valid id only', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomOpen, { id: 'room-1_a' })).toEqual({ ok: true, value: { id: 'room-1_a' } });
     for (const id of ['../x', 'a/b', 'a.b', '', 7, undefined]) {

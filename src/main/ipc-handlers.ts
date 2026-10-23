@@ -29,7 +29,7 @@ function buildHandlers(controller: AgentController, room: RoomService): Handlers
     [INVOKE_CHANNELS.roomRename]: ({ id, title }) => room.rename(id, title),
     [INVOKE_CHANNELS.roomNew]: () => room.newRoom(),
     [INVOKE_CHANNELS.roomSelect]: () => controller.selectRoom(),
-    [INVOKE_CHANNELS.roomStart]: ({ config, continueId }) => room.start(config, continueId),
+    [INVOKE_CHANNELS.roomStart]: ({ config, continueId, resume }) => room.start(config, continueId, resume),
     [INVOKE_CHANNELS.roomStop]: () => room.stop(),
     [INVOKE_CHANNELS.roomCarry]: ({ id, what }) => room.carry(id, what),
     [INVOKE_CHANNELS.roomResume]: () => room.resume(),

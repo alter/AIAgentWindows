@@ -30,6 +30,8 @@ import {
   setupOpenAfterStart,
   setupOpenOnRoom,
   snapshotFromRecord,
+  startAction,
+  startLabel,
   type RoomFormValues,
 } from '../../src/shared/room-view';
 import { adapterFor } from '../../src/main/site-adapters/registry';
@@ -998,5 +1000,62 @@ describe('room setup digest', () => {
     expect(setupDigest(0, 'relay', '').length).toBeLessThan(120);
     expect(setupDigest(3, 'relay', 'x'.repeat(500)).length).toBeLessThan(120);
     expect(setupDigest(3, 'relay', '')).not.toContain('undefined');
+  });
+});
+
+describe('start action', () => {
+  const MS = 1_700_000_000_000;
+  const CONFIG: RoomRecordConfig = { mode: 'relay', rounds: 2, participants: PLAN.participants, finalizerId: 'a', turnTimeoutMs: 90_000, debugSites: false };
+  const prompt = (text = 'ask'): RoomEntry => ({ authorId: 'owner', label: 'Owner', time: MS, kind: 'prompt', text });
+  const answer = (authorId: string, round: number): RoomEntry => ({ authorId, label: authorId, time: MS, kind: 'reply', text: 'ok', round });
+
+  function record(entries: RoomEntry[], status: RoomRecord['status'], config = CONFIG): RoomRecord {
+    const parsed = parseRoomRecord(JSON.parse(JSON.stringify({ version: 1, id: 'r1', createdAt: MS, updatedAt: MS, status, config, entries, nonce: 'abcd1234abcd1234' })));
+    if (parsed === null) throw new Error('record does not parse');
+    return parsed;
+  }
+
+  function current(overrides: Partial<RoomFormValues> = {}): ReturnType<typeof formToConfig> {
+    const form = formFromRecord(record([prompt()], 'stopped'));
+    return formToConfig({ ...form, prompt: 'ask', ...overrides });
+  }
+
+  const stopped = snapshotFromRecord(record([prompt(), answer('a', 1)], 'stopped'), '/h/r1.md');
+
+  it('is start for a room that is not opened', () => {
+    expect(startAction(false, stopped, current())).toBe('start');
+    expect(startAction(false, emptyRoomSnapshot(), current())).toBe('start');
+  });
+
+  it('is resume for the opened stopped or failed room while the prompt and the setup are those of the run', () => {
+    expect(startAction(true, stopped, current())).toBe('resume');
+    expect(startAction(true, snapshotFromRecord(record([prompt(), answer('a', 1)], 'failed'), '/h/r1.md'), current())).toBe('resume');
+    expect(startAction(true, stopped, current({ timeoutMinutes: '7' }))).toBe('resume');
+    expect(startAction(true, stopped, current({ debugSites: true }))).toBe('resume');
+  });
+
+  it('is continue once the prompt or the setup differs, the form is invalid, or the room is not resumable', () => {
+    expect(startAction(true, stopped, current({ prompt: 'another' }))).toBe('continue');
+    expect(startAction(true, stopped, current({ rounds: '3' }))).toBe('continue');
+    expect(startAction(true, stopped, current({ mode: 'broadcast' }))).toBe('continue');
+    expect(startAction(true, stopped, current({ checked: ['a'], rows: [{ id: 'a', kind: 'claude' }], finalizerId: 'a' }))).toBe('continue');
+    expect(startAction(true, stopped, current({ rounds: 'x' }))).toBe('continue');
+    expect(startAction(true, snapshotFromRecord(record([prompt(), answer('a', 1)], 'done'), '/h/r1.md'), current())).toBe('continue');
+    expect(startAction(true, emptyRoomSnapshot(), current())).toBe('continue');
+  });
+
+  it('is continue when the stopped run already has a final entry', () => {
+    const final: RoomEntry = { ...answer('a', 2), kind: 'final' };
+    expect(startAction(true, snapshotFromRecord(record([prompt(), answer('a', 1), final], 'stopped'), '/h/r1.md'), current())).toBe('continue');
+  });
+
+  it('labels the three actions', () => {
+    expect([startLabel('start'), startLabel('continue'), startLabel('resume')]).toEqual(['Start', 'Continue', 'Resume']);
+  });
+
+  it('prefills the prompt of a stopped run that can be resumed and leaves it empty otherwise', () => {
+    expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'stopped')).prompt).toBe('the ask');
+    expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'failed')).prompt).toBe('the ask');
+    expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'done')).prompt).toBe('');
   });
 });

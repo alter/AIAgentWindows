@@ -39,8 +39,12 @@ const api: AppApi = {
   roomRename: (id, title) => ipcRenderer.invoke(INVOKE_CHANNELS.roomRename, { id, title }) as Promise<boolean>,
   roomNew: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomNew) as Promise<boolean>,
   roomSelect: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomSelect) as Promise<void>,
-  roomStart: (config: RoomConfig, continueId?: string) =>
-    ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, continueId === undefined ? { config } : { config, continueId }) as Promise<RoomStartResult>,
+  roomStart: (config: RoomConfig, continueId?: string, resume?: boolean) =>
+    ipcRenderer.invoke(INVOKE_CHANNELS.roomStart, {
+      config,
+      ...(continueId === undefined ? {} : { continueId }),
+      ...(resume === true ? { resume } : {}),
+    }) as Promise<RoomStartResult>,
   roomStop: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomStop) as Promise<void>,
   roomCarry: (id, what) => ipcRenderer.invoke(INVOKE_CHANNELS.roomCarry, { id, what }) as Promise<boolean>,
   roomCopyFinal: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomCopyFinal) as Promise<boolean>,

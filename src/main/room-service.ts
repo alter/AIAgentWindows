@@ -4,7 +4,7 @@ import { Room, type DriverFactory, type RoomContinuation } from './room';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { listRecords, readRecord, stopInterrupted, writeRecord } from './room-archive';
-import { isRoomId, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
+import { isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
 import {
   applyRoomEvent,
@@ -84,9 +84,9 @@ export class RoomService {
     return true;
   }
 
-  async start(config: RoomConfig, continueId?: string): Promise<RoomStartResult> {
+  async start(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult> {
     try {
-      const from = continueId === undefined ? undefined : await this.continuation(continueId);
+      const from = continueId === undefined ? undefined : await this.continuation(continueId, resume === true ? config : undefined);
       const run = this.room.start(config, from);
       void run.done.catch(() => undefined);
       const debugDir = config.debugSites && this.deps.debugRoot !== undefined ? path.join(this.deps.debugRoot, run.roomId) : null;
@@ -100,11 +100,16 @@ export class RoomService {
     return path.join(this.deps.roomsDir, `${id}.md`);
   }
 
-  private async continuation(id: string): Promise<RoomContinuation> {
+  private async continuation(id: string, resumeWith?: RoomConfig): Promise<RoomContinuation> {
     if (this.snapshot.roomId !== id) throw new Error('only the opened room can be continued');
     const record = await readRecord(this.deps.roomsDir, id);
     if (record === null) throw new Error('the room cannot be read');
-    return { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt, ...(record.title === undefined ? {} : { title: record.title }) };
+    const base = { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt, ...(record.title === undefined ? {} : { title: record.title }) };
+    if (resumeWith === undefined) return base;
+    const point = resumePoint(record);
+    if (point === null) throw new Error('there is nothing to resume in this room');
+    if (!resumeMatches(point, record.config, resumeWith)) throw new Error('the prompt or the setup differs from the stopped run: continue with a new prompt instead');
+    return { ...base, done: point.done };
   }
 
   async rename(id: string, title: string): Promise<boolean> {

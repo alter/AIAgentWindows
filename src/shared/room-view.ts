@@ -12,6 +12,8 @@ import {
   roomPlan,
   parseRoomConfig,
   parseRoomTitle,
+  resumeMatches,
+  resumePoint,
   type RoomConfigResult,
   type RoomEntry,
   type RoomEntryState,
@@ -395,7 +397,7 @@ export function snapshotFromRecord(record: RoomRecord, historyPath: string): Roo
 export function formFromRecord(record: RoomRecord): RoomFormValues {
   const { config } = record;
   return {
-    prompt: '',
+    prompt: resumePoint(record)?.prompt ?? '',
     mode: config.mode,
     rounds: String(config.rounds),
     timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
@@ -428,6 +430,21 @@ export function renameTitle(current: string, typed: string): string | null {
 
 const MODE_TEXT: Record<RoomMode, string> = { broadcast: 'To all', relay: 'Relay' };
 const ROUNDS_SHAPE = /^\d{1,3}$/;
+
+export type StartAction = 'start' | 'continue' | 'resume';
+
+const START_LABELS: Record<StartAction, string> = { start: 'Start', continue: 'Continue', resume: 'Resume' };
+
+export function startLabel(action: StartAction): string {
+  return START_LABELS[action];
+}
+
+export function startAction(opened: boolean, snapshot: RoomSnapshot, current: RoomConfigResult): StartAction {
+  if (!opened) return 'start';
+  if (!current.ok || snapshot.plan === null || snapshot.phase === 'idle') return 'continue';
+  const point = resumePoint({ status: snapshot.phase, entries: snapshot.entries });
+  return point !== null && resumeMatches(point, snapshot.plan, current.config) ? 'resume' : 'continue';
+}
 
 export function setupOpenOnRoom(entryCount: number): boolean {
   return entryCount === 0;

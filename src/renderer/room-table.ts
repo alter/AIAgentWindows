@@ -215,6 +215,7 @@ export class RoomTable {
     final.checked = row.id === this.finalId;
     final.addEventListener('change', () => {
       if (final.checked) this.finalId = row.id;
+      this.changeListener?.();
     });
     const buttons = { up: actionButton('up', '↑'), down: actionButton('down', '↓'), remove: actionButton('remove', '×') };
     const view: RowView = { id: row.id, kind: row.kind, root, model: null, effort: null, final, buttons };
@@ -244,8 +245,12 @@ export class RoomTable {
       model.addEventListener('input', () => {
         this.refreshEfforts(view);
         this.nameRows();
+        this.changeListener?.();
       });
-      effort.addEventListener('change', () => this.nameRows());
+      effort.addEventListener('change', () => {
+        this.nameRows();
+        this.changeListener?.();
+      });
       modelCell.append(model);
       effortCell.append(effort);
     }

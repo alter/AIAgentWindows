@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Room resume — a stopped run continues from its first unanswered turn
@@ -8,10 +8,10 @@ created: 2026-10-23
 Stop (or quit) then the start button with the same prompt and setup goes on from the first unanswered turn. Owner, 2026-10-23: "нажал stop и затем continue - почему все с нуля началось? у нас же промпт тот же, ответы от моделей уже имеются, что мешало нам продолжить?"
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
-- [ ] AC2 Resume point: `npx vitest run tests/unit/room-model.test.ts tests/unit/ipc-validate.test.ts` exit 0 — relay and broadcast segments, none after a final or for a done record, stopped entries not counted, `resume` accepted only as a boolean with a continue id; tests seen red first
-- [ ] AC3 Run: `npx vitest run tests/integration/room-archive.test.ts` exit 0 — stop a relay after two answered turns, resume: one owner prompt in the segment, no repeated (author, round) pair, final present; broadcast stopped mid-round resumes only the missing participants; a resume with a changed prompt or participants is refused and writes nothing; reverse control (done turns ignored) turns `a resumed relay skips the answered turns` red, output in NOTES.md
-- [ ] AC4 Smoke: electron-smoke exit 0 — stubs, relay stopped mid-run, the button reads Resume (assert by a data attribute, not wording), pressed, history has no repeated answer and ends with the final — windows hidden
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [x] AC2 Resume point: `npx vitest run tests/unit/room-model.test.ts tests/unit/ipc-validate.test.ts` exit 0 — relay and broadcast segments, none after a final or for a done record, stopped entries not counted, `resume` accepted only as a boolean with a continue id; tests seen red first
+- [x] AC3 Run: `npx vitest run tests/integration/room-archive.test.ts` exit 0 — stop a relay after two answered turns, resume: one owner prompt in the segment, no repeated (author, round) pair, final present; broadcast stopped mid-round resumes only the missing participants; a resume with a changed prompt or participants is refused and writes nothing; reverse control (done turns ignored) turns `a resumed relay skips the answered turns` red, output in NOTES.md
+- [x] AC4 Smoke: electron-smoke exit 0 — stubs, relay stopped mid-run, the button reads Resume (assert by a data attribute, not wording), pressed, history has no repeated answer and ends with the final — windows hidden
 - [ ] AC5 HUMAN (excluded from /run): the owner stops a real room mid-run and resumes it
 
 ## Stack
@@ -29,6 +29,11 @@ As tasks/10-app-shell/06-room-layout/PLAN.md. No new dependency.
 - Resumable record statuses: stopped and failed (app start already rewrites running as stopped).
 - Equality for resume: prompt text (exact), mode, rounds, participants (id, kind, model, effort, order), finalizerId; turn timeout and site debug may differ and take the new values.
 - No marker entry for the resume; the feed shows the resumed turns after the stop entry under their round.
+- A participant error entry without `round` is a failed final-phase turn: it is not a done turn and does not block resume; a reply without `round` still blocks it (T01).
+- Opening a stopped or failed room prefills the prompt box with that run's prompt, otherwise the button could never read Resume after a reopen; other records keep an empty box (T01).
+- The pane derives the button from its snapshot (entries, phase, plan) and the form; no new IPC for the offer. The main process re-checks everything from the stored record (T01).
+- The resumed run replays progress events for the done turns, so round, chips and counters continue where the stop cut them (T01).
+- `src/renderer/room-table.ts` joined the WRITE-SET: model, effort and final edits notify the pane (T01).
 
 ## Out of scope
 - Continue with a new prompt (unchanged)
@@ -37,8 +42,11 @@ As tasks/10-app-shell/06-room-layout/PLAN.md. No new dependency.
 
 ## Tasks
 - [x] T00 Baseline: the coordinator's verified run of 08-room-setup-collapse (d1fec41) is this plan's baseline — verify: the Log line exists
-- [ ] T01 Resume (S1–S4): `resumePoint(record)` and the equality rule in src/shared (red first in room-model.test.ts); `resume?: boolean` through ipc parser/preload/handlers (red first in ipc-validate.test.ts); room-service builds the continuation with the done turns and refuses mismatches; Room.execute/relay/broadcast skip done turns and append no prompt when resuming, progress starts at the done count; room-pane button label and `data-room-action` from a pure rule in room-view (red first in room-view.test.ts); integration tests in room-archive.test.ts with reverse control; smoke in tests/full/room-archive.spec.ts — verify: AC2, AC3 commands + fast tier + electron-smoke
-- [ ] T02 Ledger and notes: docs/PROJECT.md Room row (resume); NOTES.md summary; labels `status:review` when AC1–AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem (baseline 7) + fast tier
+- [x] T01 Resume (S1–S4): `resumePoint(record)` and the equality rule in src/shared (red first in room-model.test.ts); `resume?: boolean` through ipc parser/preload/handlers (red first in ipc-validate.test.ts); room-service builds the continuation with the done turns and refuses mismatches; Room.execute/relay/broadcast skip done turns and append no prompt when resuming, progress starts at the done count; room-pane button label and `data-room-action` from a pure rule in room-view (red first in room-view.test.ts); integration tests in room-archive.test.ts with reverse control; smoke in tests/full/room-archive.spec.ts — verify: AC2, AC3 commands + fast tier + electron-smoke
+- [x] T02 Ledger and notes: docs/PROJECT.md Room row (resume); NOTES.md summary; labels `status:review` when AC1–AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem (baseline 7) + fast tier
 
 ## Log
 - 2026-10-23 coordinator: T00 baseline = 08-room-setup-collapse T01 verification run on d1fec41 (fast tier 12 commands exit 0, vitest 947/947, coverage 100.00 %, electron-smoke 48/48); tasks/check.py baseline 7 problems
+- 2026-10-23 T01 done: resumePoint/resumeMatches/entriesBeforeRound in room-model, resume flag through ipc/preload/handler/service, Room skips done turns without a new prompt, button rule startAction + data-room-action; AC2 exit 0 (72 tests), AC3 exit 0 (8 tests, reverse control red in NOTES.md), gates.sh exit 0: fast tier 12 commands 0, vitest 966/966, coverage 100.00 %, electron-smoke 49/49
+- 2026-10-23 coordinator: T01 verified (`bash .claude/scratch/gates.sh` exit 0: fast tier 12 commands exit 0, vitest 966/966, coverage 100.00 %, build exit 0, electron-smoke 49/49 — this run; diff of room.ts, room-service.ts, room-model.ts reviewed); AC1-AC4 met
+- 2026-10-23 coordinator: T02 done: docs/PROJECT.md Room row (resume), NOTES summary, labels status:review; tasks/check.py 7 problems (baseline 7); paused on AC5 (owner)

@@ -12,6 +12,9 @@ import {
   parseRoomConfig,
   parseRoomRecord,
   parseRoomTitle,
+  entriesBeforeRound,
+  resumeMatches,
+  resumePoint,
   roomTitle,
   ROOM_PARTICIPANTS,
   relaySchedule,
@@ -332,5 +335,97 @@ describe('room title', () => {
     expect(derivedRoomTitle({ entries: [] })).toBe('New room');
     expect(derivedRoomTitle({ entries: [entryOf('reply', 'x')] })).toBe('New room');
     expect(derivedRoomTitle({ entries: [entryOf('prompt', '\n\nlater')] })).toBe('New room');
+  });
+});
+
+function turn(authorId: string, round: number, kind: RoomEntry['kind'] = 'reply', state?: RoomEntry['state']): RoomEntry {
+  return { authorId, label: authorId, time: 1, kind, text: `${authorId}${round}`, round, ...(state === undefined ? {} : { state }) };
+}
+
+function withoutRound(entry: RoomEntry): RoomEntry {
+  const copy = { ...entry };
+  delete copy.round;
+  return copy;
+}
+
+function stopEntry(): RoomEntry {
+  return { authorId: 'room', label: 'Room', time: 1, kind: 'error', text: 'Stopped by the owner.', state: 'stopped' };
+}
+
+describe('resumePoint', () => {
+  const prompt = entryOf('prompt', 'the question');
+
+  it('names the prompt and the answered turns of a stopped relay segment in order', () => {
+    const point = resumePoint({ status: 'stopped', entries: [prompt, turn('a', 1), turn('b', 1), stopEntry()] });
+    expect(point).toEqual({
+      prompt: 'the question',
+      done: [
+        { authorId: 'a', round: 1, state: 'replied' },
+        { authorId: 'b', round: 1, state: 'replied' },
+      ],
+    });
+  });
+
+  it('counts the answered participants of an interrupted broadcast round, errors and timeouts included, stopped entries not', () => {
+    const point = resumePoint({
+      status: 'failed',
+      entries: [prompt, turn('a', 1), turn('b', 1, 'error'), turn('c', 1, 'error', 'timeout'), turn('a', 2, 'error', 'stopped'), stopEntry()],
+    });
+    expect(point?.done).toEqual([
+      { authorId: 'a', round: 1, state: 'replied' },
+      { authorId: 'b', round: 1, state: 'failed' },
+      { authorId: 'c', round: 1, state: 'timeout' },
+    ]);
+  });
+
+  it('looks only at the segment after the last owner prompt', () => {
+    const point = resumePoint({ status: 'stopped', entries: [prompt, turn('a', 1), { ...turn('a', 1, 'final'), kind: 'final' }, entryOf('prompt', 'second'), turn('b', 1)] });
+    expect(point).toEqual({ prompt: 'second', done: [{ authorId: 'b', round: 1, state: 'replied' }] });
+  });
+
+  it('is none after a final entry, for a done or running record, without a prompt, and for a reply without a round', () => {
+    const final: RoomEntry = { ...turn('a', 1), kind: 'final' };
+    expect(resumePoint({ status: 'stopped', entries: [prompt, turn('a', 1), final] })).toBeNull();
+    expect(resumePoint({ status: 'done', entries: [prompt, turn('a', 1)] })).toBeNull();
+    expect(resumePoint({ status: 'running', entries: [prompt, turn('a', 1)] })).toBeNull();
+    expect(resumePoint({ status: 'stopped', entries: [turn('a', 1)] })).toBeNull();
+    expect(resumePoint({ status: 'stopped', entries: [] })).toBeNull();
+    expect(resumePoint({ status: 'stopped', entries: [prompt, withoutRound(turn('a', 1))] })).toBeNull();
+  });
+
+  it('ignores a failed final-phase error that has no round and resumes with every turn done', () => {
+    const point = resumePoint({ status: 'stopped', entries: [prompt, turn('a', 1), withoutRound(turn('a', 2, 'error')), stopEntry()] });
+    expect(point?.done).toEqual([{ authorId: 'a', round: 1, state: 'replied' }]);
+  });
+});
+
+describe('resumeMatches', () => {
+  const point = { prompt: 'the question', done: [] };
+  const setup = { mode: 'relay' as const, rounds: 2, participants: [A, B], finalizerId: 'a' };
+  const config = { ...setup, prompt: 'the question', turnTimeoutMs: 1000, debugSites: true };
+
+  it('is true when prompt, mode, rounds, participants and finalizer are those of the run, whatever the timeout and debug', () => {
+    expect(resumeMatches(point, { ...setup, participants: [{ ...A }, { ...B }] }, config)).toBe(true);
+  });
+
+  it('is false when any of them differs', () => {
+    expect(resumeMatches(point, setup, { ...config, prompt: 'other' })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, mode: 'broadcast' })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, rounds: 3 })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, finalizerId: 'b' })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [B, A] })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [A] })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [A, { ...B, model: 'gpt-x' }] })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [{ ...A, effort: 'high' }, B] })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [A, { ...B, kind: 'claude' }] })).toBe(false);
+  });
+});
+
+describe('entriesBeforeRound', () => {
+  it('drops the entries of the given round after the last prompt and keeps the older runs and the rest', () => {
+    const entries = [entryOf('prompt', 'one'), turn('a', 1), entryOf('prompt', 'two'), turn('a', 1), turn('b', 1), turn('a', 2), stopEntry()];
+    expect(entriesBeforeRound(entries, 1).map((item) => item.text)).toEqual(['one', 'a1', 'two', 'a2', 'Stopped by the owner.']);
+    expect(entriesBeforeRound(entries.slice(0, 2), 5)).toEqual(entries.slice(0, 2));
+    expect(entriesBeforeRound([turn('a', 1)], 1)).toEqual([]);
   });
 });
