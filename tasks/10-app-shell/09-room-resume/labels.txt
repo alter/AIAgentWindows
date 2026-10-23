@@ -2,7 +2,7 @@ phase:app-shell
 role:APP
 type:feature
 priority:P1
-status:review
+status:in_progress
 verify:pending
 depends:10-app-shell/08-room-setup-collapse
 milestone:M2

@@ -20,6 +20,7 @@ SCOPE
   + S2 room:start takes an optional `resume: true` with continueId; the main process computes the resume point from the stored record and refuses when there is none or when the requested prompt, mode, rounds, participants or finalizer differ from the record's (turn timeout and site debug may change); the renderer is never trusted for which turns are done
   + S3 a resumed run appends no new owner prompt, skips the done turns (relay: in schedule order; broadcast: the missing participants of the interrupted round with the entries seen at that round's start, then the remaining rounds), then the finalizer; progress counts start at the done turns; the turn cut by Stop is asked again; CLI sessions start fresh and get the earlier entries as on continue today
   + S4 the button reads Resume when the opened room is resumable and the prompt box and setup equal the stopped run's; editing the prompt or the setup turns it back to Continue (a new prompt, as today); refused resume shows its error
+  + S5 on resume the Room "stopped" entries of the resumed segment are dropped: the record and the markdown history are rewritten atomically without them, the feed no longer shows them and participants never receive them; after Continue with a new prompt the stop entry of the old segment stays (that run really ended stopped)
   − a new prompt in the same room (Continue) — unchanged, 10-app-shell/04-room-archive
   − resuming after the setup was changed (participants added or removed) — the button falls back to Continue
   − partial text of the turn cut by Stop — discarded as today
@@ -62,7 +63,8 @@ VERIFY (QA)
   3. [fast] tests/integration/room-archive.test.ts: stop after two turns, resume, no repeated (author, round) pair, one prompt in the segment, final present; a resume with a changed prompt or participants is refused
   4. [fast] reverse control: resume ignores the done turns in room.ts → tests/integration/room-archive.test.ts::a resumed relay skips the answered turns
   5. [full] electron-smoke: stop a relay on stubs, the button reads Resume, press it, the history has no repeated answer and ends with the final
-  6. [fast] HUMAN: the owner stops a real room mid-run and resumes it
+  6. [fast] tests/integration/room-archive.test.ts::a resume drops the stop entries of its segment — record, history file and the history given to participants hold no stopped entry of the resumed segment; a Continue keeps the old segment's stop entry
+  7. [fast] HUMAN: the owner stops a real room mid-run and resumes it
 
 ROLE
   APP, QA, HUMAN
