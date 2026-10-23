@@ -34,8 +34,14 @@ shows its normal sign-in form (`docs/EVIDENCE.md` W3, W4). The client hints
 were the remaining mismatch (W15), now removed (W22, W24). Mechanism: the
 session string plus CDP `Emulation.setUserAgentOverride` with
 `userAgentMetadata` through `webContents.debugger`, applied to every view and
-to every popup (`docs/tech/electron@44.6.0.md`). No code runs inside the
-sites' pages.
+to every popup (`docs/tech/electron@44.6.0.md`). A cross-site iframe that
+Chromium runs in its own process (Cloudflare Turnstile) is a separate DevTools
+target the top-level command does not reach, so 2026-10-23
+(07-site-challenge) the same override is also sent to every iframe and page
+target the view's debugger auto-attaches (`Target.setAutoAttach` with flatten
+and waitForDebuggerOnStart, repeated inside each child, targets resumed with
+`Runtime.runIfWaitingForDebugger`): one page no longer shows two browsers. No
+code runs inside the sites' pages.
 
 **Not done.** Header rewriting: Electron 44.6.0 sends no `Sec-CH-UA*` request
 header at all (W23), so there is nothing to make consistent; injecting them
