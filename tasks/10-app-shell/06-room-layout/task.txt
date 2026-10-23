@@ -34,6 +34,8 @@ WRITE-SET
   src/preload/index.ts
   src/main/ipc-handlers.ts
   src/main/room-service.ts
+  src/main/room.ts
+  src/main/room-archive.ts
   src/renderer/index.ts
   src/renderer/sidebar.ts
   src/renderer/room-pane.ts
@@ -42,6 +44,7 @@ WRITE-SET
   src/renderer/styles.css
   src/renderer/contrast-pairs.json
   tests/unit/room-model.test.ts
+  tests/unit/room-archive.test.ts
   tests/unit/room-view.test.ts
   tests/unit/ipc-validate.test.ts
   tests/unit/room-tree.test.ts
