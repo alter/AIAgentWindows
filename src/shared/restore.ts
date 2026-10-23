@@ -1,5 +1,5 @@
 // restore.ts
-import { isSiteKind, type Agent } from './agents';
+import { isCliKind, type Agent } from './agents';
 import { buildSpawn, type SpawnSpec } from './cli-args';
 import { claimRollout, type Rollout } from './codex-claim';
 
@@ -11,7 +11,7 @@ export interface RestoreContext {
 }
 
 export function restoreSpawn(agent: Agent, context: RestoreContext): SpawnSpec | null {
-  if (isSiteKind(agent.kind) || agent.cwd === undefined) return null;
+  if (!isCliKind(agent.kind) || agent.cwd === undefined) return null;
   const sessionId = agent.sessionId;
   if (agent.kind === 'claude' && sessionId === undefined) return null;
   return buildSpawn(agent.kind, {

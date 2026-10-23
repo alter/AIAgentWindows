@@ -1,7 +1,10 @@
 // agents.ts
+import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from './openrouter';
 import { parseSidebarWidth } from './site-layout';
 import { parseThemeChoice, type ThemeChoice } from './theme';
-export const AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
+export const ROOM_AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
+export const OPENROUTER_KIND = 'openrouter';
+export const AGENT_KINDS = [...ROOM_AGENT_KINDS, OPENROUTER_KIND] as const;
 export type AgentKind = (typeof AGENT_KINDS)[number];
 export type CliKind = 'claude' | 'codex';
 export type SiteKind = 'chatgpt' | 'grok' | 'deepseek';
@@ -14,6 +17,7 @@ export const AGENT_LABELS: Readonly<Record<AgentKind, string>> = {
   chatgpt: 'ChatGPT',
   grok: 'Grok',
   deepseek: 'DeepSeek',
+  openrouter: 'OpenRouter',
 };
 
 export const SITE_URLS: Readonly<Record<SiteKind, string>> = {
@@ -28,6 +32,7 @@ export interface Agent {
   title: string;
   cwd?: string;
   sessionId?: string;
+  openrouter?: OpenRouterSettings;
   createdAt: number;
 }
 
@@ -106,7 +111,7 @@ function validCwd(value: unknown): value is string {
 
 function parseAgent(raw: unknown): Agent | null {
   if (!isRecord(raw)) return null;
-  const { id, kind, title, cwd, sessionId, createdAt } = raw;
+  const { id, kind, title, cwd, sessionId, openrouter, createdAt } = raw;
   if (typeof id !== 'string' || id.length === 0) return null;
   if (!isAgentKind(kind)) return null;
   if (typeof title !== 'string') return null;
@@ -119,6 +124,13 @@ function parseAgent(raw: unknown): Agent | null {
   if (sessionId !== undefined) {
     if (!isCliKind(kind) || !isUuid(sessionId)) return null;
     agent.sessionId = sessionId;
+  }
+  if (kind === OPENROUTER_KIND) {
+    const settings = openrouter === undefined ? emptyOpenRouterSettings() : parseOpenRouterSettings(openrouter);
+    if (settings === null) return null;
+    agent.openrouter = settings;
+  } else if (openrouter !== undefined) {
+    return null;
   }
   return agent;
 }

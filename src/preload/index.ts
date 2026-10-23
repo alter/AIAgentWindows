@@ -11,7 +11,8 @@ import {
   type PtyExitEvent,
   type SiteStateEvent,
 } from '../shared/ipc';
-import type { OpenRouterStatus } from '../shared/openrouter';
+import type { OpenRouterSettings, OpenRouterStatus } from '../shared/openrouter';
+import type { ChatDelta, ChatLoad, ChatSend } from '../shared/openrouter-chat';
 import type { ThemeChoice } from '../shared/theme';
 import type { RoomModels } from '../shared/cli-models';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
@@ -69,6 +70,11 @@ const api: AppApi = {
   openrouterDisconnect: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterDisconnect) as Promise<OpenRouterStatus>,
   openrouterRefresh: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterRefresh) as Promise<OpenRouterStatus>,
   openrouterModels: (refresh) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterModels, { refresh }) as Promise<OpenRouterModels>,
+  openrouterChatLoad: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatLoad, { id }) as Promise<ChatLoad>,
+  openrouterChatSend: (id, text) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatSend, { id, text }) as Promise<ChatSend>,
+  openrouterChatStop: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatStop, { id }) as Promise<void>,
+  openrouterChatCopy: (id, index) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatCopy, { id, index }) as Promise<boolean>,
+  openrouterSettings: (id, settings: OpenRouterSettings) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterSettings, { id, settings }) as Promise<boolean>,
   onAgentsChanged: (listener) => subscribe<AgentsSnapshot>(EVENT_CHANNELS.agentsChanged, listener),
   onPtyData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.ptyData, listener),
   onPtyExit: (listener) => subscribe<PtyExitEvent>(EVENT_CHANNELS.ptyExit, listener),
@@ -76,6 +82,7 @@ const api: AppApi = {
   onRoomEvent: (listener) => subscribe<RoomEvent>(EVENT_CHANNELS.roomEvent, listener),
   onRoomTerminalData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.roomTerminalData, listener),
   onOpenRouterChanged: (listener) => subscribe<OpenRouterStatus>(EVENT_CHANNELS.openrouterChanged, listener),
+  onOpenRouterChatDelta: (listener) => subscribe<ChatDelta>(EVENT_CHANNELS.openrouterChatDelta, listener),
 };
 
 contextBridge.exposeInMainWorld('aiaw', api);

@@ -18,7 +18,9 @@ import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { createRoomDrivers, type RoomDrivers } from './room-drivers';
 import { moveToFolder } from './room-archive';
+import { OpenRouterChats } from './openrouter/chats';
 import { OpenRouterClient } from './openrouter/client';
+import { ConversationStore } from './openrouter/conversation-store';
 import { KeyStore } from './openrouter/key-store';
 import { electronSecretBox } from './openrouter/secret-box';
 import { OpenRouterService } from './openrouter/service';
@@ -45,6 +47,7 @@ let sites: SiteViews | null = null;
 let room: RoomService | null = null;
 let roomDrivers: RoomDrivers | null = null;
 let openrouter: OpenRouterService | null = null;
+let chats: OpenRouterChats | null = null;
 
 async function pickFolder(): Promise<string | null> {
   const preset = process.env['AIAW_TEST_FOLDER'];
@@ -109,6 +112,7 @@ async function start(): Promise<void> {
       showSite: (agent) => siteViews.show(agent),
       layoutSidebar: (width) => siteViews.setSidebarWidth(width),
       closeSite: (id) => siteViews.close(id),
+      closeChat: (id) => chats?.stop(id),
       listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
     },
     state,
@@ -130,6 +134,16 @@ async function start(): Promise<void> {
     },
   });
   openrouter = openrouterService;
+  const openrouterChats = new OpenRouterChats({
+    service: openrouterService,
+    store: new ConversationStore(path.join(sharedDir, 'openrouter')),
+    settingsOf: (id) => active.openrouterSettings(id),
+    emit: (delta) => {
+      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.openrouterChatDelta, delta);
+    },
+    copy: (text) => clipboard.writeText(text),
+  });
+  chats = openrouterChats;
   await openrouterService.init();
   const roomsDir = path.join(sharedDir, 'rooms');
   const debugRoot = path.join(userData, 'debug', 'sites');
@@ -168,7 +182,7 @@ async function start(): Promise<void> {
   });
   room = roomService;
   await roomService.init();
-  registerIpc(active, roomService, openrouterService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
+  registerIpc(active, roomService, openrouterService, openrouterChats, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(
     process.platform === 'darwin',
@@ -212,11 +226,13 @@ app.on('before-quit', (event) => {
     active?.shutdown();
     roomDrivers?.shutdown();
     sites?.closeAll();
+    chats?.shutdown();
     openrouter?.shutdown();
     return;
   }
   quitting = true;
   event.preventDefault();
+  chats?.shutdown();
   void (room?.shutdown() ?? Promise.resolve())
     .catch(() => undefined)
     .then(() => active.flush())

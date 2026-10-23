@@ -297,7 +297,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 
 .content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .content-empty { margin: auto; font-style: italic; }
-.content-empty[hidden], .site-area[hidden], .terminal-pane[hidden] { display: none; }
+.content-empty[hidden], .site-area[hidden], .terminal-pane[hidden], .or-pane[hidden] { display: none; }
 .site-area { flex: 1; }
 
 .nav-bar {
@@ -577,3 +577,24 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-terminals { display: flex; flex-direction: column; gap: 8px; height: 260px; }
 .room-terminals .terminal-pane { border-radius: 6px; overflow: hidden; }
 .room-pause .room-button { align-self: flex-start; }
+
+.or-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 38px 20px 16px; gap: 12px; }
+.or-bar { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 24px; }
+.or-group { display: flex; flex-direction: column; gap: 4px; }
+.or-group-label { font-size: 12px; font-weight: 700; }
+.or-log { flex: 1; min-height: 80px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.or-empty { font-style: italic; }
+.or-msg { padding: 8px 12px; border-radius: 8px; background: var(--surface); }
+.or-msg[data-role="user"] { background: var(--info-bg); }
+.or-msg[data-status="failed"] { background: var(--err-bg); }
+.or-msg[data-status="stopped"] { background: var(--stop-bg); }
+.or-msg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; font-size: 12px; }
+.or-msg-author { font-weight: 700; }
+.or-msg-text { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+.or-msg-error { margin: 6px 0 0; font-size: 12px; }
+.or-copy { padding: 2px 10px; font-size: 12px; }
+.or-notice { font-size: 12px; min-height: 16px; }
+.or-notice:empty { min-height: 0; }
+.or-composer { display: flex; align-items: flex-end; gap: 8px; }
+.or-input { flex: 1; min-height: 56px; resize: vertical; padding: 8px 10px; }
+.or-buttons { display: flex; gap: 8px; }

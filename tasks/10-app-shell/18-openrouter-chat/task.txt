@@ -40,6 +40,11 @@ WRITE-SET
   src/renderer/icons.ts
   src/renderer/styles.css
   src/renderer/contrast-pairs.json
+  src/renderer/assets/icons/
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/restore.ts
+  docs/tech/lobe-icons@1.95.1.md
   tests/unit/
   tests/integration/
   tests/full/

@@ -1,9 +1,10 @@
 // ipc.ts
-import { AGENT_KINDS, parseAgentTitle, type Agent, type AgentKind } from './agents';
+import { AGENT_KINDS, isUuid, parseAgentTitle, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
-import { MAX_PASTE_CHARS, type ModelItem, type OpenRouterMode, type OpenRouterStatus } from './openrouter';
+import { MAX_PASTE_CHARS, parseOpenRouterSettings, type ModelItem, type OpenRouterMode, type OpenRouterSettings, type OpenRouterStatus } from './openrouter';
+import { MAX_ENTRIES, MAX_MESSAGE_CHARS, type ChatDelta, type ChatLoad, type ChatSend } from './openrouter-chat';
 import { isSidebarWidth } from './site-layout';
 import { isThemeChoice, type ThemeChoice } from './theme';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
@@ -46,6 +47,11 @@ export const INVOKE_CHANNELS = {
   openrouterDisconnect: 'openrouter:disconnect',
   openrouterRefresh: 'openrouter:refresh',
   openrouterModels: 'openrouter:models',
+  openrouterChatLoad: 'openrouter:chat-load',
+  openrouterChatSend: 'openrouter:chat-send',
+  openrouterChatStop: 'openrouter:chat-stop',
+  openrouterChatCopy: 'openrouter:chat-copy',
+  openrouterSettings: 'openrouter:settings',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -56,6 +62,7 @@ export const EVENT_CHANNELS = {
   roomEvent: 'room:event',
   roomTerminalData: 'room:terminal-data',
   openrouterChanged: 'openrouter:changed',
+  openrouterChatDelta: 'openrouter:chat-delta',
 } as const;
 
 export const MAX_PTY_WRITE_BYTES = 1024 * 1024;
@@ -140,6 +147,11 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.openrouterDisconnect]: undefined;
   [INVOKE_CHANNELS.openrouterRefresh]: undefined;
   [INVOKE_CHANNELS.openrouterModels]: { refresh: boolean };
+  [INVOKE_CHANNELS.openrouterChatLoad]: { id: string };
+  [INVOKE_CHANNELS.openrouterChatSend]: { id: string; text: string };
+  [INVOKE_CHANNELS.openrouterChatStop]: { id: string };
+  [INVOKE_CHANNELS.openrouterChatCopy]: { id: string; index: number };
+  [INVOKE_CHANNELS.openrouterSettings]: { id: string; settings: OpenRouterSettings };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -186,6 +198,11 @@ export interface AppApi {
   openrouterDisconnect(): Promise<OpenRouterStatus>;
   openrouterRefresh(): Promise<OpenRouterStatus>;
   openrouterModels(refresh: boolean): Promise<OpenRouterModels>;
+  openrouterChatLoad(id: string): Promise<ChatLoad>;
+  openrouterChatSend(id: string, text: string): Promise<ChatSend>;
+  openrouterChatStop(id: string): Promise<void>;
+  openrouterChatCopy(id: string, index: number): Promise<boolean>;
+  openrouterSettings(id: string, settings: OpenRouterSettings): Promise<boolean>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
@@ -193,6 +210,7 @@ export interface AppApi {
   onRoomEvent(listener: (event: RoomEvent) => void): () => void;
   onRoomTerminalData(listener: (event: PtyDataEvent) => void): () => void;
   onOpenRouterChanged(listener: (status: OpenRouterStatus) => void): () => void;
+  onOpenRouterChatDelta(listener: (delta: ChatDelta) => void): () => void;
 }
 
 type Parser<T> = (payload: unknown) => T | null;
@@ -227,6 +245,10 @@ function parseRoomStart(payload: unknown): RoomStartRequest | null {
   if (!Object.hasOwn(payload, 'resume')) return { config: parsed.config, continueId };
   const resume = payload['resume'];
   return typeof resume === 'boolean' ? { config: parsed.config, continueId, resume } : null;
+}
+
+function withUuid<T extends object>(payload: unknown, build: (record: Record<string, unknown>, id: string) => T | null): T | null {
+  return withId(payload, (record, id) => (isUuid(id) ? build(record, id) : null));
 }
 
 function noPayload(payload: unknown): undefined | null {
@@ -329,6 +351,23 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
     const refresh = payload['refresh'];
     return typeof refresh === 'boolean' ? { refresh } : null;
   },
+  [INVOKE_CHANNELS.openrouterChatLoad]: (payload) => withUuid(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.openrouterChatSend]: (payload) =>
+    withUuid(payload, (record, id) => {
+      const text = record['text'];
+      return typeof text === 'string' && text.length >= 1 && text.length <= MAX_MESSAGE_CHARS ? { id, text } : null;
+    }),
+  [INVOKE_CHANNELS.openrouterChatStop]: (payload) => withUuid(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.openrouterChatCopy]: (payload) =>
+    withUuid(payload, (record, id) => {
+      const index = record['index'];
+      return typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < MAX_ENTRIES ? { id, index } : null;
+    }),
+  [INVOKE_CHANNELS.openrouterSettings]: (payload) =>
+    withUuid(payload, (record, id) => {
+      const settings = parseOpenRouterSettings(record['settings']);
+      return settings === null ? null : { id, settings };
+    }),
 };
 
 export function validateRequest(channel: string, payload: unknown): Validation<unknown> {

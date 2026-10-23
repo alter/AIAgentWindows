@@ -1,10 +1,11 @@
 // content.ts
-import { isCliKind } from '../shared/agents';
+import { OPENROUTER_KIND, isCliKind, isSiteKind } from '../shared/agents';
 import type { AgentsSnapshot, PtyDataEvent, SiteStateEvent } from '../shared/ipc';
 import type { RoomEvent } from '../shared/room-model';
 import type { RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 import { NavBar } from './nav-bar';
+import { OpenRouterPane } from './openrouter-pane';
 import { RoomPane } from './room-pane';
 import type { RoomTreeState } from './room-tree';
 import { TerminalPane, agentIo } from './terminal-pane';
@@ -12,6 +13,7 @@ import { TerminalPane, agentIo } from './terminal-pane';
 export class Content {
   readonly element = el('main', 'content');
   private readonly panes = new Map<string, TerminalPane>();
+  private readonly chats = new Map<string, OpenRouterPane>();
   private readonly navBar = new NavBar();
   private readonly room = new RoomPane();
   private readonly sitePlaceholder = el('div', 'site-area');
@@ -41,17 +43,37 @@ export class Content {
       this.element.append(pane.element);
       this.observer.observe(pane.element);
     }
+    this.renderChats(snapshot);
     this.selectedId = snapshot.roomOpen ? null : snapshot.selectedId;
     this.room.setAgents(snapshot.agents);
     if (snapshot.roomOpen) this.room.show();
     else this.room.hide();
     const selected = snapshot.roomOpen ? undefined : snapshot.agents.find((agent) => agent.id === snapshot.selectedId);
     this.empty.hidden = selected !== undefined || snapshot.roomOpen;
-    const site = selected !== undefined && !isCliKind(selected.kind);
+    const site = selected !== undefined && isSiteKind(selected.kind);
     this.sitePlaceholder.hidden = !site;
     this.navBar.setAgent(site ? selected.id : null);
     for (const [id, pane] of this.panes) if (id !== this.selectedId) pane.hide();
     this.panes.get(this.selectedId ?? '')?.show();
+    for (const [id, chat] of this.chats) {
+      if (id === this.selectedId) chat.show();
+      else chat.hide();
+    }
+  }
+
+  private renderChats(snapshot: AgentsSnapshot): void {
+    const wanted = snapshot.agents.filter((agent) => agent.kind === OPENROUTER_KIND);
+    for (const [id, chat] of this.chats) {
+      if (wanted.some((agent) => agent.id === id)) continue;
+      chat.dispose();
+      this.chats.delete(id);
+    }
+    for (const agent of wanted) {
+      if (this.chats.has(agent.id)) continue;
+      const chat = new OpenRouterPane(agent);
+      this.chats.set(agent.id, chat);
+      this.element.append(chat.element);
+    }
   }
 
   watchRooms(listener: (state: RoomTreeState) => void): void {

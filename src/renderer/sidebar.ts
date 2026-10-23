@@ -27,6 +27,7 @@ const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
   { kind: 'chatgpt', label: 'ChatGPT' },
   { kind: 'grok', label: 'Grok' },
   { kind: 'deepseek', label: 'DeepSeek' },
+  { kind: 'openrouter', label: 'OpenRouter' },
 ];
 
 interface Editing {

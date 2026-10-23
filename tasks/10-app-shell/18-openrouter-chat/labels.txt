@@ -2,7 +2,7 @@ phase:app-shell
 role:APP
 type:feature
 priority:P1
-status:todo
+status:review
 verify:pending
 milestone:M2
 format:2

@@ -91,8 +91,26 @@ describe('state store', () => {
     expect(parsed.agents[0]).not.toHaveProperty('extra');
   });
 
+  it('keeps the model, effort and web settings of an OpenRouter agent and loads an old one without them', () => {
+    const settings = { model: 'acme/m:free', modelName: 'Acme M', effort: 'low', web: true };
+    const state: AppState = { version: 1, agents: [{ id: 'o1', kind: 'openrouter', title: 'OpenRouter · Acme M', openrouter: settings, createdAt: 1 }] };
+    expect(parseState(serializeState(state))).toEqual(state);
+    const old = parseState(JSON.stringify({ version: 1, agents: [{ id: 'o2', kind: 'openrouter', title: 'OpenRouter', createdAt: 2 }] }));
+    expect(old.agents[0]?.openrouter).toEqual({ model: '', effort: '', web: false });
+  });
+
+  it('refuses settings that are malformed or sit on another kind of agent', () => {
+    const agent = (patch: Record<string, unknown>): string => JSON.stringify({ version: 1, agents: [{ id: 'o1', kind: 'openrouter', title: 'T', createdAt: 1, ...patch }] });
+    expect(parseState(agent({ openrouter: { model: 'Bad Model', effort: '', web: false } }))).toEqual(emptyState());
+    expect(parseState(agent({ openrouter: 'x' }))).toEqual(emptyState());
+    expect(parseState(agent({ cwd: '/w' }))).toEqual(emptyState());
+    expect(parseState(withAgent({ openrouter: { model: '', effort: '', web: false } }))).toEqual(emptyState());
+  });
+
   it('describes kinds', () => {
-    expect([...AGENT_KINDS].sort()).toEqual(['chatgpt', 'claude', 'codex', 'deepseek', 'grok']);
+    expect([...AGENT_KINDS].sort()).toEqual(['chatgpt', 'claude', 'codex', 'deepseek', 'grok', 'openrouter']);
+    expect(isCliKind('openrouter')).toBe(false);
+    expect(isSiteKind('openrouter')).toBe(false);
     expect(isCliKind('claude')).toBe(true);
     expect(isCliKind('grok')).toBe(false);
     expect(isSiteKind('grok')).toBe(true);

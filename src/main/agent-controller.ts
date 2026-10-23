@@ -1,9 +1,11 @@
 // agent-controller.ts
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { AGENT_LABELS, isCliKind, isSiteKind, parseAgentTitle, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
+import { AGENT_LABELS, OPENROUTER_KIND, isCliKind, isSiteKind, parseAgentTitle, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
+import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from '../shared/openrouter';
+import { openrouterTitle } from '../shared/openrouter-chat';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice, type ThemeChoice } from '../shared/theme';
@@ -25,6 +27,7 @@ export interface ControllerDeps {
   showSite?(agent: Agent | null): void;
   layoutSidebar?(width: number): void;
   closeSite?(id: string): void;
+  closeChat?(id: string): void;
   listRollouts?(sinceMs: number): Promise<Rollout[]>;
 }
 
@@ -96,7 +99,7 @@ export class AgentController {
   }
 
   async add(kind: AgentKind): Promise<void> {
-    const agent = isCliKind(kind) ? await this.createCliAgent(kind) : this.createSiteAgent(kind);
+    const agent = isCliKind(kind) ? await this.createCliAgent(kind) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent() : this.createSiteAgent(kind);
     if (agent === null) return;
     this.agents.push(agent);
     this.selectedId = agent.id;
@@ -130,6 +133,7 @@ export class AgentController {
     this.closed.add(id);
     this.pty.kill(id);
     this.deps.closeSite?.(id);
+    this.deps.closeChat?.(id);
     this.backlogs.delete(id);
     this.spawnedAt.delete(id);
     this.agents = next.agents;
@@ -145,6 +149,24 @@ export class AgentController {
     await this.persist();
     this.emitChanged();
     return true;
+  }
+
+  async setOpenrouterSettings(id: string, settings: unknown): Promise<boolean> {
+    const clean = parseOpenRouterSettings(settings);
+    const known = this.agentById(id);
+    if (clean === null || known === undefined || known.kind !== OPENROUTER_KIND) return false;
+    const before = known.openrouter ?? emptyOpenRouterSettings();
+    const renamed = known.title !== openrouterTitle(before);
+    const title = renamed ? known.title : openrouterTitle(clean);
+    this.agents = this.agents.map((agent) => (agent.id === id ? { ...agent, title, openrouter: clean } : agent));
+    await this.persist();
+    this.emitChanged();
+    return true;
+  }
+
+  openrouterSettings(id: string): OpenRouterSettings | undefined {
+    const agent = this.agentById(id);
+    return agent?.kind === OPENROUTER_KIND ? (agent.openrouter ?? emptyOpenRouterSettings()) : undefined;
   }
 
   async restart(id: string): Promise<boolean> {
@@ -210,6 +232,11 @@ export class AgentController {
     return sessionId === undefined
       ? { id, kind, title, cwd, createdAt: Date.now() }
       : { id, kind, title, cwd, sessionId, createdAt: Date.now() };
+  }
+
+  private createOpenRouterAgent(): Agent {
+    const settings = emptyOpenRouterSettings();
+    return { id: randomUUID(), kind: OPENROUTER_KIND, title: openrouterTitle(settings), openrouter: settings, createdAt: Date.now() };
   }
 
   private createSiteAgent(kind: AgentKind): Agent {

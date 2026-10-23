@@ -9,7 +9,9 @@ import {
   type OpenRouterNotice,
   type OpenRouterStatus,
 } from '../../shared/openrouter';
-import { ChatError, NOT_SIGNED_IN_TEXT, type ChatInput, type ChatOptions } from './chat';
+import { CHAT_SIGNED_OUT_TEXT } from '../../shared/openrouter-chat';
+import { ChatError, NOT_SIGNED_IN_TEXT, type ChatInput, type ChatOptions, type ChatRequest } from './chat';
+import { failedOutcome, type KeyedOutcome, type StreamOptions } from './chat-stream';
 import { OpenRouterError, type OpenRouterClient } from './client';
 import type { KeyStore } from './key-store';
 import { startCallbackServer, type CallbackServer } from './loopback';
@@ -140,6 +142,14 @@ export class OpenRouterService {
       if (error instanceof ChatError && error.code === 'unauthorized' && this.deps.store.bearer() === key) await this.keyRejected();
       throw error;
     }
+  }
+
+  async chatStream(request: ChatRequest, options: StreamOptions): Promise<KeyedOutcome> {
+    const key = this.deps.store.bearer();
+    if (key === null) return failedOutcome(CHAT_SIGNED_OUT_TEXT);
+    const outcome = await this.deps.client.chatStream(key, request, options);
+    if (outcome.unauthorized && this.deps.store.bearer() === key) await this.keyRejected();
+    return outcome;
   }
 
   models(refresh: boolean): Promise<OpenRouterModels> {

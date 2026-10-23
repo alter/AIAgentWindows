@@ -9,9 +9,10 @@ export const AGENT_ICON_FILES: Readonly<Record<AgentKind, string>> = {
   chatgpt: 'openai.svg',
   grok: 'grok.svg',
   deepseek: 'deepseek-color.svg',
+  openrouter: 'openrouter.svg',
 };
 
-export const MONO_ICON_FILES: readonly string[] = ['openai.svg', 'grok.svg'];
+export const MONO_ICON_FILES: readonly string[] = ['openai.svg', 'grok.svg', 'openrouter.svg'];
 
 export function kindIcon(kind: AgentKind): HTMLElement {
   const tile = document.createElement('span');

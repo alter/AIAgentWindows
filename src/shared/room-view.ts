@@ -1,5 +1,5 @@
 // room-view.ts
-import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
+import { AGENT_LABELS, ROOM_AGENT_KINDS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
 import { emptyRoomModels, type RoomModels } from './cli-models';
 import type { ModelItem } from './openrouter';
 import { renderCarryHistory } from './room-history';
@@ -192,7 +192,7 @@ export function addMenuOptions(
   withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER,
   openrouterSignedIn = true,
 ): AddMenuOption[] {
-  const agents = AGENT_KINDS.map((kind): AddMenuOption => {
+  const agents = ROOM_AGENT_KINDS.map((kind): AddMenuOption => {
     const note = isSiteKind(kind) ? siteNote(rows, kind, withAdapter) : '';
     return { kind, label: AGENT_LABELS[kind], available: note === '', note };
   });

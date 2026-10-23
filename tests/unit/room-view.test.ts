@@ -1,6 +1,6 @@
 // room-view.test.ts
 import { describe, expect, it } from 'vitest';
-import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
+import { AGENT_LABELS, ROOM_AGENT_KINDS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
 import type { RoomEntry, RoomEvent, RoomPlan, RoomRecord, RoomRecordConfig } from '../../src/shared/room-model';
 import type { RoomModels } from '../../src/shared/cli-models';
 import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
@@ -57,8 +57,8 @@ const PLAN: RoomPlan = {
 const STARTED: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 3, plan: PLAN };
 
 describe('room participants', () => {
-  it('offers every agent kind once, id equal to kind, with the agent label', () => {
-    expect(ROOM_PARTICIPANTS.map((item) => item.kind)).toEqual([...AGENT_KINDS]);
+  it('offers every room agent kind once, id equal to kind, with the agent label', () => {
+    expect(ROOM_PARTICIPANTS.map((item) => item.kind)).toEqual([...ROOM_AGENT_KINDS]);
     for (const item of ROOM_PARTICIPANTS) {
       expect(item.id).toBe(item.kind);
       expect(item.label).toBe(AGENT_LABELS[item.kind]);

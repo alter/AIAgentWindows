@@ -49,6 +49,13 @@ export interface ModelItem {
   efforts: string[];
 }
 
+export interface OpenRouterSettings {
+  model: string;
+  modelName?: string;
+  effort: string;
+  web: boolean;
+}
+
 export type ModelFilter = 'all' | 'free' | 'paid';
 export type ModelSort = 'name' | 'price' | 'context';
 
@@ -57,6 +64,7 @@ export const MODEL_ID_PATTERN = /^[a-z0-9._/:-]{1,200}$/;
 export const GATEWAY_EFFORTS: readonly string[] = ['max', 'xhigh', 'high', 'medium', 'low', 'minimal', 'none'];
 export const WEB_SEARCH_USD = 0.007;
 const EFFORT_SHAPE = /^[a-z]{1,16}$/;
+const CONTROL_CHARS = /[\p{Cc}\u2028\u2029]/u;
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -230,6 +238,21 @@ export function sortModels(models: readonly ModelItem[], sort: ModelSort): Model
 
 export function pickableModels(models: readonly ModelItem[]): ModelItem[] {
   return models.filter((model) => MODEL_ID_PATTERN.test(model.id));
+}
+
+export function emptyOpenRouterSettings(): OpenRouterSettings {
+  return { model: '', effort: '', web: false };
+}
+
+export function parseOpenRouterSettings(raw: unknown): OpenRouterSettings | null {
+  if (!isRecord(raw)) return null;
+  const { model, modelName, effort, web } = raw;
+  if (typeof model !== 'string' || (model !== '' && !MODEL_ID_PATTERN.test(model))) return null;
+  if (typeof effort !== 'string' || (effort !== '' && !EFFORT_SHAPE.test(effort))) return null;
+  if (typeof web !== 'boolean') return null;
+  if (modelName === undefined) return { model, effort, web };
+  if (typeof modelName !== 'string' || modelName.length < 1 || modelName.length > MAX_MODEL_FIELD_CHARS || CONTROL_CHARS.test(modelName)) return null;
+  return { model, modelName, effort, web };
 }
 
 export function effortSupported(model: ModelItem | undefined, effort: string): boolean {

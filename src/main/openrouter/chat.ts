@@ -1,6 +1,7 @@
 // chat.ts
 import { setTimeout as delay } from 'node:timers/promises';
 import { attributionHeaders } from '../../shared/openrouter';
+import { LENGTH_TEXT, MODEL_FAILED_TEXT, UNREADABLE_TEXT, errorDetail, failureText } from '../../shared/openrouter-chat';
 
 export type ChatErrorCode = 'unauthorized' | 'timeout' | 'failed';
 
@@ -22,6 +23,13 @@ export interface ChatInput {
   web: boolean;
 }
 
+export interface ChatRequest {
+  model: string;
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  effort: string | null;
+  web: boolean;
+}
+
 export interface ChatOptions {
   timeoutMs: number;
   signal: AbortSignal;
@@ -39,47 +47,54 @@ interface Answer {
 }
 
 const MAX_ANSWER_BYTES = 16 * 1024 * 1024;
-const MAX_DETAIL_CHARS = 300;
 const DEFAULT_WAIT_MS = 1000;
 const WEB_TOOL = { type: 'openrouter:web_search', parameters: { max_results: 3, max_uses: 2 } };
 
 export const NOT_SIGNED_IN_TEXT = 'OpenRouter is not signed in. Sign in, then run the room again.';
 const STOPPED_TEXT = 'The turn was stopped.';
-const UNREACHABLE_TEXT = 'OpenRouter could not be reached.';
-const UNREADABLE_TEXT = 'OpenRouter sent an answer that could not be read.';
-const LENGTH_TEXT = 'The model reached its token limit before it wrote a reply (reasoning can use all of it): lower the effort or raise the limit.';
+export const UNREACHABLE_TEXT = 'OpenRouter could not be reached.';
 const RATE_TEXT = 'OpenRouter is rate limiting this key (free models have a per-minute and a per-day cap). Try again later or pick another model.';
-const REJECTED_TEXT = 'OpenRouter no longer accepts the saved key. You are signed out: sign in again.';
+export const REJECTED_TEXT = 'OpenRouter no longer accepts the saved key. You are signed out: sign in again.';
+
+export function requestBody(request: ChatRequest, stream: boolean): Record<string, unknown> {
+  return {
+    model: request.model,
+    stream,
+    messages: request.messages,
+    ...(request.effort === null ? {} : { reasoning: { effort: request.effort } }),
+    ...(request.web ? { tools: [WEB_TOOL] } : {}),
+  };
+}
 
 export function chatBody(input: ChatInput): Record<string, unknown> {
-  return {
-    model: input.model,
-    stream: false,
-    messages: [
-      { role: 'system', content: input.system },
-      { role: 'user', content: input.user },
-    ],
-    ...(input.effort === null ? {} : { reasoning: { effort: input.effort } }),
-    ...(input.web ? { tools: [WEB_TOOL] } : {}),
-  };
+  return requestBody(
+    {
+      model: input.model,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+      effort: input.effort,
+      web: input.web,
+    },
+    false,
+  );
+}
+
+export function postHeaders(key: string, accept: string): Record<string, string> {
+  return { ...attributionHeaders(), Accept: accept, 'Content-Type': 'application/json', Authorization: `Bearer ${key}` };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseJson(text: string): unknown {
+export function parseJson(text: string): unknown {
   try {
     return JSON.parse(text) as unknown;
   } catch {
     return undefined;
   }
-}
-
-function detailOf(error: unknown): string {
-  if (!isRecord(error)) return '';
-  const message = error['message'];
-  return typeof message === 'string' ? message.trim().slice(0, MAX_DETAIL_CHARS) : '';
 }
 
 function limitSource(error: unknown): string {
@@ -89,11 +104,10 @@ function limitSource(error: unknown): string {
 }
 
 function withDetail(lead: string, error: unknown): ChatError {
-  const detail = detailOf(error);
-  return new ChatError('failed', detail === '' ? lead : `${lead}: ${detail}`);
+  return new ChatError('failed', failureText(lead, errorDetail(error)));
 }
 
-function failedStatus(status: number, value: unknown): ChatError {
+export function failedStatus(status: number, value: unknown): ChatError {
   const error = isRecord(value) ? value['error'] : undefined;
   if (status === 401) return new ChatError('unauthorized', REJECTED_TEXT);
   if (status === 402) return withDetail(`OpenRouter says the account is out of credits${limitSource(error)}. Add credits or use a free model`, error);
@@ -120,7 +134,7 @@ export function readAnswer(status: number, text: string): string | null {
   const choice = firstChoice(value);
   const error = value['error'] ?? choice?.['error'];
   if (choice === undefined || choice['finish_reason'] === 'error' || error !== undefined) {
-    throw withDetail('The model failed on the OpenRouter side', error);
+    throw withDetail(MODEL_FAILED_TEXT, error);
   }
   const content = contentOf(choice);
   if (content === null && choice['finish_reason'] === 'length') throw new ChatError('failed', LENGTH_TEXT);
@@ -144,7 +158,7 @@ async function post(deps: ChatDeps, key: string, body: string, options: ChatOpti
     const response = await (deps.fetch ?? fetch)(`${deps.base}/api/v1/chat/completions`, {
       method: 'POST',
       body,
-      headers: { ...attributionHeaders(), Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      headers: postHeaders(key, 'application/json'),
       redirect: 'error',
       signal: AbortSignal.any([options.signal, timer]),
     });

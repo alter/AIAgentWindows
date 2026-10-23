@@ -8,7 +8,8 @@ import {
   type KeyInfo,
   type ModelItem,
 } from '../../shared/openrouter';
-import { runChat, type ChatInput, type ChatOptions } from './chat';
+import { runChat, type ChatInput, type ChatOptions, type ChatRequest } from './chat';
+import { runChatStream, type KeyedOutcome, type StreamOptions } from './chat-stream';
 
 export class OpenRouterError extends Error {
   constructor(
@@ -52,6 +53,10 @@ export class OpenRouterClient {
 
   chat(key: string, input: ChatInput, options: ChatOptions): Promise<string | null> {
     return runChat({ base: this.deps.base, ...(this.deps.fetch === undefined ? {} : { fetch: this.deps.fetch }) }, key, input, options);
+  }
+
+  chatStream(key: string, request: ChatRequest, options: StreamOptions): Promise<KeyedOutcome> {
+    return runChatStream({ base: this.deps.base, ...(this.deps.fetch === undefined ? {} : { fetch: this.deps.fetch }) }, key, request, options);
   }
 
   private async send(path: string, init: { method: string; body?: string; headers: Record<string, string> }, maxBytes: number): Promise<unknown> {

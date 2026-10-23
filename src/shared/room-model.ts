@@ -1,5 +1,5 @@
 // room-model.ts
-import { AGENT_KINDS, AGENT_LABELS, isSiteKind, type AgentKind } from './agents';
+import { AGENT_KINDS, AGENT_LABELS, OPENROUTER_KIND, ROOM_AGENT_KINDS, isSiteKind, type AgentKind } from './agents';
 import { MODEL_ID_PATTERN, isFreeModel } from './openrouter';
 
 export const MIN_ROUNDS = 1;
@@ -25,9 +25,8 @@ const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const PARTICIPANT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 export const MODEL_PATTERN = /^[A-Za-z0-9._:[\]-]{1,64}$/;
 export const EFFORT_PATTERN = /^[a-z]{1,16}$/;
-export const OPENROUTER_KIND = 'openrouter';
+export { OPENROUTER_KIND };
 export const MAX_MODEL_NAME_CHARS = 200;
-const OPENROUTER_LABEL = 'OpenRouter';
 const LABEL_NAME_CHARS = 80;
 const ENTRY_KINDS: readonly RoomEntryKind[] = ['prompt', 'reply', 'final', 'error'];
 const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stopped', 'failed'];
@@ -35,7 +34,7 @@ const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stoppe
 export type RoomMode = 'broadcast' | 'relay';
 export type RoomEntryKind = 'prompt' | 'reply' | 'final' | 'error';
 
-export type RoomKind = AgentKind | typeof OPENROUTER_KIND;
+export type RoomKind = AgentKind;
 
 export interface RoomParticipant {
   id: string;
@@ -112,14 +111,14 @@ export type RoomEvent =
   | { type: 'entry'; roomId: string; entry: RoomEntry }
   | { type: 'finished'; roomId: string; status: RoomStatus };
 
-export const ROOM_PARTICIPANTS: readonly (RoomParticipant & { kind: AgentKind })[] = AGENT_KINDS.map((kind) => ({
+export const ROOM_PARTICIPANTS: readonly (RoomParticipant & { kind: AgentKind })[] = ROOM_AGENT_KINDS.map((kind) => ({
   id: kind,
   kind,
   label: AGENT_LABELS[kind],
 }));
 
 export function kindLabel(kind: RoomKind): string {
-  return kind === OPENROUTER_KIND ? OPENROUTER_LABEL : AGENT_LABELS[kind];
+  return AGENT_LABELS[kind];
 }
 
 function shortName(text: string): string {
@@ -185,7 +184,7 @@ function isBoundedString(value: unknown, max: number): value is string {
 }
 
 function isRoomKind(value: unknown): value is RoomKind {
-  return typeof value === 'string' && (value === OPENROUTER_KIND || (AGENT_KINDS as readonly string[]).includes(value));
+  return typeof value === 'string' && (AGENT_KINDS as readonly string[]).includes(value);
 }
 
 function parseShaped(value: unknown, pattern: RegExp): string | null | undefined {

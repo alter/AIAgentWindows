@@ -2,6 +2,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 
 export const FAKE_MODEL_MARKUP = '<img src=x onerror="window.__pwned=1">Evil <b>bold</b>';
 
@@ -20,11 +21,42 @@ export interface ChatCall {
   headers: Record<string, string | string[] | undefined>;
 }
 
+export interface StreamScript {
+  parts: string[];
+  delayMs?: number;
+  hold?: boolean;
+}
+
 export interface ChatScript {
   status?: number;
   headers?: Record<string, string>;
   body?: unknown;
   hang?: boolean;
+  stream?: StreamScript;
+}
+
+export const SSE_COMMENT = ': OPENROUTER PROCESSING\n\n';
+
+export function sseData(value: unknown): string {
+  return `data: ${JSON.stringify(value)}\n\n`;
+}
+
+export function sseDelta(text: string): string {
+  return sseData({ choices: [{ index: 0, delta: { role: 'assistant', content: text }, finish_reason: null }] });
+}
+
+export function sseTail(promptTokens: number, completionTokens: number): string[] {
+  return [
+    sseData({ choices: [{ index: 0, delta: { content: '' }, finish_reason: 'stop' }] }),
+    sseData({ choices: [{ index: 0, delta: { content: '' }, finish_reason: 'stop' }], usage: { prompt_tokens: promptTokens, completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens } }),
+    'data: [DONE]\n\n',
+  ];
+}
+
+function defaultStream(call: ChatCall): string[] {
+  const model = call.body?.model ?? 'unknown';
+  const second = sseDelta(`${model} number ${call.n}`);
+  return [SSE_COMMENT, sseDelta('Reply from '), SSE_COMMENT, second.slice(0, 12), second.slice(12), ...sseTail(10, 5)];
 }
 
 export interface FakeOpenRouter {
@@ -144,9 +176,27 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     json(response, 200, { key: fake.key, user_id: 'user_fake' });
   };
 
+  const finished = new WeakSet<http.ServerResponse>();
+
+  const streamReply = async (parts: string[], delayMs: number, hold: boolean, response: http.ServerResponse): Promise<void> => {
+    response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+    for (const [index, part] of parts.entries()) {
+      if (response.destroyed) return;
+      const last = index === parts.length - 1 && !hold;
+      if (last) finished.add(response);
+      response.write(part);
+      if (!last) await delay(delayMs);
+    }
+    if (!hold) response.end();
+  };
+
   const chatReply = (call: ChatCall, response: http.ServerResponse): void => {
     const script = fake.chat(call);
     if (script?.hang === true) return;
+    if (call.body?.stream === true && script?.status === undefined && script?.body === undefined) {
+      void streamReply(script?.stream?.parts ?? defaultStream(call), script?.stream?.delayMs ?? 5, script?.stream?.hold === true, response);
+      return;
+    }
     const model = call.body?.model ?? 'unknown';
     const fallback = {
       id: `gen-${call.n}`,
@@ -163,7 +213,7 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     const call: ChatCall = { n: fake.chatCalls.length + 1, body: parseBody(body), headers: request.headers };
     fake.chatCalls.push(call);
     response.on('close', () => {
-      if (!response.writableFinished) fake.chatClosed += 1;
+      if (!response.writableFinished && !finished.has(response)) fake.chatClosed += 1;
     });
     if (fake.revoked || request.headers.authorization !== `Bearer ${fake.key}`) {
       json(response, 401, { error: { message: 'No cookie auth credentials found', code: 401 } });

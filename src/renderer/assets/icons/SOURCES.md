@@ -11,4 +11,5 @@ The MIT licence covers these files, not the brands' trademarks: OpenAI, ChatGPT,
 | openai.svg | ChatGPT | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openai.svg |
 | grok.svg | Grok | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/grok.svg |
 | deepseek-color.svg | DeepSeek | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/deepseek-color.svg |
-| openrouter-color.svg | OpenRouter (not shown yet) | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openrouter-color.svg |
+| openrouter.svg | OpenRouter (mono mark, black on the light palette and inverted to white on the dark one) | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openrouter.svg |
+| openrouter-color.svg | OpenRouter colour variant (kept, not shown: its #C8FF00 fill is for dark backgrounds) | https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openrouter-color.svg |

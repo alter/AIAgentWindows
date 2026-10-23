@@ -296,4 +296,42 @@ describe('theme channels', () => {
       expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
     }
   });
+
+  describe('openrouter chat channels', () => {
+    const UUID = '0b9a5d6e-3f43-4c1b-9d57-1f6b7a2c8e10';
+
+    it('take the id of an agent as a UUID only', () => {
+      for (const channel of [INVOKE_CHANNELS.openrouterChatLoad, INVOKE_CHANNELS.openrouterChatStop]) {
+        expect(validateRequest(channel, { id: UUID })).toEqual({ ok: true, value: { id: UUID } });
+        for (const payload of [undefined, null, {}, { id: 'a1' }, { id: '../x' }, { id: 5 }]) expect(validateRequest(channel, payload).ok).toBe(false);
+      }
+    });
+
+    it('send takes a message of 1 to 100000 characters', () => {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterChatSend, { id: UUID, text: 'hi' })).toEqual({ ok: true, value: { id: UUID, text: 'hi' } });
+      expect(validateRequest(INVOKE_CHANNELS.openrouterChatSend, { id: UUID, text: 'a'.repeat(100000) }).ok).toBe(true);
+      for (const payload of [{ id: UUID }, { id: UUID, text: '' }, { id: UUID, text: 5 }, { id: UUID, text: 'a'.repeat(100001) }, { id: 'a1', text: 'hi' }]) {
+        expect(validateRequest(INVOKE_CHANNELS.openrouterChatSend, payload).ok).toBe(false);
+      }
+    });
+
+    it('copy takes an entry index in range', () => {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterChatCopy, { id: UUID, index: 3 })).toEqual({ ok: true, value: { id: UUID, index: 3 } });
+      for (const payload of [{ id: UUID }, { id: UUID, index: -1 }, { id: UUID, index: 1.5 }, { id: UUID, index: 2000 }, { id: UUID, index: '1' }]) {
+        expect(validateRequest(INVOKE_CHANNELS.openrouterChatCopy, payload).ok).toBe(false);
+      }
+    });
+
+    it('settings take the model, effort and web flag of the agent', () => {
+      const settings = { model: 'acme/m', effort: 'low', web: true };
+      expect(validateRequest(INVOKE_CHANNELS.openrouterSettings, { id: UUID, settings })).toEqual({ ok: true, value: { id: UUID, settings } });
+      for (const payload of [{ id: UUID }, { id: UUID, settings: { model: 'Bad Model', effort: '', web: false } }, { id: 'a1', settings }]) {
+        expect(validateRequest(INVOKE_CHANNELS.openrouterSettings, payload).ok).toBe(false);
+      }
+    });
+
+    it('the delta channel is an event channel', () => {
+      expect(isEventChannel(EVENT_CHANNELS.openrouterChatDelta)).toBe(true);
+    });
+  });
 });

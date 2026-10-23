@@ -14,6 +14,7 @@ const PINNED_SHA256: Readonly<Record<string, string>> = {
   'openai.svg': 'a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186',
   'grok.svg': '9175fc90c22655160231976c849f25a03b888d7cc0e04c5f1b987b659bb07c95',
   'deepseek-color.svg': 'deba5f98a5c1796e20fcac3149bcd7eb8a32f0bdd04d048819400b1f28bd1439',
+  'openrouter.svg': 'ae671cc83de9bd45db97a47ed5e38a4e1bd9f93a12be495ba4b4f8b284026bca',
   'openrouter-color.svg': '17bede1b89166f824ee06753dc526a3f5e18b769706deaab09d04a3a98de1a78',
 };
 
@@ -43,7 +44,7 @@ describe('agent icon map', () => {
   });
 
   it('marks only the single-colour logos, which follow the palette', () => {
-    expect([...MONO_ICON_FILES].sort()).toEqual(['grok.svg', 'openai.svg']);
+    expect([...MONO_ICON_FILES].sort()).toEqual(['grok.svg', 'openai.svg', 'openrouter.svg']);
     for (const file of MONO_ICON_FILES) expect(readFileSync(path.join(ICONS, file), 'utf8')).toContain('fill="currentColor"');
     for (const kind of AGENT_KINDS) {
       const file = AGENT_ICON_FILES[kind];
