@@ -1,0 +1,59 @@
+TASK: sidebar palette — the left panel takes the same light and dark palette as the content, chosen by APCA
+
+GOAL
+  The sidebar stops being a fixed aubergine panel and follows the same two
+  palettes as the right side (light and dark, by the theme switch); every
+  background and text colour of it is chosen against APCA Bronze levels and
+  the project's no-same-hue rule, and held by the contrast gate. Owner's
+  request of 2026-10-23 ("давай и левую часть по цветам сделаем как и правую?
+  для выбора цветов фона и шрифта учитывай рекомендацию APCA"). Serves no gate.
+
+CONTEXT
+  docs/tech/apca-w3@0.1.9.md (Bronze levels: body Lc 75 min / 90 preferred, other text Lc 60, non-text project rule Lc 45)
+  src/renderer/styles.css (tokens; sidebar rules use --aubergine*, --on-fill, --glyph-*, --focus-sidebar)
+  src/renderer/contrast-pairs.json
+  scripts/contrast_check.py
+  tests/full/design-contrast.spec.ts
+  tasks/10-app-shell/05-design-contrast/PLAN.md (palette rules and decisions)
+
+SCOPE
+  + S1 a sidebar background token in both palettes, a neighbour of the content background (not the same value), with a 1px border token line between sidebar and content; sidebar text uses --text
+  + S2 sidebar states from the shared tokens: hover --hover-bg, selected --info-bg plus bold weight (not colour alone), focus ring --focus; the "+" buttons and the rename/confirm controls use the same button tokens as the content; --aubergine*, --glyph-*, --focus-sidebar removed when unused
+  + S3 every sidebar text pair reaches Lc 90 (APCA Bronze preferred level for body text) and WCAG 4.5:1 in both palettes; non-text pairs (arrows, "+" outline, radio borders, focus ring) Lc 45 and 3:1; no pair is two shades of one hue; all pairs listed in contrast-pairs.json at the level that holds them
+  + S4 agent kind tiles keep their kind colours with the white glyph (non-text pairs unchanged)
+  − the content (right side) palette — 10-app-shell/05-design-contrast, unchanged unless a shared token must move to keep S3, then the move is recorded in NOTES.md with both Lc values
+  − the window title bar — not requested
+  indivisible: one stylesheet's sidebar rules and their contrast pairs change together
+
+WRITE-SET
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  scripts/contrast_check.py
+  tests/scripts/
+  tests/full/design-contrast.spec.ts
+  docs/PROJECT.md
+  tasks/10-app-shell/12-sidebar-palette/
+
+DATA
+  (none)
+
+SECURITY
+  (no sinks)
+
+OUTCOME
+  `python3 scripts/contrast_check.py` exits 0 with every sidebar pair listed
+  at Lc 90 for text, and a smoke run finds the sidebar background equal to its
+  token and different between the light and dark schemes; every task of
+  tasks/10-app-shell/12-sidebar-palette/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0, contrast_check 0 findings
+  2. [fast] reverse control: set the sidebar text token to a grey of the sidebar's hue → tests/scripts/test_contrast_check.py::test_real_pairs_pass goes red, or contrast_check exits 1 with a path:line finding (output in NOTES.md)
+  3. [full] electron-smoke: `the sidebar background follows the colour scheme` — with emulateMedia light then dark the sidebar background equals the --sidebar-bg token and differs between the schemes; the sidebar text colour equals --text
+  4. [fast] HUMAN: the owner looks at the sidebar in both themes
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/11-theme-switch
