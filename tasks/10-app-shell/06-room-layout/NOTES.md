@@ -49,3 +49,12 @@ undefined
 With the change restored: 4 passed.
 
 Out-of-list edits (small, needed by T01): src/main/room.ts and src/main/room-archive.ts (the record write and the list item live there, not in room-service), tests/unit/room-archive.test.ts (one `toEqual` gained `title`). tests/integration/room-archive.test.ts is new.
+
+## Coordinator reverse control for T01's validation tests (2026-10-23)
+The T01 unit tests were written after the code. Mutation in place (copy kept in .claude/scratch, restored): `parseRoomTitle` without the control-character check and without the 80-character bound. COMMAND `npx vitest run tests/unit/room-model.test.ts tests/unit/ipc-validate.test.ts` → exit 1, 3 failed / 60 passed:
+```
+× refuses a record whose title is empty, over 80 characters, has a control character or is not a string
+× validates a title on its own
+× room rename rejects a malformed id or title
+```
+Restored: room-model + ipc-validate + integration room-archive 67/67.

@@ -48,3 +48,4 @@ As tasks/10-app-shell/05-design-contrast/PLAN.md; palette tokens and the contras
 ## Log
 - 2026-10-23 coordinator: T00 baseline = 05-design-contrast T05 verification run on c56b372 (fast tier 12 commands exit 0, coverage 920/920 100 %, electron-smoke 38/38)
 - 2026-10-23 T01 done: `title?` on RoomRecord (parseRoomTitle, roomTitle), list item carries title, RoomService.rename via Room.retitle / atomic write, room:rename validated through ipc/preload/handlers; AC2 command exit 0, reverse control red in NOTES.md; fast tier 12 commands exit 0 (coverage 100 %), electron-smoke 38/38
+- 2026-10-23 coordinator: T01 verified (fast tier 12 commands exit 0 with coverage 931/931 100 %, electron-smoke 38/38 — this run); tests were written after the code, so the coordinator ran a reverse control on title validation (3 tests red, NOTES.md); AC2 reverse control (title dropped from the record write) by the worker in NOTES.md
