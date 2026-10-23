@@ -22,6 +22,8 @@
   {"fg": "--on-fill", "bg": "--kind-chatgpt", "use": "non-text"},
   {"fg": "--on-fill", "bg": "--kind-grok", "use": "non-text"},
   {"fg": "--on-fill", "bg": "--kind-deepseek", "use": "non-text"},
+  {"fg": "--text", "bg": "--input-bg", "use": "non-text"},
+  {"fg": "--input-bg", "bg": "--text", "use": "non-text"},
   {"fg": "--text", "bg": "--surface", "use": "non-text"},
   {"fg": "--text", "bg": "--info-bg", "use": "non-text"},
   {"fg": "--text", "bg": "--ok-bg", "use": "non-text"},

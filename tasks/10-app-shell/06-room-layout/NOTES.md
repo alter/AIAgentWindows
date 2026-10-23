@@ -94,3 +94,17 @@ Smoke: new tests in tests/full/room-layout.spec.ts (three rows reordered with th
 Decisions: the table starts with the Claude Code and Codex rows (the old checkboxes started unticked); every row takes part, there is no ticked state; a row has no checkbox. When a moved row reaches an end its pressed arrow is disabled, so the focus goes to the other arrow of the same row. After Add the focus returns to the Add participant button.
 
 Checks: fast tier 12 commands exit 0 (coverage 100.00 %, 943 tests); `npm run -s build` then electron-smoke 44/44.
+
+## 2026-10-23 T03b native controls on the palette
+
+Design (src/renderer/styles.css): radios and checkboxes are `appearance: none`, 24x24, border 2px `--border`, background `--input-bg`; checked is drawn by `::before` in `--text` — an inner dot in the radio, a check mark (rotated L) in the checkbox — so the checked state differs by shape, not by colour; disabled is a dashed border like the other controls; `:focus-visible` uses the global `--focus` ring. `::placeholder` is `color: var(--text)`, `opacity: 1`, italic. Manifest: added `--text` on `--input-bg` (non-text) and `--input-bg` on `--text` (non-text, the dot is drawn with `--text` as a background, which the gate wants covered); `--border` and `--focus` on `--input-bg` already existed.
+
+Smoke: `a final radio and the debug checkbox toggle by click and by Space` in tests/full/room-layout.spec.ts (outcome: checked/not checked of the Final radios and of `debug-sites`).
+
+Reverse control (scratch edit, restored afterwards): `pointer-events: none` on the control rule, `npm run -s build`, `npx playwright test --project=electron-smoke tests/full/room-layout.spec.ts -g "toggle by click" --timeout 15000` -> red:
+```
+✘  1 [electron-smoke] › tests/full/room-layout.spec.ts:268:5 › a final radio and the debug checkbox toggle by click and by Space (15.0s)
+    Test timeout of 15000ms exceeded.
+  1 failed
+```
+Green without it: `1 passed`.

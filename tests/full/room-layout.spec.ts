@@ -264,3 +264,33 @@ test('a table is read as a table: headers with scope, buttons named after the ro
     await app.close();
   }
 });
+
+test('a final radio and the debug checkbox toggle by click and by Space', async () => {
+  const base = newBase();
+  const { app, page } = await launch(base);
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    const finalRadio = (id: string): Locator => tableRow(page, id).locator('[data-row-field="final"]');
+    await expect(finalRadio('claude')).toBeChecked();
+    await finalRadio('codex').click();
+    await expect(finalRadio('codex')).toBeChecked();
+    await expect(finalRadio('claude')).not.toBeChecked();
+    await finalRadio('claude').focus();
+    await page.keyboard.press('Space');
+    await expect(finalRadio('claude')).toBeChecked();
+    await expect(finalRadio('codex')).not.toBeChecked();
+
+    const debug = field(page, 'debug-sites');
+    await expect(debug).not.toBeChecked();
+    await debug.click();
+    await expect(debug).toBeChecked();
+    await debug.focus();
+    await page.keyboard.press('Space');
+    await expect(debug).not.toBeChecked();
+    await page.keyboard.press('Space');
+    await expect(debug).toBeChecked();
+  } finally {
+    await app.close();
+  }
+});

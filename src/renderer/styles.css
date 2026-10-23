@@ -84,6 +84,29 @@ select:disabled, input[type="text"]:disabled, input[type="number"]:disabled, .ro
   background: transparent;
 }
 
+::placeholder { color: var(--text); opacity: 1; font-style: italic; }
+
+input[type="radio"], input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  border: 2px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text);
+  cursor: pointer;
+}
+input[type="radio"] { border-radius: 50%; }
+input[type="checkbox"] { border-radius: 4px; }
+input[type="radio"]::before, input[type="checkbox"]::before { content: ""; position: absolute; display: none; }
+input[type="radio"]::before { inset: 4px; border-radius: 50%; background: var(--text); }
+input[type="checkbox"]::before { left: 6px; top: 1px; width: 6px; height: 12px; border: solid var(--text); border-width: 0 3px 3px 0; transform: rotate(45deg); }
+input[type="radio"]:checked::before, input[type="checkbox"]:checked::before { display: block; }
+input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: dashed; background: transparent; cursor: default; }
+
 #app { display: flex; height: 100vh; }
 
 .sidebar {
@@ -418,7 +441,6 @@ select:disabled, input[type="text"]:disabled, input[type="number"]:disabled, .ro
 .room-table-number { width: 2.5em; text-align: right; }
 .room-table input[type="text"], .room-table select { min-height: 24px; padding: 3px 6px; font-size: 13px; }
 .room-table input[type="text"] { width: 100%; min-width: 120px; }
-.room-table input[type="radio"] { width: 24px; height: 24px; margin: 0; }
 .room-table-actions { white-space: nowrap; }
 .room-table-action {
   min-width: 28px;
