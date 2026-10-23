@@ -104,7 +104,21 @@ input[type="checkbox"]::before { left: 6px; top: 1px; width: 6px; height: 12px; 
 input[type="radio"]:checked::before, input[type="checkbox"]:checked::before { display: block; }
 input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: dashed; background: transparent; cursor: default; }
 
-#app { display: flex; height: 100vh; }
+#app { position: relative; display: flex; height: 100vh; }
+
+.sidebar-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--sidebar-width) - 6px);
+  width: 6px;
+  z-index: 40;
+  cursor: col-resize;
+  touch-action: none;
+  border-right: 1px solid var(--border);
+}
+.sidebar-divider.dragging { border-right-color: var(--focus); }
+.sidebar-divider:focus-visible { outline-offset: -2px; }
 
 .sidebar {
   position: relative;

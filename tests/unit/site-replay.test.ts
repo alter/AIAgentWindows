@@ -25,7 +25,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.useRealTimers();
-  await rm(root, { recursive: true, force: true });
+  await rm(root, { recursive: true, force: true, maxRetries: 3 });
 });
 
 async function recordOn(runner: PageRunner, prompt: string, turn: string): Promise<{ dir: string; reply: string | null }> {

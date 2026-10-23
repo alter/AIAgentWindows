@@ -5,6 +5,7 @@ import { AGENT_LABELS, isCliKind, isSiteKind, removeAgent, type Agent, type Agen
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
+import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice, type ThemeChoice } from '../shared/theme';
 import { OutputBuffer } from '../shared/output-buffer';
 import { claimForAgents, restoreSpawn } from '../shared/restore';
@@ -22,6 +23,7 @@ export interface ControllerDeps {
   emit(channel: EventChannel, payload: unknown): void;
   siteNav?(id: string, action: SiteAction): void;
   showSite?(agent: Agent | null): void;
+  layoutSidebar?(width: number): void;
   closeSite?(id: string): void;
   listRollouts?(sinceMs: number): Promise<Rollout[]>;
 }
@@ -31,6 +33,7 @@ export class AgentController {
   private selectedId: string | null;
   private roomOpen = false;
   private themeChoice: ThemeChoice;
+  private sidebar: number;
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
   private readonly spawnedAt = new Map<string, number>();
@@ -41,6 +44,7 @@ export class AgentController {
     this.agents = [...initial.agents];
     this.selectedId = this.agents[0]?.id ?? null;
     this.themeChoice = parseThemeChoice(initial.theme);
+    this.sidebar = parseSidebarWidth(initial.sidebarWidth);
     this.pty = new PtyManager({
       onData: (id, data) => {
         if (!this.closed.has(id)) this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) });
@@ -59,6 +63,16 @@ export class AgentController {
 
   async setTheme(choice: ThemeChoice): Promise<void> {
     this.themeChoice = choice;
+    await this.persist();
+  }
+
+  sidebarWidth(): number {
+    return this.sidebar;
+  }
+
+  async setSidebarWidth(width: number): Promise<void> {
+    this.sidebar = width;
+    this.deps.layoutSidebar?.(width);
     await this.persist();
   }
 
@@ -232,7 +246,7 @@ export class AgentController {
   private persist(): Promise<void> {
     const run = async (): Promise<void> => {
       await this.claimSessions();
-      const state: AppState = { version: 1, agents: this.agents, theme: this.themeChoice };
+      const state: AppState = { version: 1, agents: this.agents, theme: this.themeChoice, sidebarWidth: this.sidebar };
       await saveState(this.deps.stateFile, state);
     };
     this.saving = this.saving.then(run, run);

@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Sidebar resize — a draggable divider, width kept
@@ -8,9 +8,9 @@ created: 2026-10-23
 Owner, 2026-10-23: "разделитель между левой панелью с агентами и правой с полем где происходит работа статический, а хотелось бы его двигать уметь".
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
-- [ ] AC2 Rules: `npx vitest run tests/unit/site-layout.test.ts tests/unit/ipc-validate.test.ts tests/unit/state-file.test.ts` exit 0 — siteBounds(width), clamp (min 180, max min(600, 50 % of window)), stored width parse (missing / out of range → 260), IPC `layout:sidebar` accepts only an integer in range; tests seen red first
-- [ ] AC3 Smoke: electron-smoke exit 0 — `the divider moves by drag and keys and the width survives a restart` in tests/full/sidebar-resize.spec.ts: drag by mouse, ArrowRight/ArrowLeft/Home/End by keyboard, sidebar width and a site view's bounds.x (main-process evaluate) equal the new width, restart keeps it; reverse control (width argument dropped from siteBounds in site-views) turns it red, output in NOTES.md — windows hidden
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [x] AC2 Rules: `npx vitest run tests/unit/site-layout.test.ts tests/unit/ipc-validate.test.ts tests/unit/state-file.test.ts` exit 0 — siteBounds(width), clamp (min 180, max min(600, 50 % of window)), stored width parse (missing / out of range → 260), IPC `layout:sidebar` accepts only an integer in range; tests seen red first
+- [x] AC3 Smoke: electron-smoke exit 0 — `the divider moves by drag and keys and the width survives a restart` in tests/full/sidebar-resize.spec.ts: drag by mouse, ArrowRight/ArrowLeft/Home/End by keyboard, sidebar width and a site view's bounds.x (main-process evaluate) equal the new width, restart keeps it; reverse control (width argument dropped from siteBounds in site-views) turns it red, output in NOTES.md — windows hidden
 - [ ] AC4 HUMAN (excluded from /run): the owner drags the divider with a site open
 
 ## Stack
@@ -32,8 +32,12 @@ As tasks/10-app-shell/06-room-layout/PLAN.md. No new dependency.
 
 ## Tasks
 - [x] T00 Baseline: the coordinator's verified run on aed0565 (12-sidebar-palette + 09 T03) is this plan's baseline — verify: the Log line exists
-- [ ] T01 Resize (S1–S4): siteBounds(width, ...) and clamp in src/shared/site-layout.ts, red first; `layout:sidebar` validated IPC; site-views relayout on width; width in agents.json via AgentController; `src/renderer/sidebar-resizer.ts` separator with pointer and keyboard; smoke tests/full/sidebar-resize.spec.ts with restart and reverse control — verify: AC2 command + fast tier + electron-smoke
-- [ ] T02 Ledger and notes: docs/PROJECT.md shell row (resizable sidebar); NOTES.md summary; labels `status:review` when AC1–AC3 are [x] — verify: `python3 tasks/check.py` no new problem (baseline 7) + fast tier
+- [x] T01 Resize (S1–S4): siteBounds(width, ...) and clamp in src/shared/site-layout.ts, red first; `layout:sidebar` validated IPC; site-views relayout on width; width in agents.json via AgentController; `src/renderer/sidebar-resizer.ts` separator with pointer and keyboard; smoke tests/full/sidebar-resize.spec.ts with restart and reverse control — verify: AC2 command + fast tier + electron-smoke
+- [x] T02 Ledger and notes: docs/PROJECT.md shell row (resizable sidebar); NOTES.md summary; labels `status:review` when AC1–AC3 are [x] — verify: `python3 tasks/check.py` no new problem (baseline 7) + fast tier
 
 ## Log
 - 2026-10-23 coordinator: T00 baseline = verification run on aed0565 (fast tier 12 commands exit 0, contrast_check 0 findings, vitest 976/976, coverage 100.00 %, electron-smoke 52/52); tasks/check.py baseline 7 problems
+- 2026-10-23 T01 done: draggable/keyboard separator, `layout:get`/`layout:sidebar` IPC, sidebarWidth in agents.json, site views follow; AC2 48/48 (was 16 red first), vitest 991/991, coverage 100.00 %, fast tier 12 exit 0, electron-smoke 53/53 (new spec 1), reverse control red (NOTES.md)
+- 2026-10-23 coordinator: first gate run red only on tests/unit/site-replay.test.ts afterEach `rm` ENOTEMPTY (macOS recursive rm race, seen once before by the 09 worker); teardown of site-replay/site-recorder tests now `rm(..., { maxRetries: 3 })` (docs/tech/node@22.20.5.md); not reproducible red on demand
+- 2026-10-23 coordinator: T01 verified (diff reviewed; fast tier 12 exit 0, vitest 991/991, coverage 100.00 %, electron-smoke 53/53) — this run
+- 2026-10-23 T02 done: ledger row "Slack-like shell" extended, NOTES summary, labels status:review; tasks/check.py 7 problems (baseline); paused on AC4 HUMAN

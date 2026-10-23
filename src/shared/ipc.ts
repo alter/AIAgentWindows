@@ -3,6 +3,7 @@ import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
+import { isSidebarWidth } from './site-layout';
 import { isThemeChoice, type ThemeChoice } from './theme';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
 
@@ -33,6 +34,8 @@ export const INVOKE_CHANNELS = {
   roomTerminalResize: 'room:terminal-resize',
   themeGet: 'theme:get',
   themeSet: 'theme:set',
+  layoutGet: 'layout:get',
+  layoutSidebar: 'layout:sidebar',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -110,6 +113,8 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomTerminalResize]: { id: string; cols: number; rows: number };
   [INVOKE_CHANNELS.themeGet]: undefined;
   [INVOKE_CHANNELS.themeSet]: { choice: ThemeChoice };
+  [INVOKE_CHANNELS.layoutGet]: undefined;
+  [INVOKE_CHANNELS.layoutSidebar]: { width: number };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -145,6 +150,8 @@ export interface AppApi {
   roomTerminalResize(id: string, cols: number, rows: number): Promise<void>;
   themeGet(): Promise<ThemeChoice>;
   themeSet(choice: ThemeChoice): Promise<void>;
+  layoutGet(): Promise<number>;
+  layoutSidebar(width: number): Promise<void>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
@@ -254,6 +261,12 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
     if (!isRecord(payload)) return null;
     const choice = payload['choice'];
     return isThemeChoice(choice) ? { choice } : null;
+  },
+  [INVOKE_CHANNELS.layoutGet]: noPayload,
+  [INVOKE_CHANNELS.layoutSidebar]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const width = payload['width'];
+    return isSidebarWidth(width) ? { width } : null;
   },
 };
 

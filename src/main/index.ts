@@ -3,6 +3,7 @@ import { app, BrowserWindow, clipboard, dialog, nativeTheme } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice } from '../shared/theme';
 import { applyRenderSwitches } from '../shared/render-switches';
 import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
@@ -85,6 +86,7 @@ async function start(): Promise<void> {
     if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.siteState, event);
   }, process.env, siteLog);
   sites = siteViews;
+  siteViews.setSidebarWidth(parseSidebarWidth(state.sidebarWidth));
   controller = new AgentController(
     {
       stateFile: path.join(userData, 'agents.json'),
@@ -97,6 +99,7 @@ async function start(): Promise<void> {
       },
       siteNav: (id, action) => siteViews.navigate(id, action),
       showSite: (agent) => siteViews.show(agent),
+      layoutSidebar: (width) => siteViews.setSidebarWidth(width),
       closeSite: (id) => siteViews.close(id),
       listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
     },

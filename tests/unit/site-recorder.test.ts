@@ -76,7 +76,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true });
+  await rm(root, { recursive: true, force: true, maxRetries: 3 });
 });
 
 function request(debugSites: boolean, overrides: Partial<TurnRequest> = {}): TurnRequest {

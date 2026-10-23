@@ -1,4 +1,5 @@
 // agents.ts
+import { parseSidebarWidth } from './site-layout';
 import { parseThemeChoice, type ThemeChoice } from './theme';
 export const AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
 export type AgentKind = (typeof AGENT_KINDS)[number];
@@ -34,6 +35,7 @@ export interface AppState {
   version: 1;
   agents: Agent[];
   theme?: ThemeChoice;
+  sidebarWidth?: number;
 }
 
 export const STATE_VERSION = 1;
@@ -124,7 +126,8 @@ export function parseState(text: string): AppState {
     seen.add(agent.id);
     agents.push(agent);
   }
-  return raw['theme'] === undefined
-    ? { version: STATE_VERSION, agents }
-    : { version: STATE_VERSION, agents, theme: parseThemeChoice(raw['theme']) };
+  const state: AppState = { version: STATE_VERSION, agents };
+  if (raw['theme'] !== undefined) state.theme = parseThemeChoice(raw['theme']);
+  if (raw['sidebarWidth'] !== undefined) state.sidebarWidth = parseSidebarWidth(raw['sidebarWidth']);
+  return state;
 }

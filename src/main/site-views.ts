@@ -2,7 +2,7 @@
 import { BrowserWindow, session, WebContentsView, type WebContents } from 'electron';
 import { isSiteKind, type Agent, type SiteKind } from '../shared/agents';
 import type { SiteAction, SiteStateEvent } from '../shared/ipc';
-import { siteBounds, type Bounds } from '../shared/site-layout';
+import { clampSidebarWidth, SIDEBAR_WIDTH, siteBounds, type Bounds } from '../shared/site-layout';
 import { windowsVisible } from '../shared/window-visibility';
 import {
   originOf,
@@ -29,6 +29,7 @@ export class SiteViews {
   private readonly entries = new Map<string, SiteEntry>();
   private visibleId: string | null = null;
   private parking: BrowserWindow | null = null;
+  private sidebarWidth = SIDEBAR_WIDTH;
 
   constructor(
     private readonly window: BrowserWindow,
@@ -38,6 +39,11 @@ export class SiteViews {
   ) {
     window.on('resize', () => this.layout());
     window.on('closed', () => this.destroyParking());
+  }
+
+  setSidebarWidth(width: number): void {
+    this.sidebarWidth = width;
+    this.layout();
   }
 
   show(agent: Agent | null): void {
@@ -231,7 +237,7 @@ export class SiteViews {
 
   private bounds(): Bounds {
     const [width, height] = this.window.getContentSize();
-    return siteBounds(width ?? 0, height ?? 0);
+    return siteBounds(clampSidebarWidth(this.sidebarWidth, width ?? 0), width ?? 0, height ?? 0);
   }
 
   private layout(): void {

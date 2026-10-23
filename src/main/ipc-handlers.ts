@@ -43,6 +43,8 @@ function buildHandlers(controller: AgentController, room: RoomService): Handlers
       nativeTheme.themeSource = choice;
       await controller.setTheme(choice);
     },
+    [INVOKE_CHANNELS.layoutGet]: () => controller.sidebarWidth(),
+    [INVOKE_CHANNELS.layoutSidebar]: ({ width }) => controller.setSidebarWidth(width),
   };
 }
 

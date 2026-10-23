@@ -202,6 +202,25 @@ describe('room channels', () => {
   });
 });
 
+describe('layout channels', () => {
+  it('layout sidebar accepts only an integer width in range', () => {
+    for (const width of [180, 260, 599, 600]) {
+      expect(validateRequest(INVOKE_CHANNELS.layoutSidebar, { width })).toEqual({ ok: true, value: { width } });
+    }
+    for (const width of [179, 601, 0, -260, 260.5, Number.NaN, Infinity, '260', null, undefined, [260], {}]) {
+      expect(validateRequest(INVOKE_CHANNELS.layoutSidebar, { width }).ok).toBe(false);
+    }
+    for (const payload of [undefined, null, 260, '260', [260], {}]) {
+      expect(validateRequest(INVOKE_CHANNELS.layoutSidebar, payload).ok).toBe(false);
+    }
+  });
+
+  it('layout get takes no payload', () => {
+    expect(validateRequest(INVOKE_CHANNELS.layoutGet, undefined).ok).toBe(true);
+    expect(validateRequest(INVOKE_CHANNELS.layoutGet, { x: 1 }).ok).toBe(false);
+  });
+});
+
 describe('theme channels', () => {
   it('theme set accepts only system, light or dark', () => {
     for (const choice of ['system', 'light', 'dark']) {

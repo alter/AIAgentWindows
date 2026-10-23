@@ -17,6 +17,7 @@ let controller: AgentController;
 let siteNav: Mock<NonNullable<ControllerDeps['siteNav']>>;
 let showSite: Mock<NonNullable<ControllerDeps['showSite']>>;
 let closeSite: Mock<NonNullable<ControllerDeps['closeSite']>>;
+let layoutSidebar: Mock<NonNullable<ControllerDeps['layoutSidebar']>>;
 
 function build(): AgentController {
   const deps: ControllerDeps = {
@@ -29,6 +30,7 @@ function build(): AgentController {
     siteNav,
     showSite,
     closeSite,
+    layoutSidebar,
   };
   return new AgentController(deps, emptyState());
 }
@@ -54,6 +56,7 @@ beforeEach(async () => {
   siteNav = vi.fn<NonNullable<ControllerDeps['siteNav']>>();
   showSite = vi.fn<NonNullable<ControllerDeps['showSite']>>();
   closeSite = vi.fn<NonNullable<ControllerDeps['closeSite']>>();
+  layoutSidebar = vi.fn<NonNullable<ControllerDeps['layoutSidebar']>>();
   controller = build();
 });
 
@@ -63,6 +66,14 @@ afterEach(async () => {
 });
 
 describe('agent controller', () => {
+  it('keeps the sidebar width, lays the site views out from it and stores it beside the agents', async () => {
+    expect(controller.sidebarWidth()).toBe(260);
+    await controller.setSidebarWidth(340);
+    expect(controller.sidebarWidth()).toBe(340);
+    expect(layoutSidebar).toHaveBeenCalledWith(340);
+    expect((await loadState(path.join(dir, 'agents.json'))).sidebarWidth).toBe(340);
+  });
+
   it('adds a claude agent that runs in a pty with a fresh session id and persists it', async () => {
     await controller.add('claude');
     const snapshot = controller.snapshot();

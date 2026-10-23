@@ -61,6 +61,33 @@ describe('state file', () => {
     expect(await loadState(file)).toEqual(emptyState());
   });
 
+  it('round-trips a stored sidebar width', async () => {
+    const file = path.join(dir, 'agents.json');
+    await saveState(file, { ...SAMPLE, sidebarWidth: 340 });
+    expect((await loadState(file)).sidebarWidth).toBe(340);
+  });
+
+  it('loads a file written before the sidebar width existed without a width', async () => {
+    const file = path.join(dir, 'agents.json');
+    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'dark' }), 'utf8');
+    expect((await loadState(file)).sidebarWidth).toBeUndefined();
+  });
+
+  it('reads an out of range or non-integer stored sidebar width as 260', async () => {
+    const file = path.join(dir, 'agents.json');
+    for (const sidebarWidth of [50, 5000, 300.5, '300', null]) {
+      await writeFile(file, JSON.stringify({ version: 1, agents: [], sidebarWidth }), 'utf8');
+      expect((await loadState(file)).sidebarWidth).toBe(260);
+    }
+  });
+
+  it('keeps theme and sidebar width side by side', async () => {
+    const file = path.join(dir, 'agents.json');
+    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'light', sidebarWidth: 280 }), 'utf8');
+    const state = await loadState(file);
+    expect([state.theme, state.sidebarWidth]).toEqual(['light', 280]);
+  });
+
   it('reads an unknown stored theme as system', async () => {
     const file = path.join(dir, 'agents.json');
     await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'neon' }), 'utf8');
