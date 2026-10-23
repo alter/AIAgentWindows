@@ -1,0 +1,49 @@
+---
+status: running
+created: 2026-10-23
+---
+# Room participants — several sessions of one CLI with their own model and effort
+
+## Goal
+A Room participant is an instance, not an agent kind. The owner adds, for example, three Claude Code participants (Fable 5.1; Opus 5.5 effort high; Sonnet 5.5 effort medium) or several Codex ones, and the relay passes the room history between them exactly as between CLI and site participants today. Model names are the CLIs' own aliases or full names; the app keeps no model list of its own: suggestions come from the installed CLI (owner, 2026-10-22: "нужно подтягивать поддерживаемые модели из claude code и codex ... имена моделей типа Opus - просто должны на последнюю поддерживаемую версию вести").
+
+## Acceptance criteria
+- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [ ] AC2 Participant model: `npx vitest run tests/unit/room-model.test.ts` exit 0 — two claude participants with different ids are accepted; a duplicate id is rejected; a model with a space, a quote or over 64 chars is rejected; an effort outside `[a-z]{1,16}` is rejected; a record from 04-room-archive without model/effort still parses
+- [ ] AC3 Spawn: `npx vitest run tests/unit/cli-args.test.ts tests/unit/room-sessions.test.ts` exit 0 — claude gets `--model <m>` and `--effort <e>` as separate argv entries, codex gets `-m <m>` and `-c model_reasoning_effort="<e>"` before `resume`; absent values add nothing; reverse control: dropping the effort argument turns `room turn passes model and effort as separate arguments` red (output in NOTES.md)
+- [ ] AC4 Smoke: electron-smoke exit 0 including a relay of two stub Claude participants that differ only in model and effort for 2 rounds; both instance labels appear in order in the history file and the stub's argv log shows each turn's model and effort — windows hidden
+- [!] AC5 HUMAN (excluded from /run): the owner runs a Room with Fable 5.1, Opus 5.5 effort high and Sonnet 5.5 effort medium for 2 relay rounds and records in NOTES.md whether each reply came from the model asked for
+
+## Stack
+As tasks/10-app-shell/02-room/PLAN.md. CLIs installed on 2026-10-23: claude 2.1.308, codex-cli 0.163.0 (NOTES.md of this task). No new dependency.
+
+## Decisions
+- D1 Where model and effort are chosen -> rows in the Room UI (kind, model, effort), kept with the room (owner, 2026-10-22).
+- D2 Model names -> the CLI's own aliases or full names; no list kept by the app; suggestions only from the installed CLI (owner, 2026-10-22).
+- D3 Priority -> P1, after 02-room and 04-room-archive (owner, 2026-10-22).
+- Branch: `room`. Commit per task, never push.
+
+## Assumptions
+- Suggestions: Claude Code has no model-listing command; its `--help` names the aliases in the `--model` description ("e.g. 'fable', 'opus', or 'sonnet'") and the levels in the `--effort` description ("(low, medium, high, xhigh, max)"); the app parses these two lines of the installed CLI's `--help` and offers them, and any other text is still accepted. Codex: `codex debug models` returns the catalog (`models[].slug`, `visibility`, `supported_reasoning_levels[].effort`); models with `visibility: "list"` are offered with their own levels. Both are read once per app run in the main process with a 10 s timeout; a failure leaves free text and no suggestions. In test mode (AIAW_USER_DATA) the stub CLI answers these commands; a real CLI is never started by tests.
+- Validation is by shape, not by list (the list changes with every CLI update): model `[A-Za-z0-9._:-]{1,64}`, effort `[a-z]{1,16}`; values pass as separate argv entries, never through a shell string (the login-shell wrapper passes `"$@"`).
+- Label of an instance: `<kind label> · <model>` plus ` · <effort>` when set, e.g. "Claude Code · opus · high"; with neither set the label stays the kind label. The label is fixed at the start of a run and written into entries and the record.
+- Ids: the first participant of a kind keeps the kind as its id (old records and tests keep working); further ones get `<kind>-<n>`. Site participants stay one per site, with no model or effort.
+- The participant rows are part of the room's config (04-room-archive record), so they come back with the room at app start; New room keeps the current rows.
+
+## Out of scope
+- Model or effort for site participants
+- Changing the owner's working windows' model or effort
+- OpenAI API participants
+
+## Tasks
+- [x] T00 Baseline: the coordinator's run at 04-room-archive T06 verification on c5bd4ec (fast tier 11 commands exit 0, coverage 853/853 100 %, electron-smoke 33/33) is this plan's baseline — verify: the Log line exists
+- [ ] T01 Evidence (S1, ARCH): `docs/tech/claude-code@2.1.306.md` gets a 2.1.308 model and effort section (`--model` aliases and full names, `--effort` levels, `--fallback-model`, no listing command; whether `--model`/`--effort` apply under `-p` and with `--resume`, from the docs) and `docs/tech/codex@0.163.0.md` a model section (`-m`, `-c model_reasoning_effort`, `codex debug models` shape, `~/.codex/models_cache.json`, whether `-c` before `resume` applies to the resumed thread), each item with its URL; parse-only probes (`--help`, `codex debug models` piped to a summary of slugs and levels, never a prompt) saved in `tasks/10-app-shell/03-room-participants/spikes/`; EVIDENCE rows for what is confirmed and what stays open — verify: `python3 scripts/evidence_check.py` exit 0 and `python3 tasks/check.py` shows no new problem
+- [ ] T02 Participant instances in the model: `RoomParticipant` gains optional `model` and `effort`; `parseRoomConfig` and `parseRoomRecord` accept several participants of a CLI kind (unique ids, id pattern), validate model and effort by shape, refuse model/effort on site participants; `instanceLabel(participant)`; `nextParticipantId(kind, existing)`; `formToConfig` in room-view.ts carries the rows; old configs and records without these fields parse unchanged; tests red first in `tests/unit/room-model.test.ts`, `tests/unit/room-view.test.ts`, `tests/unit/room-archive.test.ts` — verify: `npx vitest run tests/unit/room-model.test.ts tests/unit/room-view.test.ts tests/unit/room-archive.test.ts` + fast tier
+- [ ] T03 Spawn with model and effort: `SpawnOptions` gains `model?`/`effort?`; `buildRoomTurnSpawn` adds claude `--model <m>` `--effort <e>`, codex `-m <m>` `-c model_reasoning_effort="<e>"` (before `resume`); the room CLI driver passes the participant's values; each participant id has its own driver and session (two claude instances never share a session id); the stub CLI appends its argv per print turn to `AIAW_STUB_ARGV_LOG` when set; tests red first in `tests/unit/cli-args.test.ts` (`room turn passes model and effort as separate arguments`), `tests/unit/room-sessions.test.ts` (read-only flags still present with model/effort), `tests/integration/room.test.ts` (two claude instances, two sessions, argv per turn); reverse control for AC3 kept in NOTES.md — verify: `npx vitest run tests/unit/cli-args.test.ts tests/unit/room-sessions.test.ts tests/integration/room.test.ts` + fast tier
+- [ ] T04 Suggestions from the installed CLIs: `src/main/cli-models.ts` with pure parsers in `src/shared/` (`parseClaudeHelpModels(helpText)` → aliases and levels, `parseCodexCatalog(json)` → visible models with levels; both bounded and tolerant of missing parts) and a main-process reader that runs `claude --help` and `codex debug models` once per app run (10 s timeout, the same binary resolution and login-shell wrapper as other CLI starts, test-mode stubs), validated IPC `room:models` returning `{ claude: {models, efforts}, codex: {models: [{id, efforts}]} }`; the stub CLI answers `--help` and `debug models` with fixture text; tests red first for both parsers (from fixture text in tests, synthetic) and for the IPC validation — verify: `npx vitest run tests/unit tests/integration` + fast tier
+- [ ] T05 Participant rows in the Room pane: each CLI participant row has kind, a model input with a `<datalist>` from `room:models` (free text allowed), an effort `<select>` (empty = CLI default; for codex the levels of the chosen model when known, else the union), remove; "Add Claude Code" / "Add Codex" add a row with the next id; site participants stay checkboxes; the finalizer select lists instances by label; rows come from the opened room's config and stay on New room; all text through `textContent`; tests red first in `tests/unit/room-view.test.ts` for the pure row logic and a smoke step that adds a second Claude row with a model and effort and sees both in the participant list of the started run — verify: `npx vitest run tests/unit` + electron-smoke + fast tier
+- [ ] T06 Smoke for AC4 (`tests/full/room-participants.spec.ts`): two stub Claude participants, models `opus`/`sonnet`, efforts `high`/`medium`, relay 2 rounds; history file has both instance labels in schedule order; `AIAW_STUB_ARGV_LOG` shows `--model opus --effort high` and `--model sonnet --effort medium` on the right turns; the reopened room (04-room-archive) shows the same rows; red once against a mutation (labels without model, or argv without effort), red output in NOTES.md — verify: electron-smoke + fast tier
+- [ ] T07 Ledger and notes: docs/PROJECT.md Room row says what is built; NOTES.md summary; task labels `status:review` when AC1-AC4 are [x] — verify: `python3 tasks/check.py` shows no new problem + fast tier
+
+## Log
+- 2026-10-23 coordinator: T00 baseline taken from the 04-room-archive T06 verification run on c5bd4ec (fast tier 11 commands exit 0, coverage 853/853 100 %, electron-smoke 33/33)
