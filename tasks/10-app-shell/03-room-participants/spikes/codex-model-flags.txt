@@ -1,0 +1,37 @@
+# T01 probe: model and effort flags of codex 0.163.0 (parse only: every command ends in --help, stdin is /dev/null, no prompt is sent)
+# date: 2026-10-23
+$ codex --version
+codex-cli 0.163.0
+exit=0
+
+$ codex exec --help (-m, -c)
+19:  -c, --config <key=value>
+20-          Override a configuration value that would otherwise be loaded from `~/.codex/config.toml`.
+--
+40:  -m, --model <MODEL>
+41-          Model the agent should use
+
+$ codex exec -m gpt-6-luna -c model_reasoning_effort="low" --sandbox read-only resume --help
+Resume a previous session by id or pick the most recent with --last
+
+Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+exit=0
+
+$ codex exec --sandbox read-only resume -m gpt-6-luna --help
+Resume a previous session by id or pick the most recent with --last
+
+Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+exit=0
+
+$ codex exec --sandbox read-only resume -c model_reasoning_effort="low" --help
+Resume a previous session by id or pick the most recent with --last
+
+Usage: codex exec resume [OPTIONS] [SESSION_ID] [PROMPT]
+exit=0
+
+$ codex debug models --help
+Render the raw model catalog as JSON
+
+Usage: codex debug models [OPTIONS]
+exit=0
+

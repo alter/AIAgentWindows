@@ -1,0 +1,42 @@
+# T01 probe: model and effort flags of claude 2.1.308 (parse only: every command ends in --help, stdin is /dev/null, no prompt is sent)
+# date: 2026-10-23
+$ claude --version
+2.1.308 (Claude Code)
+exit=0
+
+$ claude --help (--effort, --fallback-model, --model)
+84:  --effort <level>                      Effort level for the current session
+85-                                        (low, medium, high, xhigh, max)
+86-  --environment <environment_id>        Create a new cloud session that runs on
+87-                                        the given self-hosted environment
+88-                                        (ccpool_...).
+89-  --exclude-dynamic-system-prompt-sections
+--
+94:  --fallback-model <model>              Enable automatic fallback to specified
+95-                                        model(s) when the default model is
+96-                                        overloaded or not available. Accepts a
+97-                                        comma-separated list to try each in
+98-                                        order. Re-tries the primary at the start
+99-                                        of each user turn.
+--
+135:  --model <model>                       Model for the current session. Provide
+136-                                        an alias for the latest model (e.g.
+137-                                        'fable', 'opus', or 'sonnet') or a
+138-                                        model's full name.
+139-  -n, --name <name>                     Set a display name for this session
+140-                                        (shown in the prompt box, /resume
+exit=0
+
+$ claude --help | grep -ciE "list (the )?(available )?models"   (a command that lists models: 0 hits)
+0
+
+$ claude -p --model opus --effort high --fallback-model sonnet --resume 00000000-0000-4000-8000-000000000000 --help
+Usage: claude [options] [prompt]
+
+exit=0
+
+$ claude -p --model claude-opus-5-5 --effort max --help
+Usage: claude [options] [prompt]
+
+exit=0
+

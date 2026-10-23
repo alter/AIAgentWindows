@@ -1,0 +1,16 @@
+# T01 probe: codex debug models 0.163.0 summarised to slug, visibility, default and supported levels (no prompt; RefreshStrategy::OnlineIfUncached reads ~/.codex/models_cache.json, TTL 300 s, else fetches the catalog)
+# date: 2026-10-23
+$ codex debug models | python3 -I summary
+top-level keys: ['models']
+model keys: ['additional_speed_tiers', 'apply_patch_tool_type', 'availability_nux', 'available_access_programs', 'base_instructions', 'comp_hash', 'context_window', 'default_reasoning_level', 'default_reasoning_summary', 'default_verbosity', 'description', 'display_name', 'effective_context_window_percent', 'experimental_supported_tools', 'include_apps_usage_instructions', 'include_plugin_usage_instructions', 'include_skills_usage_instructions', 'input_modalities', 'max_context_window', 'model_messages', 'multi_agent_version', 'node_repl_auto_review_required', 'node_repl_disabled', 'priority', 'service_tiers', 'shell_type', 'slug', 'support_verbosity', 'supported_in_api', 'supported_reasoning_levels', 'supports_experimental_context', 'supports_image_detail_original', 'supports_reasoning_effort_updates', 'supports_reasoning_summary_parameter', 'supports_search_tool', 'tool_mode', 'truncation_policy', 'upgrade', 'use_responses_lite', 'visibility', 'web_search_tool_type']
+gpt-6-chat-thinking hide default=medium low,medium,high,xhigh,max
+gpt-reserve hide default=medium low,medium,high,xhigh,max
+gpt-6-luna list default=medium low,medium,high,xhigh,max
+gpt-5.6-terra list default=medium low,medium,high,xhigh,max,ultra
+gpt-5.6-luna list default=medium low,medium,high,xhigh,max
+codex-auto-review hide default=medium low,medium,high,xhigh,max
+exit=0
+
+$ python3 -I cache keys of ~/.codex/models_cache.json
+['client_version', 'etag', 'fetched_at', 'identity', 'models']
+client_version 0.163.0 models 6
