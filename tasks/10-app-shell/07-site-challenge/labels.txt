@@ -2,9 +2,9 @@ phase:app-shell
 role:APP
 type:fix
 priority:P0
-status:todo
+status:in_progress
 verify:pending
-depends:10-app-shell/02-room
+depends:10-app-shell/03-room-participants
 milestone:M2
 format:2
 capability:ChatGPT, Grok, DeepSeek as embedded views with per-agent persistent profile

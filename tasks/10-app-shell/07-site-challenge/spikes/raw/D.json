@@ -1,0 +1,230 @@
+{
+  "variant": "D",
+  "target": "https://demo.turnstile.workers.dev/",
+  "electron": "44.6.0",
+  "chrome": "152.0.7977.130",
+  "debuggerAttached": false,
+  "frames": [
+    "https://demo.turnstile.workers.dev/",
+    "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/h9j0f/1x0000000"
+  ],
+  "probes": {
+    "top": {
+      "NotificationPermission": "granted",
+      "chromeKeys": [],
+      "chromeType": "object",
+      "deviceMemory": 16,
+      "enumerateDevices": [
+        "audioinput",
+        "audioinput",
+        "audioinput",
+        "videoinput",
+        "audiooutput",
+        "audiooutput",
+        "audiooutput"
+      ],
+      "hardwareConcurrency": 8,
+      "highEntropy": {
+        "architecture": "arm",
+        "bitness": "64",
+        "brands": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152"
+          }
+        ],
+        "fullVersionList": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24.0.0.0"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152.0.7977.130"
+          }
+        ],
+        "mobile": false,
+        "model": "",
+        "platform": "macOS",
+        "platformVersion": "27.0.0",
+        "uaFullVersion": "152.0.7977.130",
+        "wow64": false
+      },
+      "languages": [
+        "en-GB",
+        "en-RU",
+        "ru-RU"
+      ],
+      "mediaDevices": true,
+      "mimeTypes": 2,
+      "outer": [
+        1100,
+        800
+      ],
+      "perm_camera": "granted",
+      "perm_clipboard-read": "granted",
+      "perm_geolocation": "granted",
+      "perm_microphone": "granted",
+      "perm_midi": "granted",
+      "perm_notifications": "granted",
+      "platform": "MacIntel",
+      "plugins": 5,
+      "screen": [
+        1710,
+        1112,
+        30,
+        2
+      ],
+      "tz": "Asia/Tbilisi",
+      "uaBrands": [
+        {
+          "brand": "Not?A_Brand",
+          "version": "24"
+        },
+        {
+          "brand": "Chromium",
+          "version": "152"
+        }
+      ],
+      "uaFnToString": "function query() { [native code] }",
+      "uaMobile": false,
+      "uaPlatform": "macOS",
+      "url": "https://demo.turnstile.workers.dev/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "vendor": "Google Inc.",
+      "webdriver": false,
+      "webgl": [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"
+      ]
+    },
+    "cf:0": {
+      "NotificationPermission": "granted",
+      "chromeKeys": [],
+      "chromeType": "object",
+      "deviceMemory": 16,
+      "enumerateDevices": [
+        "audioinput",
+        "videoinput",
+        "audiooutput"
+      ],
+      "hardwareConcurrency": 8,
+      "highEntropy": {
+        "architecture": "arm",
+        "bitness": "64",
+        "brands": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152"
+          }
+        ],
+        "fullVersionList": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24.0.0.0"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152.0.7977.130"
+          }
+        ],
+        "mobile": false,
+        "model": "",
+        "platform": "macOS",
+        "platformVersion": "27.0.0",
+        "uaFullVersion": "152.0.7977.130",
+        "wow64": false
+      },
+      "languages": [
+        "en-GB",
+        "en-RU",
+        "ru-RU"
+      ],
+      "mediaDevices": true,
+      "mimeTypes": 2,
+      "outer": [
+        1100,
+        800
+      ],
+      "perm_camera": "denied",
+      "perm_clipboard-read": "denied",
+      "perm_geolocation": "denied",
+      "perm_microphone": "denied",
+      "perm_midi": "denied",
+      "perm_notifications": "granted",
+      "platform": "MacIntel",
+      "plugins": 5,
+      "screen": [
+        1710,
+        1112,
+        30,
+        2
+      ],
+      "tz": "Asia/Tbilisi",
+      "uaBrands": [
+        {
+          "brand": "Not?A_Brand",
+          "version": "24"
+        },
+        {
+          "brand": "Chromium",
+          "version": "152"
+        }
+      ],
+      "uaFnToString": "function query() { [native code] }",
+      "uaMobile": false,
+      "uaPlatform": "macOS",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/h9j0f/1x00000000000000000000AA/light/fbE/new/normal",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "vendor": "Google Inc.",
+      "webdriver": false,
+      "webgl": [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"
+      ]
+    }
+  },
+  "widget": [
+    21
+  ],
+  "requestHeaders": [
+    {
+      "type": "script",
+      "url": "https://challenges.cloudflare.com/turnstile/v0/api.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+        "sec-ch-ua": "\"Not?A_Brand\";v=\"24\", \"Chromium\";v=\"152\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-dest": "script",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://demo.turnstile.workers.dev/",
+        "accept-language": "en-GB"
+      }
+    },
+    {
+      "type": "subFrame",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/h9j0f",
+      "headers": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-dest": "iframe",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://demo.turnstile.workers.dev/",
+        "accept-language": "en-GB"
+      }
+    }
+  ],
+  "permLog": {}
+}

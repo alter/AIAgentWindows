@@ -1,0 +1,338 @@
+{
+  "variant": "A",
+  "target": "https://grok.com/",
+  "electron": "44.6.0",
+  "chrome": "152.0.7977.130",
+  "debuggerAttached": true,
+  "drive": [
+    [
+      "sign in",
+      true
+    ],
+    [
+      "continue",
+      true
+    ]
+  ],
+  "frames": [
+    "https://grok.com/",
+    "about:blank",
+    "about:blank",
+    "about:blank",
+    "https://js.stripe.com/v3/m-outer-3437aaddcdf6922d623e172c2d6f9278.html#url=https%3A%2F%2Fgrok.com%2F",
+    "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/9sk9y/0x4AAAAAA",
+    "https://m.stripe.network/inner.html#url=https%3A%2F%2Fgrok.com%2F&title=Grok&referrer=&muid=NA&sid=N"
+  ],
+  "probes": {
+    "top": {
+      "NotificationPermission": "denied",
+      "chromeKeys": [],
+      "chromeType": "object",
+      "deviceMemory": 16,
+      "enumerateDevices": [
+        "audioinput",
+        "audioinput",
+        "audioinput",
+        "videoinput",
+        "audiooutput",
+        "audiooutput",
+        "audiooutput"
+      ],
+      "hardwareConcurrency": 8,
+      "highEntropy": {
+        "architecture": "arm",
+        "bitness": "64",
+        "brands": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "152"
+          }
+        ],
+        "fullVersionList": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24.0.0.0"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152.0.7977.130"
+          },
+          {
+            "brand": "Google Chrome",
+            "version": "152.0.7977.130"
+          }
+        ],
+        "mobile": false,
+        "model": "",
+        "platform": "macOS",
+        "platformVersion": "27.0.0",
+        "uaFullVersion": "152.0.7977.130",
+        "wow64": false
+      },
+      "languages": [
+        "en-GB",
+        "en-RU",
+        "ru-RU"
+      ],
+      "mediaDevices": true,
+      "mimeTypes": 2,
+      "outer": [
+        1100,
+        800
+      ],
+      "perm_camera": "granted",
+      "perm_clipboard-read": "denied",
+      "perm_geolocation": "denied",
+      "perm_microphone": "granted",
+      "perm_midi": "denied",
+      "perm_notifications": "denied",
+      "platform": "MacIntel",
+      "plugins": 5,
+      "screen": [
+        1710,
+        1112,
+        30,
+        2
+      ],
+      "stun": [
+        "host",
+        "srflx",
+        "host"
+      ],
+      "tz": "Asia/Tbilisi",
+      "uaBrands": [
+        {
+          "brand": "Not?A_Brand",
+          "version": "24"
+        },
+        {
+          "brand": "Chromium",
+          "version": "152"
+        },
+        {
+          "brand": "Google Chrome",
+          "version": "152"
+        }
+      ],
+      "uaFnToString": "function query() { [native code] }",
+      "uaMobile": false,
+      "uaPlatform": "macOS",
+      "url": "https://grok.com/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "vendor": "Google Inc.",
+      "webdriver": false,
+      "webgl": [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"
+      ]
+    },
+    "cf:0": {
+      "NotificationPermission": "denied",
+      "chromeKeys": [],
+      "chromeType": "object",
+      "deviceMemory": 16,
+      "enumerateDevices": [
+        "audioinput",
+        "videoinput",
+        "audiooutput"
+      ],
+      "hardwareConcurrency": 8,
+      "highEntropy": {
+        "architecture": "arm",
+        "bitness": "64",
+        "brands": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152"
+          }
+        ],
+        "fullVersionList": [
+          {
+            "brand": "Not?A_Brand",
+            "version": "24.0.0.0"
+          },
+          {
+            "brand": "Chromium",
+            "version": "152.0.7977.130"
+          }
+        ],
+        "mobile": false,
+        "model": "",
+        "platform": "macOS",
+        "platformVersion": "27.0.0",
+        "uaFullVersion": "152.0.7977.130",
+        "wow64": false
+      },
+      "languages": [
+        "en-GB",
+        "en-RU",
+        "ru-RU"
+      ],
+      "mediaDevices": true,
+      "mimeTypes": 2,
+      "outer": [
+        1100,
+        800
+      ],
+      "perm_camera": "denied",
+      "perm_clipboard-read": "denied",
+      "perm_geolocation": "denied",
+      "perm_microphone": "denied",
+      "perm_midi": "denied",
+      "perm_notifications": "denied",
+      "platform": "MacIntel",
+      "plugins": 5,
+      "screen": [
+        1710,
+        1112,
+        30,
+        2
+      ],
+      "stun": [
+        "host",
+        "srflx",
+        "err:701",
+        "err:701"
+      ],
+      "tz": "Asia/Tbilisi",
+      "uaBrands": [
+        {
+          "brand": "Not?A_Brand",
+          "version": "24"
+        },
+        {
+          "brand": "Chromium",
+          "version": "152"
+        }
+      ],
+      "uaFnToString": "function query() { [native code] }",
+      "uaMobile": false,
+      "uaPlatform": "macOS",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/9sk9y/0x4AAAAAAAhr9JGVDZbrZOo0/dark/fbE/new/flexible",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+      "vendor": "Google Inc.",
+      "webdriver": false,
+      "webgl": [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)"
+      ]
+    }
+  },
+  "widget": [
+    0
+  ],
+  "requestHeaders": [
+    {
+      "type": "script",
+      "url": "https://challenges.cloudflare.com/turnstile/v0/api.js",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Not?A_Brand\";v=\"24\", \"Chromium\";v=\"152\", \"Google Chrome\";v=\"152\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-dest": "script",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://grok.com/",
+        "accept-language": "en-GB"
+      }
+    },
+    {
+      "type": "subFrame",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/9sk9y",
+      "headers": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-user": "?1",
+        "sec-fetch-dest": "iframe",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://grok.com/",
+        "accept-language": "en-GB"
+      }
+    },
+    {
+      "type": "xhr",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/fo/2925353821:1792721117:",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+        "sec-ch-ua": "\"Not?A_Brand\";v=\"24\", \"Chromium\";v=\"152\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/9sk9y/0x4AAAAAAAhr9JGVDZbrZOo0/dark/fbE/new/flexible?lang=auto",
+        "accept-language": "en-GB"
+      }
+    },
+    {
+      "type": "xhr",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/pat/a4ed7f9d2e50d0f6/1792",
+      "headers": {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-storage-access": "active",
+        "accept-language": "en-GB"
+      }
+    },
+    {
+      "type": "image",
+      "url": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/ci/a4ed7f9d2e50d0f6/17927",
+      "headers": {
+        "sec-ch-ua-platform": "\"macOS\"",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) turnstile-spike/44.6.0 Chrome/152.0.7977.130 Electron/44.6.0 Safari/537.36",
+        "sec-ch-ua": "\"Not?A_Brand\";v=\"24\", \"Chromium\";v=\"152\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "same-origin",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-dest": "image",
+        "sec-fetch-storage-access": "active",
+        "referer": "https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/av0/rch/9sk9y/0x4AAAAAAAhr9JGVDZbrZOo0/dark/fbE/new/flexible?lang=auto",
+        "accept-language": "en-GB"
+      }
+    }
+  ],
+  "permLog": {
+    "check:background-sync:https://grok.com:true": 4,
+    "check:geolocation:https://grok.com:false": 4,
+    "check:sensors:https://grok.com:true": 10,
+    "check:midi:https://grok.com:false": 3,
+    "check:media:https://grok.com:true": 14,
+    "check:background-fetch:https://grok.com:true": 2,
+    "check:persistent-storage:https://grok.com:true": 2,
+    "check:screen-wake-lock:https://grok.com:true": 2,
+    "check:display-capture:https://grok.com:false": 2,
+    "check:clipboard-read:https://grok.com:false": 3,
+    "check:clipboard-sanitized-write:https://grok.com:true": 2,
+    "check:payment-handler:https://grok.com:true": 2,
+    "check:idle-detection:https://grok.com:false": 2,
+    "check:periodic-background-sync:https://grok.com:true": 2,
+    "check:storage-access:https://grok.com:true": 2,
+    "check:window-management:https://grok.com:true": 2,
+    "check:local-fonts:https://grok.com:true": 2,
+    "check:keyboardLock:https://grok.com:true": 2,
+    "check:pointerLock:https://grok.com:true": 2,
+    "check:speaker-selection:https://grok.com:true": 2,
+    "check:notifications:https://grok.com:false": 7,
+    "check:media:https://challenges.cloudflare.com:false": 3,
+    "check:background-sync:https://challenges.cloudflare.com:true": 2,
+    "check:notifications:https://challenges.cloudflare.com:false": 5
+  }
+}

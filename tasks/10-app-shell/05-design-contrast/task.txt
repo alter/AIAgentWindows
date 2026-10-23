@@ -35,7 +35,6 @@ WRITE-SET
   docs/tech/wcag@2.2.md
   docs/tech/xterm@6.0.0.md
   docs/tech/electron@44.6.0.md
-  docs/EVIDENCE.md
   scripts/contrast_check.py
   tests/scripts/test_contrast_check.py
   src/renderer/styles.css
@@ -49,8 +48,7 @@ WRITE-SET
   src/main/index.ts
   src/main/window.ts
   tests/unit/terminal-theme.test.ts
-  tests/full/
-  tests/fixtures/
+  tests/full/design-contrast.spec.ts
   docs/PROJECT.md
   tasks/10-app-shell/05-design-contrast/
   .claude/scratch/gates.sh
@@ -77,4 +75,4 @@ ROLE
   ARCH, APP, QA, HUMAN
 
 DEPENDS
-  10-app-shell/03-room-participants
+  10-app-shell/07-site-challenge

@@ -30,13 +30,19 @@ WRITE-SET
   src/shared/site-policy.ts
   tests/unit/site-policy.test.ts
   tests/unit/site-user-agent.test.ts
+  tests/full/site-ua-frames.spec.ts
+  tests/fixtures/ua-frames/
+  docs/EVIDENCE.md::W22
+  docs/EVIDENCE.md::W23
+  docs/tech/electron@44.6.0.md::OOPIF user agent
+  tasks/DECISIONS.md::D1
   tasks/10-app-shell/07-site-challenge/
 
 DATA
-  permission request in a site view: dir=in; type=Electron permission name and requesting origin; size=permission names of Electron 44.6.0; null=no; interpretable=no; validated=tests/unit/site-policy.test.ts::sensitive permissions stay denied for a foreign origin; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/session.md
+  CDP Target.attachedToTarget event: dir=in; type=targetInfo {type, url} and sessionId from the site view's debugger; size=one event per frame or worker target the page creates; null=no; interpretable=no; validated=tests/unit/site-user-agent.test.ts::override reaches every attached frame target; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/debugger.md
 
 SECURITY
-  sink site-permissions: consumes permission request in a site view; protection=camera, microphone, location and the other sensitive permissions are still never granted to an origin other than the site's own; test=tests/unit/site-policy.test.ts::sensitive permissions stay denied for a foreign origin
+  (no sinks)
 
 OUTCOME
   tasks/10-app-shell/07-site-challenge/NOTES.md states the root cause with its
@@ -46,13 +52,13 @@ OUTCOME
 
 VERIFY (QA)
   1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
-  2. [fast] reverse control: restore the pre-fix rule in src/shared/site-policy.ts → tests/unit/site-policy.test.ts::challenge frame sees the same permission state as the site
-  3. [fast] tests/unit/site-policy.test.ts: sensitive permissions stay denied for a foreign origin after the fix
-  4. [full] electron-smoke exit 0 (site views on the local fixture page)
+  2. [fast] reverse control: drop the per-target override in src/main/site-user-agent.ts → tests/unit/site-user-agent.test.ts::override reaches every attached frame target; and tests/full/site-ua-frames.spec.ts goes red on the pre-fix code (output in NOTES.md)
+  3. [fast] tests/unit/site-user-agent.test.ts: the override and runIfWaitingForDebugger are sent with the child sessionId for every iframe target, and auto-attach is repeated inside each child
+  4. [full] electron-smoke exit 0, including tests/full/site-ua-frames.spec.ts: a localhost page with a 127.0.0.1 iframe in another renderer process reports the same navigator.userAgent (no Electron/), the same userAgentData brands and the same User-Agent header on a fetch from the iframe as the top frame
   5. [fast] HUMAN: the owner passes the Turnstile check on grok.com in the app and records it in NOTES.md
 
 ROLE
   ARCH, APP, QA, HUMAN
 
 DEPENDS
-  10-app-shell/02-room
+  10-app-shell/03-room-participants
