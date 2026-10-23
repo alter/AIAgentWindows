@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Room resume — a stopped run continues from its first unanswered turn
@@ -56,3 +56,4 @@ As tasks/10-app-shell/06-room-layout/PLAN.md. No new dependency.
 - 2026-10-23 coordinator: T01 verified (`bash .claude/scratch/gates.sh` exit 0: fast tier 12 commands exit 0, vitest 966/966, coverage 100.00 %, build exit 0, electron-smoke 49/49 — this run; diff of room.ts, room-service.ts, room-model.ts reviewed); AC1-AC4 met
 - 2026-10-23 coordinator: T02 done: docs/PROJECT.md Room row (resume), NOTES summary, labels status:review; tasks/check.py 7 problems (baseline 7); paused on AC5 (owner)
 - 2026-10-23 T03 done: dropSegmentStops + RunState.rewrite on resume, feed reloaded on `started`; AC6 command exit 0 (10 tests), reverse control red in NOTES.md, fast tier 12 commands exit 0 (vitest 976/976, coverage 100.00 %); electron-smoke NOT run, left to the coordinator (smoke step added in tests/full/room-archive.spec.ts)
+- 2026-10-23 coordinator: T03 (worker ran it in a worktree without smoke, cherry-picked as 68ce2b5) verified (`bash .claude/scratch/gates.sh` exit 0 on room with 12-sidebar-palette T01 and 09-room-resume T03 together: fast tier 12 commands exit 0, contrast_check 0 findings, vitest 976/976, coverage 100.00 %, build exit 0, electron-smoke 52/52 — this run); AC6 met; paused on AC5 (owner)

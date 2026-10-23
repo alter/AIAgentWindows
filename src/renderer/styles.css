@@ -3,21 +3,18 @@
   color-scheme: dark;
   --sidebar-width: 260px;
   --nav-bar-height: 36px;
-  --aubergine: #3f0e40;
-  --aubergine-hover: #350d36;
-  --aubergine-select: #0b4f82;
-  --glyph-bg: #6b2d6e;
-  --glyph-hover: #84408a;
   --on-fill: #ffffff;
-  --focus-sidebar: #ffd24a;
   --button-bg: #0b4f82;
-  --danger-bg: #a3123f;
+  --danger-bg: #9c1139;
   --kind-claude: #c15f3c;
   --kind-codex: #10a37f;
   --kind-chatgpt: #0e8a6b;
   --kind-grok: #2b2b2b;
   --kind-deepseek: #4d6bfe;
   --content-bg: #1a1d21;
+  --sidebar-bg: #14161a;
+  --sidebar-hover: #4b4f57;
+  --sidebar-select: #0b4f82;
   --text: #ffffff;
   --surface: #2a2d33;
   --nav-bg: #222529;
@@ -37,6 +34,9 @@
   :root {
     color-scheme: light;
     --content-bg: #ffffff;
+    --sidebar-bg: #f4f5f7;
+    --sidebar-hover: #e4e7ec;
+    --sidebar-select: #d6e8f8;
     --text: #000000;
     --surface: #eceef1;
     --nav-bg: #e4e6ea;
@@ -67,9 +67,6 @@ body {
 }
 
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.rooms-toggle:focus-visible, .rooms-title:focus-visible, .rooms-add:focus-visible, .rooms-item:focus-visible, .rooms-rename:focus-visible,
-.agent-item:focus-visible, .add-button:focus-visible, .agent-close:focus-visible,
-.confirm-yes:focus-visible, .confirm-no:focus-visible { outline-color: var(--focus-sidebar); }
 .menu-item:focus-visible, .context-item:focus-visible, .rooms-menu-item:focus-visible { outline-offset: -2px; }
 
 select, input[type="text"], input[type="number"], .room-prompt {
@@ -115,8 +112,9 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   width: var(--sidebar-width);
   display: flex;
   flex-direction: column;
-  background: var(--aubergine);
-  color: var(--on-fill);
+  background: var(--sidebar-bg);
+  color: var(--text);
+  border-right: 1px solid var(--border);
   padding-top: 38px;
   -webkit-user-select: none;
   user-select: none;
@@ -124,12 +122,12 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 
 .room-section { padding: 4px 8px 0; }
 .rooms { display: flex; flex-direction: column; padding: 4px 8px 0; }
-.rooms-header { display: flex; align-items: center; gap: 2px; padding: 4px 0; color: var(--on-fill); }
+.rooms-header { display: flex; align-items: center; gap: 2px; padding: 4px 0; color: var(--text); }
 .rooms-toggle, .rooms-title {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--on-fill);
+  color: var(--text);
   font: inherit;
   cursor: pointer;
 }
@@ -139,26 +137,26 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   flex: none;
   width: 7px;
   height: 7px;
-  border-right: 2px solid var(--on-fill);
-  border-bottom: 2px solid var(--on-fill);
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
   transform: rotate(-45deg);
 }
 .rooms-toggle[aria-expanded="true"]::before { transform: rotate(45deg); }
 .rooms-title { flex: 1; padding: 4px 6px; font-weight: 700; text-align: left; }
-.rooms-toggle:hover, .rooms-title:hover { background: var(--aubergine-hover); }
+.rooms-toggle:hover, .rooms-title:hover { background: var(--sidebar-hover); }
 .rooms-add {
   width: 28px;
   height: 28px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--glyph-bg);
+  background: var(--button-bg);
   color: var(--on-fill);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
-.rooms-add:hover { background: var(--glyph-hover); }
-.rooms-add:disabled { background: transparent; border: 1px dashed var(--on-fill); cursor: default; }
+.rooms-add:hover { background: var(--sidebar-hover); color: var(--text); }
+.rooms-add:disabled { background: transparent; border: 1px dashed var(--text); color: var(--text); cursor: default; }
 .rooms-list { list-style: none; margin: 0; padding: 0 0 4px; max-height: 30vh; overflow-y: auto; }
 .rooms-list[hidden] { display: none; }
 .rooms-empty { padding: 6px 8px 6px 24px; font-style: italic; }
@@ -170,13 +168,13 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--on-fill);
+  color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.rooms-item:hover { background: var(--aubergine-hover); }
-.rooms-item.selected { background: var(--aubergine-select); font-weight: 700; }
+.rooms-item:hover { background: var(--sidebar-hover); }
+.rooms-item.selected { background: var(--sidebar-select); font-weight: 700; }
 .rooms-item:disabled { font-style: italic; cursor: default; }
 .rooms-item[aria-disabled="true"] { cursor: default; }
 .rooms-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -188,21 +186,21 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   justify-content: space-between;
   padding: 8px 16px;
   font-weight: 700;
-  color: var(--on-fill);
+  color: var(--text);
 }
 
 .add-button {
   width: 28px;
   height: 28px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--glyph-bg);
+  background: var(--button-bg);
   color: var(--on-fill);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
-.add-button:hover { background: var(--glyph-hover); }
+.add-button:hover { background: var(--sidebar-hover); color: var(--text); }
 
 .add-menu {
   position: absolute;
@@ -232,17 +230,16 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   text-align: left;
   cursor: pointer;
 }
-.menu-item:hover { background: var(--hover-bg); }
+.menu-item:hover { background: var(--sidebar-hover); }
 
 .agent-list { list-style: none; margin: 0; padding: 4px 8px; overflow-y: auto; flex: 1; }
 .agent-empty { padding: 10px 8px; font-style: italic; }
-.theme-switch { padding: 8px 16px 12px; color: var(--on-fill); }
+.theme-switch { padding: 8px 16px 12px; color: var(--text); }
 .theme-switch-label { display: block; padding-bottom: 4px; font-weight: 700; }
 .theme-switch-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .theme-switch-option { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
-.theme-switch input[type="radio"] { width: 18px; height: 18px; border-color: var(--on-fill); background: transparent; }
-.theme-switch input[type="radio"]::before { background: var(--on-fill); }
-.theme-switch input[type="radio"]:focus-visible { outline-color: var(--focus-sidebar); }
+.theme-switch input[type="radio"] { width: 18px; height: 18px; border-color: var(--text); background: transparent; }
+.theme-switch input[type="radio"]::before { background: var(--text); }
 
 .agent-item {
   display: flex;
@@ -253,13 +250,13 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--on-fill);
+  color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
-.agent-item:hover { background: var(--aubergine-hover); }
-.agent-item.selected { background: var(--aubergine-select); font-weight: 700; }
+.agent-item:hover { background: var(--sidebar-hover); }
+.agent-item.selected { background: var(--sidebar-select); font-weight: 700; }
 .agent-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .kind-icon {
@@ -333,14 +330,14 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--on-fill);
+  color: var(--text);
   font-size: 16px;
   line-height: 1;
   visibility: hidden;
   cursor: pointer;
 }
 .agent-list li:hover .agent-close, .agent-list li:focus-within .agent-close { visibility: visible; }
-.agent-close:hover { background: var(--glyph-hover); }
+.agent-close:hover { background: var(--sidebar-hover); }
 
 .context-menu, .rooms-menu {
   position: fixed;
@@ -364,26 +361,27 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   text-align: left;
   cursor: pointer;
 }
-.context-item:hover, .rooms-menu-item:hover { background: var(--hover-bg); }
+.context-item:hover, .rooms-menu-item:hover { background: var(--sidebar-hover); }
 
 .close-confirm {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px 16px;
-  background: var(--aubergine-hover);
-  color: var(--on-fill);
+  background: var(--sidebar-bg);
+  color: var(--text);
+  border-top: 1px solid var(--border);
 }
 .close-confirm-text { flex: 1 0 100%; }
 .confirm-yes, .confirm-no {
   padding: 5px 12px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 6px;
   font: inherit;
   cursor: pointer;
 }
 .confirm-yes { background: var(--danger-bg); color: var(--on-fill); }
-.confirm-no { background: var(--glyph-bg); color: var(--on-fill); }
+.confirm-no { background: var(--button-bg); color: var(--on-fill); }
 
 .restart-button {
   position: absolute;

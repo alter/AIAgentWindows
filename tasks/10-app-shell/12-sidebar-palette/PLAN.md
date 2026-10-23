@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-23
 ---
 # Sidebar palette — the left panel on the same palettes as the content, by APCA
@@ -8,9 +8,9 @@ created: 2026-10-23
 Owner, 2026-10-23: "а давай и левую часть по цветам сделаем как и правую? для выбора цветов фона и шрифта учитывай рекоммендацию APAC".
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0; `python3 scripts/contrast_check.py` 0 findings
-- [ ] AC2 Levels: every sidebar text pair in contrast-pairs.json is at a level of Lc 90 (a new level `nav-preferred` or the pair at the body-preferred level, whichever the gate supports cleanly) and WCAG 4.5:1, non-text pairs Lc 45 and 3:1, in both palettes; no same-hue pair; reverse control (sidebar text token set to a grey of the sidebar hue) makes contrast_check exit 1 with a path:line finding, output in NOTES.md
-- [ ] AC3 Smoke: electron-smoke exit 0 — `the sidebar background follows the colour scheme` in tests/full/design-contrast.spec.ts: sidebar background equals --sidebar-bg and differs between light and dark, sidebar text equals --text — windows hidden
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0; `python3 scripts/contrast_check.py` 0 findings
+- [x] AC2 Levels: every sidebar text pair in contrast-pairs.json is at a level of Lc 90 (a new level `nav-preferred` or the pair at the body-preferred level, whichever the gate supports cleanly) and WCAG 4.5:1, non-text pairs Lc 45 and 3:1, in both palettes; no same-hue pair; reverse control (sidebar text token set to a grey of the sidebar hue) makes contrast_check exit 1 with a path:line finding, output in NOTES.md
+- [x] AC3 Smoke: electron-smoke exit 0 — `the sidebar background follows the colour scheme` in tests/full/design-contrast.spec.ts: sidebar background equals --sidebar-bg and differs between light and dark, sidebar text equals --text — windows hidden
 - [ ] AC4 HUMAN (excluded from /run): the owner looks at the sidebar in both themes
 
 ## Stack
@@ -34,8 +34,11 @@ As tasks/10-app-shell/05-design-contrast/PLAN.md; APCA per docs/tech/apca-w3@0.1
 
 ## Tasks
 - [x] T00 Baseline: the coordinator's verified run of 11-theme-switch (21a853a) is this plan's baseline — verify: the Log line exists
-- [ ] T01 Sidebar palette (S1–S4): tokens --sidebar-bg (both palettes) and any sidebar state tokens; sidebar rules moved off --aubergine*, --glyph-*, --focus-sidebar, --on-fill (except kind tiles and filled buttons); unused tokens removed; contrast-pairs.json updated (old aubergine pairs out, new sidebar pairs in at Lc 90 for text); gate level added with a test if needed; smoke in design-contrast.spec.ts; reverse control in NOTES.md with Lc values of every new pair in both palettes — verify: contrast_check 0 findings + fast tier + electron-smoke
-- [ ] T02 Ledger and notes: docs/PROJECT.md Themes row (sidebar on the palettes, Lc 90); NOTES.md summary; labels `status:review` when AC1–AC3 are [x] — verify: `python3 tasks/check.py` shows no new problem (baseline 7) + fast tier
+- [x] T01 Sidebar palette (S1–S4): tokens --sidebar-bg (both palettes) and any sidebar state tokens; sidebar rules moved off --aubergine*, --glyph-*, --focus-sidebar, --on-fill (except kind tiles and filled buttons); unused tokens removed; contrast-pairs.json updated (old aubergine pairs out, new sidebar pairs in at Lc 90 for text); gate level added with a test if needed; smoke in design-contrast.spec.ts; reverse control in NOTES.md with Lc values of every new pair in both palettes — verify: contrast_check 0 findings + fast tier + electron-smoke
+- [x] T02 Ledger and notes: docs/PROJECT.md Themes row (sidebar on the palettes, Lc 90); NOTES.md summary; labels `status:review` when AC1–AC3 are [x] — verify: `python3 tasks/check.py` shows no new problem (baseline 7) + fast tier
 
 ## Log
 - 2026-10-23 coordinator: T00 baseline = 11-theme-switch T01 verification run on 21a853a (fast tier 12 commands exit 0, vitest 974/974, coverage 100.00 %, electron-smoke 51/51); tasks/check.py baseline 7 problems
+- 2026-10-23 T01 done: sidebar on --sidebar-bg/--sidebar-hover/--sidebar-select + shared tokens, aubergine/glyph/focus-sidebar removed, --danger-bg #a3123f->#9c1139, gate level `preferred` (Lc 90) with test seen red; every sidebar text pair Lc 91.0-107.4 and 8.2-21.0:1 in both palettes, non-text Lc 53.1-107.0; contrast_check 0 findings, reverse control exit 1 (45 findings), fast tier 12 commands exit 0, vitest 974/974, coverage 100.00 %, electron-smoke 52/52 (first run 51/52: sidebar queried before the DOM existed, fixed with waitFor)
+- 2026-10-23 coordinator: T01 verified (`bash .claude/scratch/gates.sh` exit 0 on room with 12-sidebar-palette T01 and 09-room-resume T03 together: fast tier 12 commands exit 0, contrast_check 0 findings, vitest 976/976, coverage 100.00 %, build exit 0, electron-smoke 52/52 — this run); diff reviewed: own sidebar hover/select tokens because the light --hover-bg / --info-bg carry --text only at Lc 83.1 / 86.1; --danger-bg #a3123f → #9c1139 (confirm button Lc 89.9 → 91.4); AC1-AC3 met
+- 2026-10-23 coordinator: T02 done: docs/PROJECT.md Themes row, NOTES summary, labels status:review; tasks/check.py baseline 7; paused on AC4 (owner)

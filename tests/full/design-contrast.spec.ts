@@ -67,6 +67,51 @@ test('the body and terminal backgrounds follow the system colour scheme live, li
   }
 });
 
+function sidebarPaint(page: Page): Promise<{ tokenBg: string; bg: string; tokenText: string; text: string }> {
+  return page.evaluate(() => {
+    const resolve = (property: 'backgroundColor' | 'color', value: string): string => {
+      const probe = document.createElement('span');
+      probe.style[property] = value;
+      document.body.append(probe);
+      const colour = getComputedStyle(probe)[property];
+      probe.remove();
+      return colour;
+    };
+    const root = getComputedStyle(document.documentElement);
+    const sidebar = getComputedStyle(document.querySelector<HTMLElement>('.sidebar') as HTMLElement);
+    return {
+      tokenBg: resolve('backgroundColor', root.getPropertyValue('--sidebar-bg').trim()),
+      bg: sidebar.backgroundColor,
+      tokenText: resolve('color', root.getPropertyValue('--text').trim()),
+      text: sidebar.color,
+    };
+  });
+}
+
+test('the sidebar background follows the colour scheme', async () => {
+  const userData = mkdtempSync(path.join(tmpdir(), 'aiaw-userdata-'));
+  const folder = mkdtempSync(path.join(tmpdir(), 'aiaw-folder-'));
+  const app = await launch(userData, folder);
+  try {
+    const page = await app.firstWindow();
+    await page.locator('.sidebar').waitFor();
+    const seen: string[] = [];
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect
+        .poll(async () => {
+          const painted = await sidebarPaint(page);
+          return painted.bg === painted.tokenBg && painted.text === painted.tokenText;
+        })
+        .toBe(true);
+      seen.push((await sidebarPaint(page)).bg);
+    }
+    expect(seen[0]).not.toBe(seen[1]);
+  } finally {
+    await app.close();
+  }
+});
+
 test('a click on the head of a Room feed entry opens it and the head draws an arrow that turns when open', async () => {
   const base = mkdtempSync(path.join(tmpdir(), 'aiaw-contrast-room-'));
   const app = await electron.launch({

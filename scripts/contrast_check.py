@@ -30,6 +30,7 @@ MIN_HUE_DISTANCE = 40.0
 NEUTRAL_TEXT = ((255, 255, 255), (0, 0, 0))
 
 USES = {
+    "preferred": {"lc": 90.0, "ratio": 4.5, "text": True},
     "body": {"lc": 75.0, "ratio": 4.5, "text": True},
     "text": {"lc": 60.0, "ratio": 4.5, "text": True},
     "heading": {"lc": 60.0, "ratio": 4.5, "text": True},

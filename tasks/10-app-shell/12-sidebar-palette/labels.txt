@@ -2,7 +2,7 @@ phase:app-shell
 role:APP
 type:feature
 priority:P1
-status:todo
+status:review
 verify:pending
 depends:10-app-shell/11-theme-switch
 milestone:M2

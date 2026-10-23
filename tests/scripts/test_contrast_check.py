@@ -123,6 +123,18 @@ class ContrastRulesTest(unittest.TestCase):
         self.assertIn("contrast-apca", rules)
         self.assertNotIn("contrast-wcag", rules)
 
+    def test_preferred_level_needs_lc_90_where_body_needs_75(self) -> None:
+        rules = ".a { background: var(--pane); color: var(--fg); }\n"
+        shallow = with_tokens(dark="  --pane: #5a5e66;\n", light="    --pane: #e4e7ec;\n", rules=rules)
+        body = run_check(shallow, BASE_PAIRS + [{"fg": "--fg", "bg": "--pane", "use": "body"}])
+        self.assertEqual(body, [])
+        preferred = run_check(shallow, BASE_PAIRS + [{"fg": "--fg", "bg": "--pane", "use": "preferred"}])
+        self.assertEqual(rules_of(preferred), ["contrast-apca"])
+        self.assertIn("dark", preferred[0])
+        self.assertIn("below 90", preferred[0])
+        deep = with_tokens(dark="  --pane: #4b4f57;\n", light="    --pane: #e4e7ec;\n", rules=rules)
+        self.assertEqual(run_check(deep, BASE_PAIRS + [{"fg": "--fg", "bg": "--pane", "use": "preferred"}]), [])
+
     def test_dark_body_text_808080_fails_naming_the_pair(self) -> None:
         css = BASE_CSS.replace("--fg: #ffffff", "--fg: #808080")
         findings = run_check(css, BASE_PAIRS)
