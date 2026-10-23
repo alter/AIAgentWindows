@@ -45,6 +45,7 @@
   {"fg": "--on-fill", "bg": "--aubergine", "use": "non-text"},
   {"fg": "--on-fill", "bg": "--aubergine-hover", "use": "non-text"},
   {"fg": "--focus-sidebar", "bg": "--aubergine", "use": "non-text"},
+  {"fg": "--aubergine", "bg": "--on-fill", "use": "non-text"},
   {"fg": "--focus-sidebar", "bg": "--aubergine-hover", "use": "non-text"},
   {"fg": "--focus-sidebar", "bg": "--aubergine-select", "use": "non-text"}
 ]

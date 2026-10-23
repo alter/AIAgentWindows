@@ -21,6 +21,7 @@ const sidebar = new Sidebar({
   onRoomRename: (id, title) => content.roomRename(id, title),
   onAdd: (kind) => void api.addAgent(kind),
   onClose: (id) => void api.closeAgent(id),
+  onTheme: (choice) => void api.themeSet(choice),
 });
 content.watchRooms((state) => sidebar.setRooms(state));
 root.append(sidebar.element, content.element);
@@ -38,4 +39,5 @@ void api.listAgents().then((snapshot) => {
   sidebar.render(snapshot);
   content.render(snapshot);
 });
+void api.themeGet().then((choice) => sidebar.setTheme(choice));
 void api.roomState().then((snapshot) => content.roomLoad(snapshot));

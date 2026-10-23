@@ -1,5 +1,5 @@
 // ipc-handlers.ts
-import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
+import { ipcMain, nativeTheme, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import type { AgentController } from './agent-controller';
 import type { RoomService } from './room-service';
 import {
@@ -38,6 +38,11 @@ function buildHandlers(controller: AgentController, room: RoomService): Handlers
     [INVOKE_CHANNELS.roomTerminalBacklog]: ({ id }) => room.terminalBacklog(id),
     [INVOKE_CHANNELS.roomTerminalWrite]: ({ id, data }) => room.terminalWrite(id, data),
     [INVOKE_CHANNELS.roomTerminalResize]: ({ id, cols, rows }) => room.terminalResize(id, cols, rows),
+    [INVOKE_CHANNELS.themeGet]: () => controller.theme(),
+    [INVOKE_CHANNELS.themeSet]: async ({ choice }) => {
+      nativeTheme.themeSource = choice;
+      await controller.setTheme(choice);
+    },
   };
 }
 

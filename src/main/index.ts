@@ -1,8 +1,9 @@
 // index.ts
-import { app, BrowserWindow, clipboard, dialog } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, nativeTheme } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
+import { parseThemeChoice } from '../shared/theme';
 import { applyRenderSwitches } from '../shared/render-switches';
 import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
@@ -76,6 +77,7 @@ async function start(): Promise<void> {
   const sharedDir = path.join(userData, 'shared');
   await mkdir(sharedDir, { recursive: true });
   const state = await loadState(path.join(userData, 'agents.json'));
+  nativeTheme.themeSource = parseThemeChoice(state.theme);
   const window = createWindow();
   mainWindow = window;
   const siteLog = createSiteLogger(path.join(userData, 'logs', 'sites.log'));

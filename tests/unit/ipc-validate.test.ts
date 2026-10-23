@@ -201,3 +201,22 @@ describe('room channels', () => {
     expect(isEventChannel(EVENT_CHANNELS.roomEvent)).toBe(true);
   });
 });
+
+describe('theme channels', () => {
+  it('theme set accepts only system, light or dark', () => {
+    for (const choice of ['system', 'light', 'dark']) {
+      expect(validateRequest(INVOKE_CHANNELS.themeSet, { choice })).toEqual({ ok: true, value: { choice } });
+    }
+    for (const choice of ['', 'Dark', 'auto', 'neon', 1, null, undefined, ['dark'], {}]) {
+      expect(validateRequest(INVOKE_CHANNELS.themeSet, { choice }).ok).toBe(false);
+    }
+    for (const payload of [undefined, null, 'dark', ['dark'], {}]) {
+      expect(validateRequest(INVOKE_CHANNELS.themeSet, payload).ok).toBe(false);
+    }
+  });
+
+  it('theme get takes no payload', () => {
+    expect(validateRequest(INVOKE_CHANNELS.themeGet, undefined).ok).toBe(true);
+    expect(validateRequest(INVOKE_CHANNELS.themeGet, { x: 1 }).ok).toBe(false);
+  });
+});

@@ -3,6 +3,7 @@ import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
+import { isThemeChoice, type ThemeChoice } from './theme';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
 
 export const INVOKE_CHANNELS = {
@@ -30,6 +31,8 @@ export const INVOKE_CHANNELS = {
   roomTerminalBacklog: 'room:terminal-backlog',
   roomTerminalWrite: 'room:terminal-write',
   roomTerminalResize: 'room:terminal-resize',
+  themeGet: 'theme:get',
+  themeSet: 'theme:set',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -105,6 +108,8 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomTerminalBacklog]: { id: string };
   [INVOKE_CHANNELS.roomTerminalWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.roomTerminalResize]: { id: string; cols: number; rows: number };
+  [INVOKE_CHANNELS.themeGet]: undefined;
+  [INVOKE_CHANNELS.themeSet]: { choice: ThemeChoice };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -138,6 +143,8 @@ export interface AppApi {
   roomTerminalBacklog(id: string): Promise<PtyBacklog>;
   roomTerminalWrite(id: string, data: string): Promise<void>;
   roomTerminalResize(id: string, cols: number, rows: number): Promise<void>;
+  themeGet(): Promise<ThemeChoice>;
+  themeSet(choice: ThemeChoice): Promise<void>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
@@ -242,6 +249,12 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.roomTerminalBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.roomTerminalWrite]: parseWrite,
   [INVOKE_CHANNELS.roomTerminalResize]: parseResize,
+  [INVOKE_CHANNELS.themeGet]: noPayload,
+  [INVOKE_CHANNELS.themeSet]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const choice = payload['choice'];
+    return isThemeChoice(choice) ? { choice } : null;
+  },
 };
 
 export function validateRequest(channel: string, payload: unknown): Validation<unknown> {

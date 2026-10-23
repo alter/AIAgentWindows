@@ -5,6 +5,7 @@ import { AGENT_LABELS, isCliKind, isSiteKind, removeAgent, type Agent, type Agen
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
+import { parseThemeChoice, type ThemeChoice } from '../shared/theme';
 import { OutputBuffer } from '../shared/output-buffer';
 import { claimForAgents, restoreSpawn } from '../shared/restore';
 import { bracketedPaste } from '../shared/terminal-input';
@@ -29,6 +30,7 @@ export class AgentController {
   private agents: Agent[];
   private selectedId: string | null;
   private roomOpen = false;
+  private themeChoice: ThemeChoice;
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
   private readonly spawnedAt = new Map<string, number>();
@@ -38,6 +40,7 @@ export class AgentController {
   constructor(private readonly deps: ControllerDeps, initial: AppState) {
     this.agents = [...initial.agents];
     this.selectedId = this.agents[0]?.id ?? null;
+    this.themeChoice = parseThemeChoice(initial.theme);
     this.pty = new PtyManager({
       onData: (id, data) => {
         if (!this.closed.has(id)) this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) });
@@ -48,6 +51,15 @@ export class AgentController {
 
   snapshot(): AgentsSnapshot {
     return { agents: [...this.agents], selectedId: this.selectedId, roomOpen: this.roomOpen };
+  }
+
+  theme(): ThemeChoice {
+    return this.themeChoice;
+  }
+
+  async setTheme(choice: ThemeChoice): Promise<void> {
+    this.themeChoice = choice;
+    await this.persist();
   }
 
   agentById(id: string): Agent | undefined {
@@ -220,7 +232,7 @@ export class AgentController {
   private persist(): Promise<void> {
     const run = async (): Promise<void> => {
       await this.claimSessions();
-      const state: AppState = { version: 1, agents: this.agents };
+      const state: AppState = { version: 1, agents: this.agents, theme: this.themeChoice };
       await saveState(this.deps.stateFile, state);
     };
     this.saving = this.saving.then(run, run);

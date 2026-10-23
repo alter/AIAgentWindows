@@ -1,9 +1,11 @@
 // sidebar.ts
 import type { Agent, AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
+import type { ThemeChoice } from '../shared/theme';
 import { el } from './dom';
 import { kindIcon } from './icons';
 import { RoomTree, type RoomTreeState } from './room-tree';
+import { ThemeSwitch } from './theme-switch';
 
 export interface SidebarHandlers {
   onSelect(id: string): void;
@@ -13,6 +15,7 @@ export interface SidebarHandlers {
   onRoomRename(id: string, title: string): void;
   onAdd(kind: AgentKind): void;
   onClose(id: string): void;
+  onTheme(choice: ThemeChoice): void;
 }
 
 const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
@@ -26,6 +29,7 @@ const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
 export class Sidebar {
   readonly element = el('nav', 'sidebar');
   private readonly rooms: RoomTree;
+  private readonly theme: ThemeSwitch;
   private readonly list = el('ul', 'agent-list');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
@@ -47,6 +51,7 @@ export class Sidebar {
       onNew: () => this.handlers.onRoomNew(),
       onRename: (id, title) => this.handlers.onRoomRename(id, title),
     });
+    this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     const header = el('div', 'sidebar-header');
     header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
     this.addButton.type = 'button';
@@ -57,7 +62,7 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu);
+    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
@@ -72,6 +77,10 @@ export class Sidebar {
       this.hideContextMenu();
       this.setPending(null);
     });
+  }
+
+  setTheme(choice: ThemeChoice): void {
+    this.theme.setChoice(choice);
   }
 
   setRooms(state: RoomTreeState): void {

@@ -236,6 +236,13 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 
 .agent-list { list-style: none; margin: 0; padding: 4px 8px; overflow-y: auto; flex: 1; }
 .agent-empty { padding: 10px 8px; font-style: italic; }
+.theme-switch { padding: 8px 16px 12px; color: var(--on-fill); }
+.theme-switch-label { display: block; padding-bottom: 4px; font-weight: 700; }
+.theme-switch-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.theme-switch-option { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.theme-switch input[type="radio"] { width: 18px; height: 18px; border-color: var(--on-fill); background: transparent; }
+.theme-switch input[type="radio"]::before { background: var(--on-fill); }
+.theme-switch input[type="radio"]:focus-visible { outline-color: var(--focus-sidebar); }
 
 .agent-item {
   display: flex;

@@ -10,6 +10,7 @@ import {
   type PtyExitEvent,
   type SiteStateEvent,
 } from '../shared/ipc';
+import type { ThemeChoice } from '../shared/theme';
 import type { RoomModels } from '../shared/cli-models';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
 import type { RoomOpenResult, RoomSnapshot, RoomStartResult } from '../shared/room-view';
@@ -53,6 +54,8 @@ const api: AppApi = {
   roomTerminalBacklog: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalBacklog, { id }) as Promise<PtyBacklog>,
   roomTerminalWrite: (id, data) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalWrite, { id, data }) as Promise<void>,
   roomTerminalResize: (id, cols, rows) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalResize, { id, cols, rows }) as Promise<void>,
+  themeGet: () => ipcRenderer.invoke(INVOKE_CHANNELS.themeGet) as Promise<ThemeChoice>,
+  themeSet: (choice) => ipcRenderer.invoke(INVOKE_CHANNELS.themeSet, { choice }) as Promise<void>,
   onAgentsChanged: (listener) => subscribe<AgentsSnapshot>(EVENT_CHANNELS.agentsChanged, listener),
   onPtyData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.ptyData, listener),
   onPtyExit: (listener) => subscribe<PtyExitEvent>(EVENT_CHANNELS.ptyExit, listener),

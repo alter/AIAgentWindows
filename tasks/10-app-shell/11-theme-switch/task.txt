@@ -30,6 +30,9 @@ WRITE-SET
   src/main/ipc-handlers.ts
   src/main/index.ts
   src/main/state-file.ts
+  src/main/agent-controller.ts
+  src/shared/agents.ts
+  src/renderer/index.ts
   src/renderer/sidebar.ts
   src/renderer/theme-switch.ts
   src/renderer/styles.css

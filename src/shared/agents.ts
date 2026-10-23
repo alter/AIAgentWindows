@@ -1,4 +1,5 @@
 // agents.ts
+import { parseThemeChoice, type ThemeChoice } from './theme';
 export const AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
 export type AgentKind = (typeof AGENT_KINDS)[number];
 export type CliKind = 'claude' | 'codex';
@@ -32,6 +33,7 @@ export interface Agent {
 export interface AppState {
   version: 1;
   agents: Agent[];
+  theme?: ThemeChoice;
 }
 
 export const STATE_VERSION = 1;
@@ -122,5 +124,7 @@ export function parseState(text: string): AppState {
     seen.add(agent.id);
     agents.push(agent);
   }
-  return { version: STATE_VERSION, agents };
+  return raw['theme'] === undefined
+    ? { version: STATE_VERSION, agents }
+    : { version: STATE_VERSION, agents, theme: parseThemeChoice(raw['theme']) };
 }

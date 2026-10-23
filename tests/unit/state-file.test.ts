@@ -48,4 +48,22 @@ describe('state file', () => {
     expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(emptyState());
     expect(await readdir(dir)).toEqual(['agents.json']);
   });
+
+  it('round-trips a stored theme choice', async () => {
+    const file = path.join(dir, 'agents.json');
+    await saveState(file, { ...SAMPLE, theme: 'dark' });
+    expect((await loadState(file)).theme).toBe('dark');
+  });
+
+  it('loads a file written before the theme existed without a theme', async () => {
+    const file = path.join(dir, 'agents.json');
+    await writeFile(file, JSON.stringify({ version: 1, agents: [] }), 'utf8');
+    expect(await loadState(file)).toEqual(emptyState());
+  });
+
+  it('reads an unknown stored theme as system', async () => {
+    const file = path.join(dir, 'agents.json');
+    await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'neon' }), 'utf8');
+    expect((await loadState(file)).theme).toBe('system');
+  });
 });
