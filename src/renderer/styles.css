@@ -418,6 +418,23 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 .room-entry[open] > .room-entry-head::before { transform: rotate(45deg); }
 .room-entry[open] > .room-entry-head { margin-bottom: 4px; }
+.room-setup-head { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; list-style: none; }
+.room-setup-head::-webkit-details-marker { display: none; }
+.room-setup-head::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 0 2px;
+  border-right: 2px solid var(--text);
+  border-bottom: 2px solid var(--text);
+  transform: rotate(-45deg);
+}
+.room-setup[open] > .room-setup-head::before { transform: rotate(45deg); }
+.room-setup[open] > .room-setup-head { margin-bottom: 8px; }
+.room-setup-title { font-weight: 700; }
+.room-setup-digest { font-style: italic; }
+.room-setup[open] > .room-table-box, .room-setup[open] > .room-row { margin-bottom: 8px; }
 .room-copy { margin: 4px 0; }
 .room-entry-author { font-weight: 700; }
 .room-entry-text { margin: 0; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; }

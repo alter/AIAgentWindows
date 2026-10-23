@@ -3,7 +3,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { addParticipant, rowIds, table, tableRow, tableRows } from './room-table-helpers';
+import { addParticipant, openSetup, rowIds, setupBox, setupIsOpen, table, tableRow, tableRows } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -292,5 +292,74 @@ test('a final radio and the debug checkbox toggle by click and by Space', async 
     await expect(debug).toBeChecked();
   } finally {
     await app.close();
+  }
+});
+
+test('the setup closes on start and opens by click', async () => {
+  const base = newBase();
+  const { app, page } = await launch(base);
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    expect(await setupIsOpen(page)).toBe(true);
+    await expect(tableRows(page)).toHaveCount(PARTICIPANTS.length);
+    await field(page, 'prompt').fill('setup question');
+    await field(page, 'mode').selectOption('broadcast');
+    await field(page, 'rounds').fill('1');
+    await field(page, 'start').click();
+    await expect.poll(() => setupIsOpen(page)).toBe(false);
+    await expect(field(page, 'stop')).toBeEnabled();
+    await expect(field(page, 'start')).toBeDisabled();
+    await expect(table(page)).toBeHidden();
+    await setupBox(page).locator('summary').click();
+    await expect.poll(() => setupIsOpen(page)).toBe(true);
+    await expect(table(page)).toBeVisible();
+    await expect(field(page, 'rounds')).toBeDisabled();
+    await setupBox(page).locator('summary').click();
+    await expect.poll(() => setupIsOpen(page)).toBe(false);
+    await expect(field(page, 'status')).toContainText('done', { timeout: (PARTICIPANTS.length + 1) * TURN_BUDGET_MS + RUN_BASE_MS });
+    expect(await setupIsOpen(page)).toBe(false);
+    await openSetup(page);
+    await expect(field(page, 'rounds')).toBeEnabled();
+  } finally {
+    await app.close();
+  }
+});
+
+test('a refused start leaves the setup as it was', async () => {
+  const base = newBase();
+  const { app, page } = await launch(base);
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    await field(page, 'prompt').fill('');
+    await field(page, 'start').click();
+    await expect(field(page, 'message')).not.toHaveText('');
+    expect(await setupIsOpen(page)).toBe(true);
+  } finally {
+    await app.close();
+  }
+});
+
+test('a saved room with entries opens with the setup closed and a new room opens it', async () => {
+  const base = newBase();
+  const first = await launch(base);
+  try {
+    await finishOneRoom(first.page);
+  } finally {
+    await first.app.close();
+  }
+  const second = await launch(base);
+  const { page } = second;
+  try {
+    await expect(treeItems(page)).toHaveCount(1);
+    await treeItems(page).first().click();
+    await expect(field(page, 'pane')).toBeVisible();
+    await expect(page.locator('.room-entry').first()).toBeVisible();
+    expect(await setupIsOpen(page)).toBe(false);
+    await field(page, 'new').click();
+    await expect.poll(() => setupIsOpen(page)).toBe(true);
+  } finally {
+    await second.app.close();
   }
 });

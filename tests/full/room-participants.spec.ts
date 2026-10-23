@@ -3,7 +3,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { addParticipant, removeParticipant, rowIds } from './room-table-helpers';
+import { addParticipant, openSetup, removeParticipant, rowIds } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -127,6 +127,7 @@ test('two stub Claude instances relay for 2 rounds with their own labels, models
   const second = await launch(base);
   try {
     const { page } = second;
+    await openSetup(page);
     for (const instance of [FIRST, SECOND]) {
       const target = row(page, instance.id);
       await expect(target).toBeVisible();

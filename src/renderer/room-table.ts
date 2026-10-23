@@ -58,6 +58,7 @@ export class RoomTable {
   private models: RoomModels = emptyRoomModels();
   private finalId = '';
   private busy = false;
+  private changeListener: (() => void) | null = null;
 
   constructor() {
     const table = el('table', 'room-table');
@@ -105,6 +106,10 @@ export class RoomTable {
       if (!this.menu.hidden && !adder.contains(event.relatedTarget as Node | null)) this.closeMenu(false);
     });
     this.render([]);
+  }
+
+  onChange(listener: () => void): void {
+    this.changeListener = listener;
   }
 
   setRows(rows: readonly FormRow[], finalizerId: string): void {
@@ -272,6 +277,7 @@ export class RoomTable {
     this.nameRows();
     this.applyBusy();
     if (focus !== undefined) this.focus(focus);
+    this.changeListener?.();
   }
 
   private focus(target: FocusTarget): void {

@@ -425,3 +425,21 @@ export function renameTitle(current: string, typed: string): string | null {
   const title = parseRoomTitle(typed);
   return title === null || title === current ? null : title;
 }
+
+const MODE_TEXT: Record<RoomMode, string> = { broadcast: 'To all', relay: 'Relay' };
+const ROUNDS_SHAPE = /^\d{1,3}$/;
+
+export function setupOpenOnRoom(entryCount: number): boolean {
+  return entryCount === 0;
+}
+
+export function setupOpenAfterStart(open: boolean, accepted: boolean): boolean {
+  return accepted ? false : open;
+}
+
+export function setupDigest(participants: number, mode: RoomMode, rounds: string): string {
+  const parts = [`${participants} ${participants === 1 ? 'participant' : 'participants'}`, MODE_TEXT[mode]];
+  const count = rounds.trim();
+  if (ROUNDS_SHAPE.test(count)) parts.push(`${Number(count)} ${Number(count) === 1 ? 'round' : 'rounds'}`);
+  return parts.join(' · ');
+}

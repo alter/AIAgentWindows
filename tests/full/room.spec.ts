@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { addParticipant, removeParticipant, rowIds, setParticipants, tableRow } from './room-table-helpers';
+import { addParticipant, openSetup, removeParticipant, rowIds, setParticipants, tableRow } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -142,6 +142,7 @@ test('a second Claude row with a model and effort is a separate participant of t
     await expect(field(page, 'status')).toContainText('done', finishedWithin(2, 1));
     const authors = (await historyHeadings(page)).map((heading) => heading.split(' | ')[0]);
     expect(authors).toEqual(expect.arrayContaining(['Claude Code', 'Claude Code \u00b7 sonnet \u00b7 medium']));
+    await openSetup(page);
     await second.locator('[data-row-field="remove"]').click();
     await expect(second).toHaveCount(0);
   } finally {
@@ -517,6 +518,7 @@ test('a finished room is listed, New room clears the feed and the list reopens i
     await treeItems(page).first().click();
     await expect(page.locator('.room-entry')).toHaveCount(feedCount);
     await expect(field(page, 'prompt')).toHaveValue('');
+    await openSetup(page);
     await expect(tableRow(page, 'claude')).toBeVisible();
     const before = (await field(page, 'status').textContent()) ?? '';
     await field(page, 'prompt').fill('second question');

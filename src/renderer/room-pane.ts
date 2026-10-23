@@ -10,6 +10,9 @@ import {
   formToConfig,
   roomProgress,
   roomTreeRows,
+  setupDigest,
+  setupOpenAfterStart,
+  setupOpenOnRoom,
   type CarryWhat,
   type RoomFormValues,
   type RoomSnapshot,
@@ -41,6 +44,8 @@ export class RoomPane {
   private readonly feed = new RoomFeed(() => void this.onCopyFinal());
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly table = new RoomTable();
+  private readonly setup = el('details', 'room-setup');
+  private readonly digest = el('span', 'room-setup-digest');
   private readonly mode = el('select');
   private readonly rounds = el('input');
   private readonly timeout = el('input');
@@ -189,6 +194,7 @@ export class RoomPane {
     this.debugDir = null;
     this.snapshot = opened.snapshot;
     this.applyForm(opened.form);
+    this.setup.open = setupOpenOnRoom(opened.snapshot.entries.length);
     this.feed.reload(opened.snapshot);
     this.renderState();
     this.publishRooms();
@@ -204,6 +210,7 @@ export class RoomPane {
     this.message.textContent = '';
     this.prompt.value = '';
     this.snapshot = emptyRoomSnapshot();
+    this.setup.open = setupOpenOnRoom(0);
     this.feed.reload(this.snapshot);
     this.renderState();
     this.publishRooms();
@@ -216,6 +223,11 @@ export class RoomPane {
     this.rounds.value = form.rounds;
     this.timeout.value = form.timeoutMinutes;
     this.debugSites.checked = form.debugSites ?? false;
+    this.refreshDigest();
+  }
+
+  private refreshDigest(): void {
+    this.digest.textContent = setupDigest(this.table.ids().length, this.mode.value as RoomMode, this.rounds.value);
   }
 
   private controls(): HTMLElement {
@@ -244,7 +256,14 @@ export class RoomPane {
     this.stop.type = 'button';
     this.stop.dataset['room'] = 'stop';
     const settings = el('div', 'room-row');
-    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), labeled('Record site debug', this.debugSites), this.start, this.stop);
+    settings.append(field('Mode', this.mode), field('Rounds', this.rounds), field('Turn timeout (min)', this.timeout), labeled('Record site debug', this.debugSites));
+    const summary = el('summary', 'room-setup-head');
+    summary.append(el('span', 'room-setup-title', 'Participants and settings'), this.digest);
+    this.setup.dataset['room'] = 'setup';
+    this.setup.open = setupOpenOnRoom(0);
+    this.setup.append(summary, this.table.element, settings);
+    const actions = el('div', 'room-row');
+    actions.append(this.start, this.stop);
     const carry = el('div', 'room-row');
     this.target.dataset['room'] = 'carry-target';
     this.carryFinal.type = 'button';
@@ -252,10 +271,16 @@ export class RoomPane {
     this.carryHistory.type = 'button';
     this.carryHistory.dataset['room'] = 'carry-history';
     carry.append(field('Working session', this.target), this.carryFinal, this.carryHistory);
-    box.append(this.prompt, this.table.element, settings, this.status, this.message, carry);
+    box.append(this.prompt, this.setup, actions, this.status, this.message, carry);
     this.start.addEventListener('click', () => void this.onStart());
     this.stop.addEventListener('click', () => void api.roomStop());
-    this.mode.addEventListener('change', () => this.renderState());
+    this.mode.addEventListener('change', () => {
+      this.refreshDigest();
+      this.renderState();
+    });
+    this.rounds.addEventListener('input', () => this.refreshDigest());
+    this.table.onChange(() => this.refreshDigest());
+    this.refreshDigest();
     this.carryFinal.addEventListener('click', () => void this.onCarry('final'));
     this.carryHistory.addEventListener('click', () => void this.onCarry('history'));
     return box;
@@ -283,6 +308,7 @@ export class RoomPane {
     }
     this.debugDir = null;
     const started = await api.roomStart(result.config, this.openedId ?? undefined);
+    this.setup.open = setupOpenAfterStart(this.setup.open, started.ok);
     if (!started.ok) this.message.textContent = started.error;
     else this.debugDir = started.debugDir;
     this.renderState();

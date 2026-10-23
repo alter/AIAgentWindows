@@ -26,6 +26,9 @@ import {
   participantAvailability,
   resolveFinalizer,
   roomProgress,
+  setupDigest,
+  setupOpenAfterStart,
+  setupOpenOnRoom,
   snapshotFromRecord,
   type RoomFormValues,
 } from '../../src/shared/room-view';
@@ -963,5 +966,37 @@ describe('participant row logic', () => {
       { id: 'grok', label: 'Grok' },
     ]);
     expect(finalizerChoices(['codex']).map((item) => item.id)).toEqual(['codex']);
+  });
+});
+
+describe('room setup disclosure rule', () => {
+  it('opens for a room without entries and closes for a room with entries', () => {
+    expect(setupOpenOnRoom(0)).toBe(true);
+    expect(setupOpenOnRoom(1)).toBe(false);
+    expect(setupOpenOnRoom(40)).toBe(false);
+  });
+
+  it('closes on an accepted start and keeps the state on a refused one', () => {
+    expect(setupOpenAfterStart(true, true)).toBe(false);
+    expect(setupOpenAfterStart(false, true)).toBe(false);
+    expect(setupOpenAfterStart(true, false)).toBe(true);
+    expect(setupOpenAfterStart(false, false)).toBe(false);
+  });
+});
+
+describe('room setup digest', () => {
+  it('carries the participant count, the mode and the rounds', () => {
+    const digest = setupDigest(6, 'broadcast', '2');
+    expect(digest).toContain('6');
+    expect(digest).toContain('2');
+    expect(setupDigest(6, 'broadcast', '2')).not.toBe(setupDigest(6, 'relay', '2'));
+    expect(setupDigest(6, 'broadcast', '2')).not.toBe(setupDigest(5, 'broadcast', '2'));
+    expect(setupDigest(6, 'broadcast', '2')).not.toBe(setupDigest(6, 'broadcast', '3'));
+  });
+
+  it('stays short and never fails on an empty or odd rounds value', () => {
+    expect(setupDigest(0, 'relay', '').length).toBeLessThan(120);
+    expect(setupDigest(3, 'relay', 'x'.repeat(500)).length).toBeLessThan(120);
+    expect(setupDigest(3, 'relay', '')).not.toContain('undefined');
   });
 });

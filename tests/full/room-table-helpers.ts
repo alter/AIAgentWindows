@@ -33,3 +33,17 @@ export async function setParticipants(page: Page, kinds: readonly string[]): Pro
   for (const kind of kinds) await addParticipant(page, kind);
   await expect(tableRows(page)).toHaveCount(kinds.length);
 }
+
+export function setupBox(page: Page): Locator {
+  return page.locator('[data-room="setup"]');
+}
+
+export async function setupIsOpen(page: Page): Promise<boolean> {
+  return setupBox(page).evaluate((node) => (node as HTMLDetailsElement).open);
+}
+
+export async function openSetup(page: Page): Promise<void> {
+  if (await setupIsOpen(page)) return;
+  await setupBox(page).locator('summary').click();
+  await expect.poll(() => setupIsOpen(page)).toBe(true);
+}
