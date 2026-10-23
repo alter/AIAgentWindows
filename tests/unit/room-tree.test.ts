@@ -1,7 +1,7 @@
 // room-tree.test.ts
 import { describe, expect, it } from 'vitest';
 import type { RoomListItem } from '../../src/shared/room-model';
-import { renameTitle, roomTreeRows } from '../../src/shared/room-view';
+import { nextRoomAfterDelete, renameTitle, roomTreeRows } from '../../src/shared/room-view';
 
 const readable = (id: string, title: string): RoomListItem => ({
   id,
@@ -57,5 +57,19 @@ describe('renameTitle', () => {
     expect(renameTitle('Old', 'x'.repeat(81))).toBeNull();
     expect(renameTitle('Old', 'x'.repeat(80))).toBe('x'.repeat(80));
     expect(renameTitle('Old', 'bad\u0007title')).toBeNull();
+  });
+});
+
+describe('nextRoomAfterDelete', () => {
+  const unreadable: RoomListItem = { id: 'u', unreadable: true };
+
+  it('picks the next readable room, else the previous one, else nothing', () => {
+    const list = [readable('a', 'A'), readable('b', 'B'), unreadable, readable('c', 'C')];
+    expect(nextRoomAfterDelete(list, 'a')).toBe('b');
+    expect(nextRoomAfterDelete(list, 'b')).toBe('c');
+    expect(nextRoomAfterDelete(list, 'c')).toBe('b');
+    expect(nextRoomAfterDelete([readable('a', 'A'), unreadable], 'a')).toBeNull();
+    expect(nextRoomAfterDelete([readable('a', 'A')], 'a')).toBeNull();
+    expect(nextRoomAfterDelete(list, 'missing')).toBeNull();
   });
 });

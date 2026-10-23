@@ -22,6 +22,7 @@ export const INVOKE_CHANNELS = {
   roomList: 'room:list',
   roomOpen: 'room:open',
   roomRename: 'room:rename',
+  roomDelete: 'room:delete',
   roomNew: 'room:new',
   roomSelect: 'room:select',
   roomStart: 'room:start',
@@ -102,6 +103,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomList]: undefined;
   [INVOKE_CHANNELS.roomOpen]: { id: string };
   [INVOKE_CHANNELS.roomRename]: { id: string; title: string };
+  [INVOKE_CHANNELS.roomDelete]: { id: string };
   [INVOKE_CHANNELS.roomNew]: undefined;
   [INVOKE_CHANNELS.roomSelect]: undefined;
   [INVOKE_CHANNELS.roomStart]: RoomStartRequest;
@@ -140,6 +142,7 @@ export interface AppApi {
   roomList(): Promise<RoomListItem[]>;
   roomOpen(id: string): Promise<RoomOpenResult>;
   roomRename(id: string, title: string): Promise<boolean>;
+  roomDelete(id: string): Promise<boolean>;
   roomNew(): Promise<boolean>;
   roomSelect(): Promise<void>;
   roomStart(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult>;
@@ -249,6 +252,8 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
     const title = parseRoomTitle(payload['title']);
     return title === null ? null : { id: payload['id'], title };
   },
+  [INVOKE_CHANNELS.roomDelete]: (payload) =>
+    isRecord(payload) && isRoomId(payload['id']) ? { id: payload['id'] } : null,
   [INVOKE_CHANNELS.roomNew]: noPayload,
   [INVOKE_CHANNELS.roomSelect]: noPayload,
   [INVOKE_CHANNELS.roomStart]: parseRoomStart,

@@ -1,5 +1,5 @@
 // room-archive.test.ts
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -26,10 +26,12 @@ afterEach(async () => {
 
 const terminal: RoomTerminals = { backlog: () => ({ data: '', end: 0 }), write: () => true, resize: () => true };
 
-function service(driverFor: DriverFactory): { room: RoomService; seen: RoomEvent[] } {
+function service(driverFor: DriverFactory, extra: { debugRoot?: string; trash?: (file: string) => Promise<void> } = {}): { room: RoomService; seen: RoomEvent[] } {
   const seen: RoomEvent[] = [];
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
+    debugRoot: extra.debugRoot,
+    trash: extra.trash ?? (async () => undefined),
     driverFor,
     terminal,
     emit: (event) => seen.push(event),
@@ -338,5 +340,103 @@ describe('room resume in the service', () => {
     const refusedDone = await room.start(wanted, id, true);
     expect(refusedDone.ok).toBe(false);
     expect((await readRecord(roomsDir(), id))?.status).toBe('done');
+  });
+});
+
+describe('room delete in the service', () => {
+  const roomsDir = (): string => path.join(dir, 'rooms');
+  const debugRoot = (): string => path.join(dir, 'debug', 'sites');
+
+  function trashSpy(): { trash: (file: string) => Promise<void>; moved: string[] } {
+    const moved: string[] = [];
+    return {
+      moved,
+      trash: async (file) => {
+        moved.push(file);
+        await rm(file, { recursive: true, force: true });
+      },
+    };
+  }
+
+  async function savedRoom(extra: { debugRoot?: string; trash?: (file: string) => Promise<void> }): Promise<{ room: RoomService; seen: RoomEvent[]; id: string }> {
+    const made = service(gatedDriver(Promise.resolve()), extra);
+    const started = await made.room.start(config());
+    const id = started.ok ? started.roomId : '';
+    await finished(made.seen);
+    return { ...made, id };
+  }
+
+  it('moves the record, the history and the site debug folder to the trash function', async () => {
+    const spy = trashSpy();
+    const { room, id } = await savedRoom({ debugRoot: debugRoot(), trash: spy.trash });
+    await mkdir(path.join(debugRoot(), id), { recursive: true });
+    await writeFile(path.join(debugRoot(), id, 'frames.jsonl'), '{}', 'utf8');
+    expect(await room.delete(id)).toBe(true);
+    expect([...spy.moved].sort()).toEqual([path.join(debugRoot(), id), path.join(roomsDir(), `${id}.json`), path.join(roomsDir(), `${id}.md`)].sort());
+    expect(await readdir(roomsDir())).toEqual([]);
+    expect(await room.list()).toEqual([]);
+  });
+
+  it('a running room cannot be deleted', async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = trashSpy();
+    const { room, seen } = service(gatedDriver(gate), { trash: spy.trash });
+    const started = await room.start(config());
+    const id = started.ok ? started.roomId : '';
+    await vi.waitFor(async () => expect((await readRecord(roomsDir(), id))?.entries.length).toBeGreaterThanOrEqual(2));
+    expect(await room.delete(id)).toBe(false);
+    expect(spy.moved).toEqual([]);
+    expect(await readRecord(roomsDir(), id)).not.toBeNull();
+    release();
+    await finished(seen);
+    expect(await room.delete(id)).toBe(true);
+    expect(spy.moved.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('a missing file is not an error and is not sent to the trash', async () => {
+    const spy = trashSpy();
+    const { room, id } = await savedRoom({ debugRoot: debugRoot(), trash: spy.trash });
+    await unlink(path.join(roomsDir(), `${id}.md`));
+    expect(await room.delete(id)).toBe(true);
+    expect(spy.moved).toEqual([path.join(roomsDir(), `${id}.json`)]);
+    expect(await room.delete(id)).toBe(true);
+    expect(spy.moved).toHaveLength(1);
+  });
+
+  it('refuses a malformed id and touches nothing', async () => {
+    const spy = trashSpy();
+    const { room, id } = await savedRoom({ trash: spy.trash });
+    for (const bad of ['../x', 'a/b', '', '..', `${id}/..`]) expect(await room.delete(bad)).toBe(false);
+    expect(spy.moved).toEqual([]);
+    expect((await readdir(roomsDir())).sort()).toEqual([`${id}.json`, `${id}.md`]);
+  });
+
+  it('reports a failing trash and keeps the record listed', async () => {
+    const calls: string[] = [];
+    const failing = async (file: string): Promise<void> => {
+      calls.push(file);
+      throw new Error('trash is unavailable');
+    };
+    const { room, id } = await savedRoom({ trash: failing });
+    expect(await room.delete(id)).toBe(false);
+    expect(calls.length).toBeGreaterThan(0);
+    expect((await room.list()).map((item) => item.id)).toEqual([id]);
+  });
+
+  it('deleting the opened room empties the pane state, deleting another one does not', async () => {
+    const first = await savedRoom({});
+    const started = await first.room.start(config({ prompt: 'second room' }));
+    const secondId = started.ok ? started.roomId : '';
+    await vi.waitFor(() => expect(first.seen.filter((event) => event.type === 'finished')).toHaveLength(2));
+    await vi.waitFor(async () => expect((await readRecord(roomsDir(), secondId))?.status).toBe('done'));
+    expect((await first.room.open(first.id)).ok).toBe(true);
+    expect(await first.room.delete(secondId)).toBe(true);
+    expect(first.room.state().roomId).toBe(first.id);
+    expect(await first.room.delete(first.id)).toBe(true);
+    expect(first.room.state().roomId).toBeNull();
+    expect(first.room.state().entries).toEqual([]);
   });
 });

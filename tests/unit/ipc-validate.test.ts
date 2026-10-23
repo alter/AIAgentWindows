@@ -176,6 +176,16 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomRename, 'room-1_a').ok).toBe(false);
   });
 
+  it('room delete rejects a malformed id', () => {
+    expect(INVOKE_CHANNELS.roomDelete).toBe('room:delete');
+    expect(validateRequest(INVOKE_CHANNELS.roomDelete, { id: 'room-1_a' })).toEqual({ ok: true, value: { id: 'room-1_a' } });
+    for (const id of ['../x', 'a/b', 'a.b', '', 7, null, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomDelete, { id }).ok).toBe(false);
+    }
+    expect(validateRequest(INVOKE_CHANNELS.roomDelete, null).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomDelete, 'room-1_a').ok).toBe(false);
+  });
+
   it('takes no payload for state, select and stop', () => {
     for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomNew, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);

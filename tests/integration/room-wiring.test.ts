@@ -113,6 +113,7 @@ function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [],
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
     debugRoot,
+    trash: async () => undefined,
     driverFor,
     terminal,
     emit: (event) => seen.push(event),

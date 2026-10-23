@@ -8,6 +8,7 @@ import {
   defaultRows,
   emptyRoomSnapshot,
   formToConfig,
+  nextRoomAfterDelete,
   roomProgress,
   roomTreeRows,
   setupDigest,
@@ -172,6 +173,22 @@ export class RoomPane {
     const renamed = await api.roomRename(id, title).catch(() => false);
     if (!renamed) this.message.textContent = 'The room could not be renamed.';
     await this.refreshList();
+  }
+
+  async deleteFromTree(id: string): Promise<void> {
+    const next = nextRoomAfterDelete(this.listed, id);
+    const wasOpen = this.openedId === id;
+    const deleted = await api.roomDelete(id).catch(() => false);
+    if (!deleted) {
+      this.message.textContent = 'The room could not be deleted.';
+      await this.refreshList();
+      return;
+    }
+    if (wasOpen) this.openedId = null;
+    await this.refreshList();
+    if (!wasOpen) return;
+    if (next === null) await this.onNewRoom();
+    else await this.openRoom(next);
   }
 
   private async refreshList(): Promise<void> {

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Room, type DriverFactory, type RoomContinuation } from './room';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
-import { listRecords, readRecord, stopInterrupted, writeRecord } from './room-archive';
+import { listRecords, readRecord, stopInterrupted, trashRoom, writeRecord, type TrashItem } from './room-archive';
 import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
 import {
@@ -22,6 +22,7 @@ import {
 export interface RoomServiceDeps {
   roomsDir: string;
   debugRoot?: string;
+  trash: TrashItem;
   driverFor: DriverFactory;
   emit(event: RoomEvent): void;
   terminal: RoomTerminals;
@@ -125,6 +126,17 @@ export class RoomService {
     } catch {
       return false;
     }
+  }
+
+  async delete(id: string): Promise<boolean> {
+    if (!isRoomId(id) || this.room.isRunning()) return false;
+    try {
+      await trashRoom(this.deps.roomsDir, id, this.deps.trash, this.deps.debugRoot);
+    } catch {
+      return false;
+    }
+    if (this.snapshot.roomId === id) this.snapshot = emptyRoomSnapshot();
+    return true;
   }
 
   stop(): void {

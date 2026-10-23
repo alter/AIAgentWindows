@@ -7,6 +7,7 @@ export interface RoomTreeHandlers {
   onOpen(id: string): void;
   onNew(): void;
   onRename(id: string, title: string): void;
+  onDelete(id: string): void;
 }
 
 export interface RoomTreeState {
@@ -29,10 +30,16 @@ export class RoomTree {
   private readonly list = el('ul', 'rooms-list');
   private readonly menu = el('div', 'rooms-menu');
   private readonly renameItem = el('button', 'rooms-menu-item', 'Rename');
+  private readonly deleteItem = el('button', 'rooms-menu-item', 'Delete');
+  private readonly confirm = el('div', 'rooms-confirm');
+  private readonly confirmText = el('span', 'rooms-confirm-text');
+  private readonly confirmYes = el('button', 'rooms-confirm-yes', 'Delete');
+  private readonly confirmNo = el('button', 'rooms-confirm-no', 'Cancel');
   private state: RoomTreeState = { rows: [], busy: false };
   private paneOpen = false;
   private expanded = true;
   private menuId: string | null = null;
+  private pendingId: string | null = null;
   private editing: Editing | null = null;
   private rebuilding = false;
 
@@ -64,14 +71,40 @@ export class RoomTree {
       this.hideMenu();
       if (id !== null) this.startRename(id);
     });
-    this.menu.append(this.renameItem);
-    this.element.append(header, this.list, this.menu);
-    document.addEventListener('click', () => this.hideMenu());
-    document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape' || this.menuId === null) return;
+    this.deleteItem.type = 'button';
+    this.deleteItem.dataset['room'] = 'delete';
+    this.deleteItem.setAttribute('role', 'menuitem');
+    this.deleteItem.addEventListener('click', () => {
       const id = this.menuId;
       this.hideMenu();
-      this.focusItem(id);
+      if (id !== null) this.askDelete(id);
+    });
+    this.menu.append(this.renameItem, this.deleteItem);
+    this.confirm.hidden = true;
+    this.confirm.dataset['room'] = 'delete-confirm';
+    this.confirm.setAttribute('role', 'alertdialog');
+    this.confirmYes.type = 'button';
+    this.confirmYes.dataset['room'] = 'delete-yes';
+    this.confirmNo.type = 'button';
+    this.confirmNo.dataset['room'] = 'delete-no';
+    this.confirm.append(this.confirmText, this.confirmYes, this.confirmNo);
+    this.confirmYes.addEventListener('click', () => {
+      const id = this.pendingId;
+      this.setPending(null);
+      if (id !== null) this.handlers.onDelete(id);
+    });
+    this.confirmNo.addEventListener('click', () => this.cancelDelete());
+    this.element.append(header, this.list, this.confirm, this.menu);
+    document.addEventListener('click', () => this.hideMenu());
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      if (this.pendingId !== null) {
+        this.cancelDelete();
+      } else if (this.menuId !== null) {
+        const id = this.menuId;
+        this.hideMenu();
+        this.focusItem(id);
+      }
     });
     this.render();
   }
@@ -97,6 +130,7 @@ export class RoomTree {
     this.toggle.setAttribute('aria-expanded', String(this.expanded));
     this.add.disabled = this.state.busy;
     this.list.hidden = !this.expanded;
+    if (this.pendingId !== null && (this.state.busy || !this.state.rows.some((row) => row.id === this.pendingId))) this.setPending(null);
     if (!this.expanded) {
       this.editing = null;
       this.list.replaceChildren();
@@ -136,6 +170,9 @@ export class RoomTree {
       if (event.key === 'F2' && !row.unreadable) {
         event.preventDefault();
         this.startRename(row.id);
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && !row.unreadable) {
+        event.preventDefault();
+        this.askDelete(row.id);
       }
     });
     if (!row.unreadable) {
@@ -207,10 +244,32 @@ export class RoomTree {
     }
   }
 
+  private askDelete(id: string): void {
+    const row = this.state.rows.find((item) => item.id === id);
+    if (row === undefined || row.unreadable || this.state.busy) return;
+    this.hideMenu();
+    this.setPending(id);
+    this.confirmNo.focus();
+  }
+
+  private cancelDelete(): void {
+    const id = this.pendingId;
+    this.setPending(null);
+    if (id !== null) this.focusItem(id);
+  }
+
+  private setPending(id: string | null): void {
+    this.pendingId = id;
+    const row = this.state.rows.find((item) => item.id === id);
+    this.confirm.hidden = row === undefined;
+    this.confirmText.textContent = row === undefined ? '' : `Delete ${row.label}? It moves to the Trash.`;
+  }
+
   private showMenu(id: string, x: number, y: number): void {
     this.menuId = id;
     this.menu.style.left = `${x}px`;
     this.menu.style.top = `${y}px`;
+    this.deleteItem.disabled = this.state.busy;
     this.menu.hidden = false;
     this.renameItem.focus();
   }

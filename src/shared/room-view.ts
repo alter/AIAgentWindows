@@ -423,6 +423,14 @@ export function roomTreeRows(items: readonly RoomListItem[], openedId: string | 
   );
 }
 
+export function nextRoomAfterDelete(items: readonly RoomListItem[], deletedId: string): string | null {
+  const at = items.findIndex((item) => item.id === deletedId);
+  if (at < 0) return null;
+  const after = items.slice(at + 1).find((item) => !item.unreadable);
+  const before = items.slice(0, at).reverse().find((item) => !item.unreadable);
+  return (after ?? before)?.id ?? null;
+}
+
 export function renameTitle(current: string, typed: string): string | null {
   const title = parseRoomTitle(typed);
   return title === null || title === current ? null : title;

@@ -1,5 +1,5 @@
 // room-archive.ts
-import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { MAX_RECORD_BYTES, isRoomId, parseRoomRecord, roomTitle, type RoomListItem, type RoomRecord } from '../shared/room-model';
 
@@ -89,4 +89,44 @@ export async function stopInterrupted(roomsDir: string): Promise<string[]> {
     stopped.push(id);
   }
   return stopped.sort();
+}
+
+export type TrashItem = (file: string) => Promise<void>;
+
+function insideDirectory(root: string, name: string): string {
+  const base = path.resolve(root);
+  const target = path.resolve(base, name);
+  if (path.dirname(target) !== base) throw new Error('room file outside its directory');
+  return target;
+}
+
+export function roomPaths(roomsDir: string, id: string, debugRoot?: string): string[] {
+  if (!isRoomId(id)) throw new Error('invalid room id');
+  const paths = [insideDirectory(roomsDir, `${id}.md`), recordPath(roomsDir, id)];
+  return debugRoot === undefined ? paths : [insideDirectory(debugRoot, id), ...paths];
+}
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await lstat(file);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+export async function trashRoom(roomsDir: string, id: string, trash: TrashItem, debugRoot?: string): Promise<void> {
+  for (const file of roomPaths(roomsDir, id, debugRoot)) {
+    if (await exists(file)) await trash(file);
+  }
+}
+
+export function moveToFolder(folder: string): TrashItem {
+  let counter = 0;
+  return async (file) => {
+    await mkdir(folder, { recursive: true });
+    counter += 1;
+    await rename(file, path.join(folder, `${Date.now()}-${counter}-${path.basename(file)}`));
+  };
 }

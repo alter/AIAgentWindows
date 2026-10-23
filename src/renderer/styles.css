@@ -351,7 +351,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   background: var(--menu-bg);
   color: var(--text);
 }
-.context-menu[hidden], .rooms-menu[hidden], .close-confirm[hidden], .restart-button[hidden] { display: none; }
+.context-menu[hidden], .rooms-menu[hidden], .close-confirm[hidden], .rooms-confirm[hidden], .restart-button[hidden] { display: none; }
 .context-item, .rooms-menu-item {
   width: 100%;
   padding: 7px 10px;
@@ -365,7 +365,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 .context-item:hover, .rooms-menu-item:hover { background: var(--sidebar-hover); }
 
-.close-confirm {
+.close-confirm, .rooms-confirm {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -374,16 +374,16 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   color: var(--text);
   border-top: 1px solid var(--border);
 }
-.close-confirm-text { flex: 1 0 100%; }
-.confirm-yes, .confirm-no {
+.close-confirm-text, .rooms-confirm-text { flex: 1 0 100%; }
+.confirm-yes, .confirm-no, .rooms-confirm-yes, .rooms-confirm-no {
   padding: 5px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
   font: inherit;
   cursor: pointer;
 }
-.confirm-yes { background: var(--danger-bg); color: var(--on-fill); }
-.confirm-no { background: var(--button-bg); color: var(--on-fill); }
+.confirm-yes, .rooms-confirm-yes { background: var(--danger-bg); color: var(--on-fill); }
+.confirm-no, .rooms-confirm-no { background: var(--button-bg); color: var(--on-fill); }
 
 .restart-button {
   position: absolute;

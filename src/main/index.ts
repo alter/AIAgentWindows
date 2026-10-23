@@ -1,5 +1,5 @@
 // index.ts
-import { app, BrowserWindow, clipboard, dialog, nativeTheme } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, shell } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
@@ -16,6 +16,7 @@ import { CAPTURE_ENV, captureSites, summarizeCapture } from './capture-sites';
 import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { createRoomDrivers, type RoomDrivers } from './room-drivers';
+import { moveToFolder } from './room-archive';
 import { RoomService } from './room-service';
 import { createModelCatalog } from './cli-models';
 import { createSiteSeats } from './site-seats';
@@ -130,6 +131,7 @@ async function start(): Promise<void> {
   const roomService = new RoomService({
     roomsDir,
     debugRoot,
+    trash: (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file) => shell.trashItem(file),
     driverFor: drivers.factory,
     terminal: drivers.terminal,
     emit: (event) => {

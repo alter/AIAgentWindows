@@ -70,6 +70,10 @@ export class Content {
     void this.room.renameFromTree(id, title);
   }
 
+  roomDelete(id: string): void {
+    void this.room.deleteFromTree(id);
+  }
+
   roomLoad(snapshot: RoomSnapshot): void {
     this.room.load(snapshot);
   }

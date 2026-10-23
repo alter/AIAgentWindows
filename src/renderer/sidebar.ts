@@ -13,6 +13,7 @@ export interface SidebarHandlers {
   onRoomOpen(id: string): void;
   onRoomNew(): void;
   onRoomRename(id: string, title: string): void;
+  onRoomDelete(id: string): void;
   onAdd(kind: AgentKind): void;
   onClose(id: string): void;
   onRename(id: string, title: string): void;
@@ -60,6 +61,7 @@ export class Sidebar {
       onOpen: (id) => this.handlers.onRoomOpen(id),
       onNew: () => this.handlers.onRoomNew(),
       onRename: (id, title) => this.handlers.onRoomRename(id, title),
+      onDelete: (id) => this.handlers.onRoomDelete(id),
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     const header = el('div', 'sidebar-header');

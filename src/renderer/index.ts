@@ -19,6 +19,7 @@ const sidebar = new Sidebar({
   onRoomOpen: (id) => content.roomOpen(id),
   onRoomNew: () => content.roomNew(),
   onRoomRename: (id, title) => content.roomRename(id, title),
+  onRoomDelete: (id) => content.roomDelete(id),
   onAdd: (kind) => void api.addAgent(kind),
   onClose: (id) => void api.closeAgent(id),
   onRename: (id, title) => void api.renameAgent(id, title),
