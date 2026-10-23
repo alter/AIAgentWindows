@@ -74,3 +74,5 @@ A clash found by the full smoke: the tree menu first reused `.context-menu/.cont
 Smoke rewrites: tests/full/room.spec.ts (two steps) and tests/full/room-archive.spec.ts (one step) count `[data-room="tree"] [data-room-id]` and open a room by clicking its item instead of the select; coverage kept. New: tests/full/room-layout.spec.ts (rename from the tree with Escape discarded then Enter saved -> title in the record -> restart -> tree shows it and opens the room; collapse reports aria-expanded; markup in a title is shown as text, no `img`/`b` elements, no `window.__pwned`).
 
 Checks: fast tier 12 commands exit 0 (coverage 100.00 %); `npm run -s build` then electron-smoke 41/41.
+
+Write set gained src/renderer/content.ts (T02): Content is the only owner of the RoomPane, so the tree callbacks (watchRooms, roomOpen, roomNew, roomRename) pass through it.
