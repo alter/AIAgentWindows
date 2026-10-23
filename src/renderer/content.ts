@@ -6,6 +6,7 @@ import type { RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 import { NavBar } from './nav-bar';
 import { RoomPane } from './room-pane';
+import type { RoomTreeState } from './room-tree';
 import { TerminalPane, agentIo } from './terminal-pane';
 
 export class Content {
@@ -51,6 +52,22 @@ export class Content {
     this.navBar.setAgent(site ? selected.id : null);
     for (const [id, pane] of this.panes) if (id !== this.selectedId) pane.hide();
     this.panes.get(this.selectedId ?? '')?.show();
+  }
+
+  watchRooms(listener: (state: RoomTreeState) => void): void {
+    this.room.watchRooms(listener);
+  }
+
+  roomOpen(id: string): void {
+    void this.room.openFromTree(id);
+  }
+
+  roomNew(): void {
+    void this.room.newFromTree();
+  }
+
+  roomRename(id: string, title: string): void {
+    void this.room.renameFromTree(id, title);
   }
 
   roomLoad(snapshot: RoomSnapshot): void {

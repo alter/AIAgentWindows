@@ -11,6 +11,7 @@ import {
   nextParticipantId,
   roomPlan,
   parseRoomConfig,
+  parseRoomTitle,
   type RoomConfigResult,
   type RoomEntry,
   type RoomEntryState,
@@ -366,15 +367,22 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
   };
 }
 
-export interface RoomListOption {
+export interface RoomTreeRow {
   id: string;
   label: string;
-  disabled: boolean;
+  unreadable: boolean;
+  current: boolean;
 }
 
-export function roomListOption(item: RoomListItem): RoomListOption {
-  if (item.unreadable) return { id: item.id, label: `${item.id} · unreadable`, disabled: true };
-  const first = item.firstPrompt.replace(/\s+/g, ' ').trim();
-  const when = new Date(item.updatedAt).toLocaleString();
-  return { id: item.id, label: `${when} · ${item.status} · ${first === '' ? item.id : first}`, disabled: false };
+export function roomTreeRows(items: readonly RoomListItem[], openedId: string | null): RoomTreeRow[] {
+  return items.map((item) =>
+    item.unreadable
+      ? { id: item.id, label: `${item.id} · unreadable`, unreadable: true, current: false }
+      : { id: item.id, label: item.title, unreadable: false, current: item.id === openedId },
+  );
+}
+
+export function renameTitle(current: string, typed: string): string | null {
+  const title = parseRoomTitle(typed);
+  return title === null || title === current ? null : title;
 }

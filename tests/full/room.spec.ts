@@ -45,6 +45,10 @@ function field(page: Page, name: string): Locator {
   return page.locator(`[data-room="${name}"]`);
 }
 
+function treeItems(page: Page): Locator {
+  return page.locator('[data-room="tree"] [data-room-id]');
+}
+
 function finishedWithin(participants: number, rounds: number): { timeout: number } {
   return { timeout: (participants * rounds + 1) * TURN_BUDGET_MS + RUN_BASE_MS };
 }
@@ -500,10 +504,10 @@ test('a finished room is listed, New room clears the feed and the list reopens i
     await run(page, 'broadcast', 1, 'archive question');
     const feedCount = await page.locator('.room-entry').count();
     expect(feedCount).toBeGreaterThan(0);
-    await expect(field(page, 'rooms').locator('option:not([value=""])')).toHaveCount(1);
+    await expect(treeItems(page)).toHaveCount(1);
     await field(page, 'new').click();
     await expect(page.locator('.room-entry')).toHaveCount(0);
-    await field(page, 'rooms').selectOption({ index: 1 });
+    await treeItems(page).first().click();
     await expect(page.locator('.room-entry')).toHaveCount(feedCount);
     await expect(field(page, 'prompt')).toHaveValue('');
     await expect(page.locator('input[data-participant="claude"]')).toBeChecked();
@@ -513,7 +517,7 @@ test('a finished room is listed, New room clears the feed and the list reopens i
     await expect(page.locator('.room-entry')).not.toHaveCount(feedCount);
     await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
     expect(await page.locator('.room-entry').count()).toBeGreaterThan(feedCount);
-    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(1);
+    await expect(treeItems(page)).toHaveCount(1);
     expect(before).toContain('History:');
   } finally {
     await app.close();
@@ -535,14 +539,14 @@ test('Start after a finished live run continues the same room and New room start
     const text = readFileSync(firstFile, 'utf8');
     expect(text.indexOf('first question')).toBeGreaterThanOrEqual(0);
     expect(text.indexOf('first question')).toBeLessThan(text.indexOf('second question'));
-    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(1);
+    await expect(treeItems(page)).toHaveCount(1);
     await field(page, 'new').click();
     await expect(field(page, 'start')).toHaveText('Start');
     await field(page, 'prompt').fill('third question');
     await field(page, 'start').click();
     await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
     expect(await historyFileOf(page)).not.toBe(firstFile);
-    expect(await field(page, 'rooms').locator('option:not([value=""])').count()).toBe(2);
+    await expect(treeItems(page)).toHaveCount(2);
   } finally {
     await app.close();
   }

@@ -3,10 +3,14 @@ import type { Agent, AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
 import { el } from './dom';
 import { kindIcon } from './icons';
+import { RoomTree, type RoomTreeState } from './room-tree';
 
 export interface SidebarHandlers {
   onSelect(id: string): void;
   onRoom(): void;
+  onRoomOpen(id: string): void;
+  onRoomNew(): void;
+  onRoomRename(id: string, title: string): void;
   onAdd(kind: AgentKind): void;
   onClose(id: string): void;
 }
@@ -21,7 +25,7 @@ const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
 
 export class Sidebar {
   readonly element = el('nav', 'sidebar');
-  private readonly roomItem = el('button', 'room-item');
+  private readonly rooms: RoomTree;
   private readonly list = el('ul', 'agent-list');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
@@ -37,12 +41,12 @@ export class Sidebar {
   private menuOpen = false;
 
   constructor(private readonly handlers: SidebarHandlers) {
-    const roomSection = el('div', 'room-section');
-    this.roomItem.type = 'button';
-    this.roomItem.dataset['room'] = 'open';
-    this.roomItem.append(el('span', 'room-glyph', '#'), el('span', 'agent-title', 'Room'));
-    this.roomItem.addEventListener('click', () => this.handlers.onRoom());
-    roomSection.append(this.roomItem);
+    this.rooms = new RoomTree({
+      onPane: () => this.handlers.onRoom(),
+      onOpen: (id) => this.handlers.onRoomOpen(id),
+      onNew: () => this.handlers.onRoomNew(),
+      onRename: (id, title) => this.handlers.onRoomRename(id, title),
+    });
     const header = el('div', 'sidebar-header');
     header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
     this.addButton.type = 'button';
@@ -53,7 +57,7 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(roomSection, header, this.menu, this.list, this.confirm, this.contextMenu);
+    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
@@ -70,9 +74,13 @@ export class Sidebar {
     });
   }
 
+  setRooms(state: RoomTreeState): void {
+    this.rooms.setState(state);
+  }
+
   render(snapshot: AgentsSnapshot): void {
     this.agents = snapshot.agents;
-    this.roomItem.classList.toggle('selected', snapshot.roomOpen);
+    this.rooms.setPaneOpen(snapshot.roomOpen);
     if (this.pendingId !== null && !snapshot.agents.some((agent) => agent.id === this.pendingId)) this.setPending(null);
     this.list.replaceChildren();
     if (snapshot.agents.length === 0) {

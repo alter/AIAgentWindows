@@ -58,3 +58,19 @@ The T01 unit tests were written after the code. Mutation in place (copy kept in 
 × room rename rejects a malformed id or title
 ```
 Restored: room-model + ipc-validate + integration room-archive 67/67.
+
+## 2026-10-23 T02 rooms tree
+
+Design: the Room pane owns the list and the opened id and hands `{rows, busy}` to the sidebar through `Content.watchRooms`; `src/renderer/room-tree.ts` renders `# Rooms` (arrow button `data-room="tree-toggle"` with aria-expanded, title button `data-room="open"` that shows the pane, `+` `data-room="new"`), items are buttons `[data-room-id]` (labels by textContent, opened one `aria-current` while the pane is open, `aria-disabled` while a run is busy), right-click or F2 -> `Rename` -> in-place input (Enter saves, Escape or blur cancels). The pane heading shows the opened room's title (textContent). Pure logic `roomTreeRows`, `renameTitle` in src/shared/room-view.ts replaced `roomListOption` (its tests rewritten in tests/unit/room-tree.test.ts). The pane's select and "New room" button are gone; the sidebar `+` is New room. Unreadable rooms are listed disabled.
+
+Red first: tests/unit/room-tree.test.ts failed 7/7 (`renameTitle is not a function`) before the logic. The smoke specs could not be shown red on the old UI: the rewritten steps need the new markup, and electron-smoke rebuilds first, which failed on the removed `roomListOption` once the shared logic was swapped.
+
+Reverse controls on the new smoke (each run restored afterwards, `npx playwright test --project=electron-smoke tests/full/room-layout.spec.ts`):
+- the pane's rename no longer calls `api.roomRename` -> `a room renamed from the tree keeps its title ...` red (`Expected "Kept name", Received "layout question"`) and `markup in a room title is shown as text` red (`Expected the markup title, Received undefined`); the collapse test stayed green.
+- tree label set through `innerHTML` instead of textContent -> `markup in a room title is shown as text` red (`Expected "<img src=x onerror=...><b>bold</b>", Received "bold"`); the other two stayed green.
+
+A clash found by the full smoke: the tree menu first reused `.context-menu/.context-item`, which broke `smoke.spec` (`.context-item` resolved to 2 elements); the tree menu now has its own classes `rooms-menu`, `rooms-menu-item`.
+
+Smoke rewrites: tests/full/room.spec.ts (two steps) and tests/full/room-archive.spec.ts (one step) count `[data-room="tree"] [data-room-id]` and open a room by clicking its item instead of the select; coverage kept. New: tests/full/room-layout.spec.ts (rename from the tree with Escape discarded then Enter saved -> title in the record -> restart -> tree shows it and opens the room; collapse reports aria-expanded; markup in a title is shown as text, no `img`/`b` elements, no `window.__pwned`).
+
+Checks: fast tier 12 commands exit 0 (coverage 100.00 %); `npm run -s build` then electron-smoke 41/41.

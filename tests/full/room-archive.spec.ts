@@ -52,6 +52,10 @@ function field(page: Page, name: string): Locator {
   return page.locator(`[data-room="${name}"]`);
 }
 
+function treeItems(page: Page): Locator {
+  return page.locator('[data-room="tree"] [data-room-id]');
+}
+
 function finishedWithin(participants: number, rounds: number): { timeout: number } {
   return { timeout: (participants * rounds + 1) * TURN_BUDGET_MS + RUN_BASE_MS };
 }
@@ -107,8 +111,10 @@ test('a finished room survives an app restart, is reopened from the list and con
     await page.locator('button[aria-haspopup="menu"]').click();
     await page.locator('.menu-item[data-kind="claude"]').click();
     await expect(page.locator('.agent-item')).toHaveCount(1);
-    await openRoom(page);
-    await expect(field(page, 'rooms').locator('option:not([value=""])')).toHaveCount(1);
+    await expect(treeItems(page)).toHaveCount(1);
+    await treeItems(page).first().click();
+    await expect(page.locator('[data-room="pane"]')).toBeVisible();
+    await expect(treeItems(page).first()).toHaveAttribute('aria-current', 'true');
     await expect(page.locator('.room-entry')).toHaveCount(headingsBefore.length);
     await expect(field(page, 'status')).toContainText('done');
     await expect(field(page, 'carry-target').locator('option')).toHaveCount(1);

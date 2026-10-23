@@ -16,9 +16,13 @@ const content = new Content();
 const sidebar = new Sidebar({
   onSelect: (id) => void api.selectAgent(id),
   onRoom: () => void api.roomSelect(),
+  onRoomOpen: (id) => content.roomOpen(id),
+  onRoomNew: () => content.roomNew(),
+  onRoomRename: (id, title) => content.roomRename(id, title),
   onAdd: (kind) => void api.addAgent(kind),
   onClose: (id) => void api.closeAgent(id),
 });
+content.watchRooms((state) => sidebar.setRooms(state));
 root.append(sidebar.element, content.element);
 
 api.onPtyData((event) => content.ptyData(event));

@@ -15,8 +15,8 @@ import {
   participantAvailability,
   removeRow,
   resolveFinalizer,
-  roomListOption,
   roomProgress,
+  roomTreeRows,
   type CarryWhat,
   type FormRow,
   type RoomFormValues,
@@ -25,10 +25,12 @@ import {
 import { api } from './api';
 import { el } from './dom';
 import { RoomFeed } from './room-feed';
+import type { RoomTreeState } from './room-tree';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
 
 const DEFAULT_TIMEOUT_MINUTES = '10';
 const CLI_KINDS: readonly AgentKind[] = ['claude', 'codex'];
+const ROOM_HEADING = 'Room';
 
 interface RowView {
   id: string;
@@ -66,8 +68,7 @@ export class RoomPane {
   private readonly timeout = el('input');
   private readonly finalizer = el('select');
   private readonly debugSites = el('input');
-  private readonly rooms = el('select', 'room-list');
-  private readonly newRoom = el('button', 'room-button', 'New room');
+  private readonly heading = el('h2', 'room-title', ROOM_HEADING);
   private readonly start = el('button', 'room-button', 'Start');
   private readonly stop = el('button', 'room-button stop', 'Stop');
   private readonly progress = el('div', 'room-progress');
@@ -93,6 +94,7 @@ export class RoomPane {
   private debugDir: string | null = null;
   private openedId: string | null = null;
   private listed: readonly RoomListItem[] = [];
+  private roomsListener: ((state: RoomTreeState) => void) | null = null;
 
   constructor() {
     this.element.hidden = true;
@@ -118,10 +120,12 @@ export class RoomPane {
     this.resume.dataset['room'] = 'resume';
     this.resume.addEventListener('click', () => void api.roomResume());
     this.pause.append(this.pauseNotes, this.terminals, this.resume);
-    this.element.append(el('h2', 'room-title', 'Room'), this.archive(), this.progress, this.feed.element, this.pause, this.controls());
+    this.heading.dataset['room'] = 'title';
+    this.element.append(this.heading, this.progress, this.feed.element, this.pause, this.controls());
     this.renderFeed();
     this.renderState();
     void this.loadModels();
+    void this.refreshList();
   }
 
   show(): void {
@@ -165,35 +169,36 @@ export class RoomPane {
     this.renderState();
   }
 
-  private archive(): HTMLElement {
-    const row = el('div', 'room-row room-archive');
-    this.rooms.dataset['room'] = 'rooms';
-    this.newRoom.type = 'button';
-    this.newRoom.dataset['room'] = 'new';
-    this.rooms.addEventListener('change', () => {
-      if (this.rooms.value !== '') void this.openRoom(this.rooms.value);
-    });
-    this.newRoom.addEventListener('click', () => void this.onNewRoom());
-    row.append(field('Rooms', this.rooms), this.newRoom);
-    return row;
+  watchRooms(listener: (state: RoomTreeState) => void): void {
+    this.roomsListener = listener;
+    this.publishRooms();
+  }
+
+  async openFromTree(id: string): Promise<void> {
+    await api.roomSelect();
+    await this.openRoom(id);
+  }
+
+  async newFromTree(): Promise<void> {
+    await api.roomSelect();
+    await this.onNewRoom();
+  }
+
+  async renameFromTree(id: string, title: string): Promise<void> {
+    const renamed = await api.roomRename(id, title).catch(() => false);
+    if (!renamed) this.message.textContent = 'The room could not be renamed.';
+    await this.refreshList();
   }
 
   private async refreshList(): Promise<void> {
     this.listed = await api.roomList().catch(() => []);
-    this.renderList();
+    this.publishRooms();
   }
 
-  private renderList(): void {
-    const placeholder = el('option', undefined, this.listed.length === 0 ? 'No saved rooms' : `Saved rooms (${this.listed.length})`);
-    placeholder.value = '';
-    this.rooms.replaceChildren(placeholder);
-    for (const item of this.listed.map(roomListOption)) {
-      const option = el('option', undefined, item.label);
-      option.value = item.id;
-      option.disabled = item.disabled;
-      this.rooms.append(option);
-    }
-    this.rooms.value = this.openedId !== null && this.listed.some((item) => item.id === this.openedId) ? this.openedId : '';
+  private publishRooms(): void {
+    const opened = this.listed.find((item) => item.id === this.openedId);
+    this.heading.textContent = opened !== undefined && !opened.unreadable ? opened.title : ROOM_HEADING;
+    this.roomsListener?.({ rows: roomTreeRows(this.listed, this.openedId), busy: this.snapshot.phase === 'running' });
   }
 
   private async openRoom(id: string): Promise<void> {
@@ -201,7 +206,7 @@ export class RoomPane {
     const opened = await api.roomOpen(id);
     if (!opened.ok) {
       this.message.textContent = opened.error;
-      this.renderList();
+      this.publishRooms();
       return;
     }
     this.openedId = id;
@@ -210,7 +215,7 @@ export class RoomPane {
     this.applyForm(opened.form);
     this.feed.reload(opened.snapshot);
     this.renderState();
-    this.renderList();
+    this.publishRooms();
   }
 
   private async onNewRoom(): Promise<void> {
@@ -225,7 +230,7 @@ export class RoomPane {
     this.snapshot = emptyRoomSnapshot();
     this.feed.reload(this.snapshot);
     this.renderState();
-    this.renderList();
+    this.publishRooms();
   }
 
   private applyForm(form: RoomFormValues): void {
@@ -493,10 +498,9 @@ export class RoomPane {
     this.renderProgress();
     const { phase, completed, total, running, historyPath, paused } = this.snapshot;
     const busy = phase === 'running';
+    this.publishRooms();
     this.start.disabled = busy;
     this.start.textContent = this.openedId === null ? 'Start' : 'Continue';
-    this.rooms.disabled = busy;
-    this.newRoom.disabled = busy;
     this.stop.disabled = !busy;
     this.prompt.disabled = busy;
     this.mode.disabled = busy;
