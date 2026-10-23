@@ -58,3 +58,12 @@ Error: expect(received).toEqual(expected) // deep equality
 ## T06 write set
 
 tests/full/room-participants.spec.ts added to WRITE-SET of task.txt: PLAN T06 names it (the dedicated AC4 smoke).
+
+## Summary — what 03-room-participants built (2026-10-23)
+
+- Participant = instance `{id, kind, label, model?, effort?}`; ids `<kind>`, then `<kind>-<n>`; model shape `[A-Za-z0-9._:[]-]{1,64}`, effort `[a-z]{1,16}`; sites stay one each, without model or effort; old configs and records parse unchanged.
+- Spawn: claude `--model <m> --effort <e>`, codex `-m <m> -c model_reasoning_effort="<e>"` before `resume`; absent values add nothing; each instance has its own driver and session.
+- Suggestions: `src/main/cli-models.ts` reads `claude --help` and `codex debug models` once per app run (execFile through the usual wrapper, 10 s timeout, bounded output); a failure leaves free text.
+- UI: participant rows with model datalist and effort select; finalizer by instance label; rows come back with the room.
+- Open for the owner's run (AC5): whether the model asked for answers (CC38 effort on resume, CX40 codex model/effort on a resumed thread).
+
