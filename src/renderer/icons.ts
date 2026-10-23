@@ -1,22 +1,29 @@
 // icons.ts
 import type { AgentKind } from '../shared/agents';
 
-const TERMINAL_GLYPH = '<path d="M5 7l5 5-5 5M12 17h7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>';
-const GLOBE_GLYPH =
-  '<g fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c3 3 3 13 0 16M12 4c-3 3-3 13 0 16"/></g>';
+export const ICON_DIR = 'assets/icons';
 
-const GLYPHS: Readonly<Record<AgentKind, string>> = {
-  claude: TERMINAL_GLYPH,
-  codex: TERMINAL_GLYPH,
-  chatgpt: GLOBE_GLYPH,
-  grok: GLOBE_GLYPH,
-  deepseek: GLOBE_GLYPH,
+export const AGENT_ICON_FILES: Readonly<Record<AgentKind, string>> = {
+  claude: 'claudecode-color.svg',
+  codex: 'codex-color.svg',
+  chatgpt: 'openai.svg',
+  grok: 'grok.svg',
+  deepseek: 'deepseek-color.svg',
 };
 
+export const MONO_ICON_FILES: readonly string[] = ['openai.svg', 'grok.svg'];
+
 export function kindIcon(kind: AgentKind): HTMLElement {
-  const badge = document.createElement('span');
-  badge.className = `kind-icon kind-${kind}`;
-  badge.setAttribute('aria-hidden', 'true');
-  badge.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18">${GLYPHS[kind]}</svg>`;
-  return badge;
+  const tile = document.createElement('span');
+  tile.className = 'kind-icon';
+  tile.dataset['kind'] = kind;
+  tile.setAttribute('aria-hidden', 'true');
+  const file = AGENT_ICON_FILES[kind];
+  const image = document.createElement('img');
+  image.className = MONO_ICON_FILES.includes(file) ? 'kind-logo kind-logo-mono' : 'kind-logo';
+  image.alt = '';
+  image.draggable = false;
+  image.src = `${ICON_DIR}/${file}`;
+  tile.append(image);
+  return tile;
 }

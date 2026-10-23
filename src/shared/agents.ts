@@ -38,11 +38,23 @@ export interface AppState {
   sidebarWidth?: number;
 }
 
+export const MAX_AGENT_TITLE_CHARS = 80;
 export const STATE_VERSION = 1;
 export const MAX_STATE_BYTES = 1024 * 1024;
 export const MAX_CWD_BYTES = 4096;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isControlCode(code: number): boolean {
+  return code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+}
+
+export function parseAgentTitle(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  for (let index = 0; index < value.length; index += 1) if (isControlCode(value.charCodeAt(index))) return null;
+  const title = value.trim();
+  return title.length >= 1 && title.length <= MAX_AGENT_TITLE_CHARS ? title : null;
+}
 
 export function isCliKind(kind: AgentKind): kind is CliKind {
   return kind === 'claude' || kind === 'codex';

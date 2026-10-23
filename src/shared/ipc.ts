@@ -1,5 +1,5 @@
 // ipc.ts
-import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
+import { AGENT_KINDS, parseAgentTitle, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
@@ -13,6 +13,7 @@ export const INVOKE_CHANNELS = {
   selectAgent: 'agents:select',
   closeAgent: 'agents:close',
   restartAgent: 'agents:restart',
+  renameAgent: 'agent:rename',
   ptyWrite: 'pty:write',
   ptyResize: 'pty:resize',
   ptyBacklog: 'pty:backlog',
@@ -92,6 +93,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.selectAgent]: { id: string };
   [INVOKE_CHANNELS.closeAgent]: { id: string };
   [INVOKE_CHANNELS.restartAgent]: { id: string };
+  [INVOKE_CHANNELS.renameAgent]: { id: string; title: string };
   [INVOKE_CHANNELS.ptyWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.ptyResize]: { id: string; cols: number; rows: number };
   [INVOKE_CHANNELS.ptyBacklog]: { id: string };
@@ -128,6 +130,7 @@ export interface AppApi {
   selectAgent(id: string): Promise<void>;
   closeAgent(id: string): Promise<void>;
   restartAgent(id: string): Promise<boolean>;
+  renameAgent(id: string, title: string): Promise<boolean>;
   ptyWrite(id: string, data: string): Promise<void>;
   ptyResize(id: string, cols: number, rows: number): Promise<void>;
   ptyBacklog(id: string): Promise<PtyBacklog>;
@@ -224,6 +227,11 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.selectAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.closeAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.restartAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
+  [INVOKE_CHANNELS.renameAgent]: (payload) =>
+    withId(payload, (record, id) => {
+      const title = parseAgentTitle(record['title']);
+      return title === null ? null : { id, title };
+    }),
   [INVOKE_CHANNELS.ptyWrite]: parseWrite,
   [INVOKE_CHANNELS.ptyResize]: parseResize,
   [INVOKE_CHANNELS.ptyBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),

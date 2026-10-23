@@ -218,7 +218,7 @@ test('closing an agent asks for confirmation in the app, removes it, and it stay
     await expect(page.locator('.agent-item')).toHaveCount(2);
 
     await page.locator('.agent-item').first().click({ button: 'right' });
-    await page.locator('.context-item').click();
+    await page.locator('.context-item[data-agent="close"]').click();
     await expect(page.locator('.close-confirm')).toBeVisible();
     await page.locator('.confirm-yes').click();
     await expect(page.locator('.agent-item')).toHaveCount(1);

@@ -105,6 +105,19 @@ describe('channel tables', () => {
       expect(validateRequest(channel, undefined).ok).toBe(false);
     }
   });
+
+  it('agent rename accepts a valid id and a clean title only', () => {
+    expect(INVOKE_CHANNELS.renameAgent).toBe('agent:rename');
+    expect(validateRequest(INVOKE_CHANNELS.renameAgent, { id: ID, title: ' Reviewer ' })).toEqual({ ok: true, value: { id: ID, title: 'Reviewer' } });
+    for (const id of ['', 5, undefined, 'x'.repeat(201)]) {
+      expect(validateRequest(INVOKE_CHANNELS.renameAgent, { id, title: 'ok' }).ok).toBe(false);
+    }
+    for (const title of ['', '   ', 'x'.repeat(81), 'a\nb', 'a\u0000b', 7, null, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.renameAgent, { id: ID, title }).ok).toBe(false);
+    }
+    expect(validateRequest(INVOKE_CHANNELS.renameAgent, null).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.renameAgent, ID).ok).toBe(false);
+  });
 });
 
 describe('room channels', () => {

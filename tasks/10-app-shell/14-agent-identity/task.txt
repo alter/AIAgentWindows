@@ -38,7 +38,7 @@ WRITE-SET
   scripts/build.mjs
   tests/unit/
   tests/full/
-  docs/tech/lobe-icons@1.97.0.md
+  docs/tech/lobe-icons@1.95.1.md
   docs/PROJECT.md
   tasks/10-app-shell/14-agent-identity/
 

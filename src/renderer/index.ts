@@ -21,6 +21,7 @@ const sidebar = new Sidebar({
   onRoomRename: (id, title) => content.roomRename(id, title),
   onAdd: (kind) => void api.addAgent(kind),
   onClose: (id) => void api.closeAgent(id),
+  onRename: (id, title) => void api.renameAgent(id, title),
   onTheme: (choice) => void api.themeSet(choice),
 });
 content.watchRooms((state) => sidebar.setRooms(state));

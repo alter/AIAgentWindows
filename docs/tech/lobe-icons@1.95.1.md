@@ -1,0 +1,46 @@
+# lobe-icons@1.95.1
+
+Package `@lobehub/icons-static-svg` at 1.95.1, the source of the agent logos vendored by task 14-agent-identity (T02). Read from the tarball `npm pack @lobehub/icons-static-svg@1.95.1` on 2026-10-23 (unpacked in scratch, deleted after) and from the brand pages fetched the same day. Nothing is a runtime dependency: the six files are copied into the repository.
+
+## Version
+
+- Pinned 1.95.1, published 2026-09-21; the newest version at least two weeks old on 2026-10-23 (1.96.0 and 1.97.0 are from 2026-10-21, 1.98.0 from 2026-10-22). The task's WRITE-SET named 1.97.0, which is two days old, so the pin and this file's name differ from it — https://www.npmjs.com/package/@lobehub/icons-static-svg?activeTab=versions
+- The six chosen files are byte-identical in 1.95.1 and 1.98.0 (compared by `cmp`), so the pin loses nothing — https://unpkg.com/@lobehub/icons-static-svg@1.98.0/icons/
+- The tarball holds `package.json`, `README.md` and `icons/` only (950 files, flat), no LICENSE file; `package.json` says `"license": "MIT"` and the README says "This project is MIT licensed" — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/package.json
+
+## Licence
+
+- MIT, "Copyright (c) 2023 LobeHub"; the licence text is the LICENSE file of the repository (the package does not ship it), so the vendored folder carries a copy of it plus the source URL of each file — https://github.com/lobehub/lobe-icons/blob/master/LICENSE
+- The MIT licence covers the repository's files; it does not transfer the brands' trademarks, which stay with their owners and are governed by the terms below — https://github.com/lobehub/lobe-icons
+
+## Files to vendor (slugs confirmed against the tarball listing)
+
+All six assumed slugs exist; no correction. Every file is a single-line SVG with `viewBox="0 0 24 24"`, `height="1em" width="1em"`, `style="flex:none;line-height:1"` and a `<title>` (the title is the brand name; when shown as `<img>` the alt text is the agent title, so the `<title>` is not read) .
+
+- Claude Code: `claudecode-color.svg`, 424 B, colour variant, one `<path>` with fixed `fill="#D97757"`, no currentColor; sha256 `670b3d8d749d0815ad8f7e62a59d51cb5e2053cb19403f3541a8aed7036a877f` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/claudecode-color.svg
+- Codex: `codex-color.svg`, 1769 B, colour variant, a white rounded-square tile (`fill="#fff"`) and a mark filled by a linear gradient (`#3941FF`, `#7A9DFF`, `#B1A7FF`), gradient id `lobe-icons-codex-_R_0_`; it brings its own tile, so on a dark palette a white square shows; sha256 `4a2f43ce46b5b6e3722c95088f88d26ef91e6a8c2e598e70642a1c54367386e4` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/codex-color.svg
+- OpenAI (ChatGPT): `openai.svg`, 1687 B, mono variant only (no `openai-color` exists), `fill="currentColor"` on the root `<svg>`; as an `<img>` currentColor resolves to black, so the dark palette needs another way to draw it light (inline sanitized SVG or a build-time recolour is a T02 decision; the brand's own mark is black or white); sha256 `a595df6b423920c67a7f8f73c063e4bfb72d415948097b6cac063a2366bb5186` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openai.svg
+- Grok: `grok.svg`, 756 B, mono variant only (no `grok-color`), `fill="currentColor"` on the root `<svg>`, same `<img>` caveat as OpenAI; the package also has `xai.svg` (the company mark), which is not the product; sha256 `9175fc90c22655160231976c849f25a03b888d7cc0e04c5f1b987b659bb07c95` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/grok.svg
+- DeepSeek: `deepseek-color.svg`, 2164 B, colour variant, one fixed `fill="#4D6BFE"`, no currentColor; sha256 `deba5f98a5c1796e20fcac3149bcd7eb8a32f0bdd04d048819400b1f28bd1439` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/deepseek-color.svg
+- OpenRouter: `openrouter-color.svg`, 357 B, colour variant, one fixed `fill="#C8FF00"` (a yellow-green made for dark backgrounds, low contrast on a light tile: the colour variant needs a dark tile in both themes or the mono `openrouter.svg`, 382 B, `fill="currentColor"`); vendored here for the later OpenRouter tasks; sha256 `17bede1b89166f824ee06753dc526a3f5e18b769706deaab09d04a3a98de1a78` — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/openrouter-color.svg
+- Mono alternatives exist for the rest if a single recolourable set is wanted (`claudecode.svg`, `codex.svg`, `deepseek.svg`, `openrouter.svg`, all `fill="currentColor"`), but D3 of the plan prefers the colour variants where they exist — https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/
+- No file uses `<script>`, `<image>`, `xlink` or external references; the only element besides `<path>` is the Codex gradient (`<defs>`, `<linearGradient>`, three `<stop>`), and the only `style` is `flex:none;line-height:1` on the root — https://jsdelivr.com/package/npm/@lobehub/icons-static-svg
+- Mirror for the same files: https://cdn.jsdelivr.net/npm/@lobehub/icons-static-svg@1.95.1/icons/<slug>.svg
+
+## Brand terms
+
+- OpenAI (covers ChatGPT and Codex; there is no separate Codex page): "The 'OpenAI' name, the OpenAI logo, the 'ChatGPT' and 'GPT' brands, and other OpenAI trademarks, are property of OpenAI"; use the logo "exactly as provided", "only when it directly relates to OpenAI services", do not "imply endorsement", do not use it "more prominently than your own", do not "add any colors to the Blossom"; "By using OpenAI's Marks, you agree that we own them"; OpenAI may review use, require changes and terminate permission at any time; permission requests go to partnercomms@openai.com — https://openai.com/brand
+- OpenAI also says "We do not permit model names in app titles"; the sidebar item shows the agent's own title, so the logo is a label for the CLI the owner runs, not a product name — https://openai.com/brand
+- Grok (SpaceXSI, the page says it is a separate company from X): use the Marks "only to accurately refer to us or our services"; do not "imply our endorsement, approval, or sponsorship", do not use them "in any app title, domain name, or the name of any product or service not made or provided by us", do not add anything close to them that creates a new mark; logos only "exactly as provided at the download link below, without any alteration or adjustment" — https://x.ai/legal/brand-guidelines
+- Grok: the logo as vendored (the lobe-icons redraw, not the download from the brand page) is not "exactly as provided" by the owner of the mark; this is a residual risk of D1, recorded for the owner (AC5) — https://x.ai/legal/brand-guidelines
+- OpenRouter: "Please don't stretch, recolor, or remix the marks"; the page offers the glyph "the mark alone — avatars, favicons, small sizes" in four variants (Grape on light backgrounds, Volt on dark, Ink on light, Cloud on dark) as SVG and PNG; the lobe colour variant is a Volt-like `#C8FF00` (equality with the official Volt not verified) — https://openrouter.ai/brand
+- Anthropic (Claude Code): third parties may "accurately say, in plain text, that your product has Claude Code preinstalled or that it runs Claude Code", but "can't use the Claude Code or Anthropic names or logos as part of your own product, feature, or company name, in your own logo, or in a way that suggests Anthropic built, endorses, or is partnered with your product" — https://code.claude.com/docs/en/legal-and-compliance
+- Anthropic trademark guidelines: "You may only use our trademarks as specifically permitted by us and only in materials we approve beforehand"; Anthropic "will supply an image (or images) of the trademark(s)", so the lobe-icons file is not Anthropic's supplied image — https://www.anthropic.com/legal/trademark-guidelines
+- DeepSeek publishes no brand guidelines page found; its Terms of Use (6.2) say "Without our permission, you or your end users shall not use any trademarks, service marks, trade names, domain names, website names, company logos (LOGOs) ... related to the Services, including but not limited to 'DeepSeek'"; that clause is written for users of the DeepSeek services, and the permission question for a logo shown beside a locally run CLI is open — https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html
+- DeepSeek has a harness repository with a brand file for a different product ("DeepSeek Harness"), not for the logo — https://github.com/deepseek-ai/deepseek-harness/blob/master/BRAND_GUIDELINES.md
+
+## What the terms mean for T02
+
+- Common rules across the brands: use as provided, no recolour, no stretch, no implication of endorsement, do not put the mark into the product's own name or logo; the sidebar uses each logo only as a label of the agent kind next to the agent's own title — https://openai.com/brand
+- No licence in the table gives permission for the logos themselves (MIT covers the SVG files of lobe-icons); the owner takes the residual trademark risk, as D1 and D3 of the plan already state, and a brand owner's request to remove a mark is a reason to delete the file — https://github.com/lobehub/lobe-icons/blob/master/LICENSE
+- `<img src>` of a bundled file keeps each SVG isolated (no script, no CSS of the page); currentColor inside such an `<img>` is black, which is the reason for the open dark-palette question on the two mono marks — https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Attribute/fill

@@ -1,7 +1,7 @@
 // agent-controller.ts
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { AGENT_LABELS, isCliKind, isSiteKind, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
+import { AGENT_LABELS, isCliKind, isSiteKind, parseAgentTitle, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { EVENT_CHANNELS, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
@@ -125,6 +125,15 @@ export class AgentController {
     this.selectedId = next.selectedId;
     await this.persist();
     this.emitChanged();
+  }
+
+  async rename(id: string, title: string): Promise<boolean> {
+    const clean = parseAgentTitle(title);
+    if (clean === null || this.agentById(id) === undefined) return false;
+    this.agents = this.agents.map((agent) => (agent.id === id ? { ...agent, title: clean } : agent));
+    await this.persist();
+    this.emitChanged();
+    return true;
   }
 
   async restart(id: string): Promise<boolean> {

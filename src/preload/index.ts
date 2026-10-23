@@ -29,6 +29,7 @@ const api: AppApi = {
   selectAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.selectAgent, { id }) as Promise<void>,
   closeAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.closeAgent, { id }) as Promise<void>,
   restartAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.restartAgent, { id }) as Promise<boolean>,
+  renameAgent: (id, title) => ipcRenderer.invoke(INVOKE_CHANNELS.renameAgent, { id, title }) as Promise<boolean>,
   ptyWrite: (id, data) => ipcRenderer.invoke(INVOKE_CHANNELS.ptyWrite, { id, data }) as Promise<void>,
   ptyResize: (id, cols, rows) => ipcRenderer.invoke(INVOKE_CHANNELS.ptyResize, { id, cols, rows }) as Promise<void>,
   ptyBacklog: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.ptyBacklog, { id }) as Promise<PtyBacklog>,

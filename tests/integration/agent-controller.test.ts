@@ -19,8 +19,8 @@ let showSite: Mock<NonNullable<ControllerDeps['showSite']>>;
 let closeSite: Mock<NonNullable<ControllerDeps['closeSite']>>;
 let layoutSidebar: Mock<NonNullable<ControllerDeps['layoutSidebar']>>;
 
-function build(): AgentController {
-  const deps: ControllerDeps = {
+function controllerDeps(): ControllerDeps {
+  return {
     stateFile: path.join(dir, 'agents.json'),
     sharedDir: path.join(dir, 'shared'),
     platform: 'win32',
@@ -32,7 +32,10 @@ function build(): AgentController {
     closeSite,
     layoutSidebar,
   };
-  return new AgentController(deps, emptyState());
+}
+
+function build(): AgentController {
+  return new AgentController(controllerDeps(), emptyState());
 }
 
 async function waitForBanner(id: string): Promise<string> {
@@ -184,6 +187,27 @@ describe('agent controller', () => {
     } finally {
       guarded.shutdown();
     }
+  });
+
+  it('renames an agent, stores the title beside the agents and refuses a bad id or title', async () => {
+    await controller.add('grok');
+    await controller.add('deepseek');
+    const [grok, deepseek] = controller.snapshot().agents;
+    expect(await controller.rename(grok?.id ?? '', '  Research  ')).toBe(true);
+    expect(controller.snapshot().agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
+    expect(controller.snapshot().selectedId).toBe(deepseek?.id);
+    expect((await loadState(path.join(dir, 'agents.json'))).agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
+    const changed = events.filter((event) => event.channel === EVENT_CHANNELS.agentsChanged);
+    expect((changed.at(-1)?.payload as AgentsSnapshot).agents[0]?.title).toBe('Research');
+    const before = events.length;
+    for (const [id, title] of [['missing', 'x'], [grok?.id ?? '', ''], [grok?.id ?? '', 'x'.repeat(81)], [grok?.id ?? '', 'a\nb']] as const) {
+      expect(await controller.rename(id, title)).toBe(false);
+    }
+    expect(events.length).toBe(before);
+    expect(controller.snapshot().agents[0]?.title).toBe('Research');
+    const reopened = new AgentController({ ...controllerDeps(), stateFile: path.join(dir, 'agents.json') }, await loadState(path.join(dir, 'agents.json')));
+    expect(reopened.snapshot().agents.map((agent) => agent.title)).toEqual(['Research', 'DeepSeek']);
+    reopened.shutdown();
   });
 
   it('closes an agent: kills its pty, drops it from the state file and the snapshot, keeps the others', async () => {

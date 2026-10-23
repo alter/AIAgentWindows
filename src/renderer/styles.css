@@ -2,15 +2,11 @@
 :root {
   color-scheme: dark;
   --sidebar-width: 260px;
+  --sidebar-inset-end: 8px;
   --nav-bar-height: 36px;
   --on-fill: #ffffff;
   --button-bg: #0b4f82;
   --danger-bg: #9c1139;
-  --kind-claude: #c15f3c;
-  --kind-codex: #10a37f;
-  --kind-chatgpt: #0e8a6b;
-  --kind-grok: #2b2b2b;
-  --kind-deepseek: #4d6bfe;
   --content-bg: #1a1d21;
   --sidebar-bg: #14161a;
   --sidebar-hover: #4b4f57;
@@ -135,7 +131,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 
 .room-section { padding: 4px 8px 0; }
-.rooms { display: flex; flex-direction: column; padding: 4px 8px 0; }
+.rooms { display: flex; flex-direction: column; padding: 4px var(--sidebar-inset-end) 0 8px; }
 .rooms-header { display: flex; align-items: center; gap: 2px; padding: 4px 0; color: var(--text); }
 .rooms-toggle, .rooms-title {
   border: 0;
@@ -158,9 +154,11 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .rooms-toggle[aria-expanded="true"]::before { transform: rotate(45deg); }
 .rooms-title { flex: 1; padding: 4px 6px; font-weight: 700; text-align: left; }
 .rooms-toggle:hover, .rooms-title:hover { background: var(--sidebar-hover); }
-.rooms-add {
+.rooms-add, .add-button {
+  flex: none;
   width: 28px;
   height: 28px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--button-bg);
@@ -169,7 +167,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   line-height: 1;
   cursor: pointer;
 }
-.rooms-add:hover { background: var(--sidebar-hover); color: var(--text); }
+.rooms-add:hover, .add-button:hover { background: var(--sidebar-hover); color: var(--text); }
 .rooms-add:disabled { background: transparent; border: 1px dashed var(--text); color: var(--text); cursor: default; }
 .rooms-list { list-style: none; margin: 0; padding: 0 0 4px; max-height: 30vh; overflow-y: auto; }
 .rooms-list[hidden] { display: none; }
@@ -192,29 +190,16 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .rooms-item:disabled { font-style: italic; cursor: default; }
 .rooms-item[aria-disabled="true"] { cursor: default; }
 .rooms-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rooms-rename { width: 100%; margin: 1px 0; padding: 4px 6px; }
+.rooms-rename, .agent-rename { width: 100%; margin: 1px 0; padding: 4px 6px; }
 
 .sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  padding: 8px var(--sidebar-inset-end) 8px 16px;
   font-weight: 700;
   color: var(--text);
 }
-
-.add-button {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--button-bg);
-  color: var(--on-fill);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-.add-button:hover { background: var(--sidebar-hover); color: var(--text); }
 
 .add-menu {
   position: absolute;
@@ -271,6 +256,8 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 .agent-item:hover { background: var(--sidebar-hover); }
 .agent-item.selected { background: var(--sidebar-select); font-weight: 700; }
+.agent-editing { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.agent-rename { flex: 1; min-width: 0; }
 .agent-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .kind-icon {
@@ -281,12 +268,13 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   width: 26px;
   height: 26px;
   border-radius: 6px;
+  background: var(--surface);
 }
-.kind-claude { background: var(--kind-claude); }
-.kind-codex { background: var(--kind-codex); }
-.kind-chatgpt { background: var(--kind-chatgpt); }
-.kind-grok { background: var(--kind-grok); }
-.kind-deepseek { background: var(--kind-deepseek); }
+.kind-logo { display: block; flex: none; width: 18px; height: 18px; object-fit: contain; }
+.kind-logo-mono { filter: invert(1); }
+@media (prefers-color-scheme: light) {
+  .kind-logo-mono { filter: none; }
+}
 
 .content { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .content-empty { margin: auto; font-style: italic; }
