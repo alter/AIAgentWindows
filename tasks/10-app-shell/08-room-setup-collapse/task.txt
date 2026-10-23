@@ -1,0 +1,62 @@
+TASK: room setup collapse — participants table and run settings fold away on Start
+
+GOAL
+  The participants table and the run settings (Mode, Rounds, Turn timeout,
+  Record site debug) sit in one disclosure that closes by itself when a run
+  starts, so the feed gets the screen. Owner's request of 2026-10-23
+  ("всю нижнюю половину с настройками агентов сворачивать ... автоматически по
+  кнопке Start"). Serves no gate.
+
+CONTEXT
+  src/renderer/room-pane.ts:221 (controls(): prompt, table, settings row with Start/Stop, status, carry row)
+  src/renderer/room-pane.ts:346 (renderState: busy disables the settings)
+  src/renderer/room-table.ts
+  src/renderer/styles.css:396-434 (.room-pane column, .room-feed flex 1, .room-entry-head disclosure arrow)
+  src/shared/room-view.ts (pure rules of the pane)
+  tasks/10-app-shell/06-room-layout/PLAN.md (table, tree, palette rules)
+
+SCOPE
+  + S1 one `<details>` "Participants and settings" holds the participants table, Add participant and the Mode / Rounds / Turn timeout / Record site debug fields; Start/Continue and Stop move to their own row outside it and stay visible; prompt, status, message and the Working session row stay outside
+  + S2 the disclosure closes when a start or continue is accepted (not when it is refused: the error and the settings stay in view); it opens for a new room and is closed when a saved room with entries is opened; the owner can open and close it by click, Enter and Space at any time, also during a run (fields stay disabled while busy)
+  + S3 the summary carries the standard disclosure arrow of the feed spoilers and a digest of the setup built with textContent (participant count, mode, rounds), so a closed setup still says what runs
+  + S4 the freed height goes to the feed (the feed already grows with flex)
+  − colours and palette tokens beyond reusing the existing disclosure and surface tokens — 10-app-shell/05-design-contrast
+  − collapsing the prompt or the Working session row — not requested
+  − remembering the open state across app restarts — not requested
+  indivisible: one pane's control layout and its open/close rule rewrite the same file and the same smoke specs
+
+WRITE-SET
+  src/renderer/room-pane.ts
+  src/renderer/room-table.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  src/shared/room-view.ts
+  tests/unit/room-view.test.ts
+  tests/full/
+  docs/PROJECT.md
+  tasks/10-app-shell/08-room-setup-collapse/
+
+DATA
+  setup.digest: dir=out; type=string built from the participant rows, mode and rounds of the form; size=under 120 chars; null=no; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/ipc-main.md
+
+SECURITY
+  sink room-setup-summary: consumes setup.digest; protection=textContent only, never innerHTML; test=tests/full/room-layout.spec.ts::the setup closes on start and opens by click
+
+OUTCOME
+  A smoke run fills the table, presses Start and finds the setup disclosure
+  closed (open=false) while the run goes on and Stop stays enabled; a click on
+  its summary opens it; a saved room with entries opens with the setup closed;
+  every task of tasks/10-app-shell/08-room-setup-collapse/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/room-view.test.ts: the open rule (new room open, saved room with entries closed, accepted start closes, refused start keeps) and the digest
+  3. [full] electron-smoke: start closes the setup, Stop stays reachable, summary click opens it, reopening a saved room shows it closed
+  4. [fast] reverse control: drop the close on an accepted start in room-pane → tests/full/room-layout.spec.ts::the setup closes on start and opens by click
+  5. [fast] HUMAN: the owner starts a room and records in NOTES.md whether the feed now has the screen and the setup is easy to reopen
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/06-room-layout
