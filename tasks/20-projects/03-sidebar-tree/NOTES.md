@@ -30,3 +30,5 @@ Selection rule of the reducer (`selected: row.current && state.roomOpen` weakene
 Design: `Sidebar` owns the `SidebarTreeState`; `RoomTree` renders the rooms section it is handed (`setSection`) and asks to collapse through `onToggle`; the section is pushed only when `sameSection` says it changed, so an agents snapshot does not rebuild the room list (focus). The Agents list rebuilds on every snapshot as before. Every `data-room` and `data-agent` attribute, class and handler is unchanged. The agents section is not collapsible (it never was). No project nodes yet (05-project-tree).
 
 shellcheck (fast tier line 9) is red on tasks/20-projects/probes/t03/run-claude.sh and run-codex.sh (SC2164), written by the parallel T03 task; neither is a file of this task.
+
+Write set: the tests of the new code and the AGENTS.md Map rows are part of the task (D23 asks for the Map row and the red fixture test), so they are listed in CONTEXT.

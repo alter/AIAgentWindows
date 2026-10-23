@@ -13,6 +13,10 @@ CONTEXT
   src/renderer/sidebar.ts
   scripts/neutrality_check.py
   scripts/arch_check.py
+  tests/scripts/test_arch_check.py
+  tests/scripts/test_neutrality_check.py
+  tests/unit/sidebar-tree.test.ts
+  AGENTS.md
 
 SCOPE
   + shared/sidebar-tree.ts, room-tree.ts and the Agents DOM on it
