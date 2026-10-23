@@ -105,6 +105,8 @@ class CliDriver implements ParticipantDriver {
         resume: session.started,
         platform: this.deps.platform,
         loginShell: this.deps.loginShell,
+        model: this.participant.model,
+        effort: this.participant.effort,
         env: this.deps.envFor(this.participant),
       });
       const result = await runCliTurn({

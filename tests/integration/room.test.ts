@@ -636,6 +636,39 @@ describe('room with stub CLIs', () => {
     expect(codex.map((call) => path.basename(call.cwd))).toEqual(['codex-1', 'codex-1']);
   });
 
+  it('runs two claude instances with their own model, effort, folder and session', async () => {
+    const first: RoomParticipant = { id: 'claude', kind: 'claude', label: 'Claude Code · opus · high', model: 'opus', effort: 'high' };
+    const second: RoomParticipant = { id: 'claude-2', kind: 'claude', label: 'Claude Code · sonnet · medium', model: 'sonnet', effort: 'medium' };
+    const plain: RoomParticipant = { id: 'claude-3', kind: 'claude', label: 'Claude Code' };
+    const drivers = stubDrivers();
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    const run = room.start(config([first, second, plain], { rounds: 2, turnTimeoutMs: 10000 }));
+    const result = await run.done;
+    await room.shutdown();
+    drivers.shutdown();
+    expect(result.entries.filter((entry) => entry.kind === 'reply').map((entry) => entry.authorId)).toEqual(['claude', 'claude-2', 'claude-3', 'claude', 'claude-2', 'claude-3']);
+    const all = await calls();
+    const byFolder = (name: string): StubCall[] => all.filter((call) => path.basename(call.cwd) === name);
+    const [one, two, three] = [byFolder('claude-1'), byFolder('claude-2'), byFolder('claude-3')];
+    expect([one.length, two.length, three.length]).toEqual([3, 2, 2]);
+    for (const call of one) expect([flagValue(call, '--model'), flagValue(call, '--effort')]).toEqual(['opus', 'high']);
+    for (const call of two) expect([flagValue(call, '--model'), flagValue(call, '--effort')]).toEqual(['sonnet', 'medium']);
+    for (const call of three) {
+      expect(call.argv).not.toContain('--model');
+      expect(call.argv).not.toContain('--effort');
+    }
+    for (const turns of [one, two, three]) {
+      const sessionId = flagValue(turns[0], '--session-id');
+      expect(sessionId).toBeDefined();
+      expect(flagValue(turns[1], '--resume')).toBe(sessionId);
+      expect(flagValue(turns[1], '--permission-mode')).toBe('plan');
+      for (const later of turns.slice(1)) expect(flagValue(later, '--resume')).toBe(sessionId);
+    }
+    const ids = [one, two, three].map((turns) => flagValue(turns[0], '--session-id'));
+    expect(new Set(ids).size).toBe(3);
+  });
+
   it('keeps one session per participant: the first turn creates it, the later turns resume it', async () => {
     const drivers = stubDrivers();
     const room = new Room({ roomsDir, driverFor: drivers.factory });

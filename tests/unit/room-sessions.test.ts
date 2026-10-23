@@ -137,6 +137,23 @@ describe('room sessions start read-only', () => {
     }
   });
 
+  it('keeps every read-only and web flag when model and effort are set', () => {
+    for (const resume of [false, true]) {
+      const claude = cliArgs('claude', { resume, model: 'opus', effort: 'high' });
+      expect(valueAfter(claude, '--permission-mode')).toBe('plan');
+      expect((valueAfter(claude, '--tools') ?? '').split(',').sort()).toEqual(['Glob', 'Grep', 'Read', 'WebFetch', 'WebSearch']);
+      expect((valueAfter(claude, '--allowedTools') ?? '').split(',').sort()).toEqual(['WebFetch', 'WebSearch']);
+      expect(valueAfter(claude, '--disallowedTools')).toBe('mcp__*');
+      expect(claude).toContain('--strict-mcp-config');
+      const codex = cliArgs('codex', { resume, model: 'gpt-5.5', effort: 'low' });
+      expect(valueAfter(codex, '--sandbox')).toBe('read-only');
+      expect(codex).toContain('web_search="live"');
+      expect(codex.at(-1)).toBe('-');
+      expect(codex.indexOf('--sandbox')).toBeLessThan(codex.indexOf('-m'));
+      expect(codex.join(' ')).not.toMatch(/dangerously|bypass|danger-full-access|workspace-write|--yolo|acceptEdits/i);
+    }
+  });
+
   it('passes the same flags on Windows without a login shell', () => {
     const spawn = buildRoomTurnSpawn('claude', options({ platform: 'win32' }));
     expect(valueAfter(spawn.args, '--permission-mode')).toBe('plan');

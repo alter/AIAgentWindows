@@ -1,6 +1,6 @@
 // cli-args.test.ts
 import { describe, expect, it } from 'vitest';
-import { buildSpawn, type SpawnOptions } from '../../src/shared/cli-args';
+import { buildRoomTurnSpawn, buildSpawn, type SpawnOptions } from '../../src/shared/cli-args';
 
 const SESSION = '3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b';
 const HOSTILE = '/tmp/a b"; touch /tmp/pwned; "';
@@ -120,5 +120,48 @@ describe('buildSpawn in test mode', () => {
     const env = { SHELL: '/bin/bash', AIAW_USER_DATA: '/tmp/ud', AIAW_CLAUDE_BIN: '/t/stub', AIAW_CODEX_BIN: '/t/stub' };
     expect(buildSpawn('claude', options({ env })).args[5]).toBe('/t/stub');
     expect(buildSpawn('codex', options({ env })).args[5]).toBe('/t/stub');
+  });
+});
+
+describe('buildRoomTurnSpawn model and effort', () => {
+  const tail = (kind: 'claude' | 'codex', overrides: Partial<SpawnOptions> = {}): string[] =>
+    buildRoomTurnSpawn(kind, options({ platform: 'win32', ...overrides })).args;
+  const valueAfter = (args: string[], flag: string): string | undefined => args[args.indexOf(flag) + 1];
+
+  it('room turn passes model and effort as separate arguments', () => {
+    const claude = tail('claude', { model: 'opus[1m]', effort: 'high' });
+    expect(valueAfter(claude, '--model')).toBe('opus[1m]');
+    expect(valueAfter(claude, '--effort')).toBe('high');
+    expect(claude).not.toContain('--fallback-model');
+    const codex = tail('codex', { sessionId: undefined, model: 'gpt-5.5', effort: 'medium' });
+    expect(valueAfter(codex, '-m')).toBe('gpt-5.5');
+    expect(codex).toContain('model_reasoning_effort="medium"');
+    expect(codex[codex.indexOf('model_reasoning_effort="medium"') - 1]).toBe('-c');
+  });
+
+  it('passes nothing for absent values, so the CLI keeps its own default', () => {
+    for (const kind of ['claude', 'codex'] as const) {
+      const args = tail(kind);
+      expect(args).not.toContain('--model');
+      expect(args).not.toContain('--effort');
+      expect(args).not.toContain('-m');
+      expect(args.join(' ')).not.toContain('model_reasoning_effort');
+    }
+    const onlyModel = tail('claude', { model: 'sonnet' });
+    expect(onlyModel).toContain('--model');
+    expect(onlyModel).not.toContain('--effort');
+  });
+
+  it('puts the codex model and effort before resume, with the prompt marker still last', () => {
+    const args = tail('codex', { resume: true, model: 'm', effort: 'low' });
+    expect(args.indexOf('-m')).toBeLessThan(args.indexOf('resume'));
+    expect(args.indexOf('model_reasoning_effort="low"')).toBeLessThan(args.indexOf('resume'));
+    expect(args.slice(args.indexOf('resume'))).toEqual(['resume', SESSION, '-']);
+  });
+
+  it('keeps a hostile model as one argument entry in the login-shell form', () => {
+    const spec = buildRoomTurnSpawn('claude', options({ model: 'a b"; touch /tmp/pwned' }));
+    expect(spec.args[3]).toBe(SCRIPT);
+    expect(spec.args).toContain('a b"; touch /tmp/pwned');
   });
 });

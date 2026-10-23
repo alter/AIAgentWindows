@@ -19,3 +19,19 @@ Collected by the coordinator while 04-room-archive runs, for S1 of this task. On
 ## T02 write set
 
 tests/unit/room-archive.test.ts added to WRITE-SET of task.txt: PLAN T02 names it for the record round-trip of model and effort (old records without them still parse).
+
+## T03 reverse control (AC3)
+
+buildRoomTurnSpawn with the `--effort` argument dropped from `claudeChoice` (src/shared/cli-args.ts, restored afterwards) turns `room turn passes model and effort as separate arguments` red:
+
+```
+× room turn passes model and effort as separate arguments
+AssertionError: expected '-p' to be 'high' // Object.is equality
+Tests  1 failed | 18 passed (19)
+```
+
+The stub CLI already appended its argv per print turn to `AIAW_STUB_ARGV_LOG` (tests/fixtures/stub-print.mjs `logInvocation`), so T03 needed no fixture change. Drivers and folders were already keyed by participant id, so two claude instances never share a session.
+
+## T03 write set
+
+tests/unit/room-sessions.test.ts and tests/integration/room.test.ts added to WRITE-SET of task.txt: PLAN T03 names them (read-only flags with model/effort; two claude instances with their own sessions and argv per turn).

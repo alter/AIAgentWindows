@@ -8,6 +8,8 @@ export interface SpawnOptions {
   resume: boolean;
   platform: string;
   loginShell?: boolean;
+  model?: string;
+  effort?: string;
   env: Readonly<Record<string, string | undefined>>;
 }
 
@@ -76,10 +78,21 @@ function workingCliArgs(kind: CliKind, options: SpawnOptions): string[] {
   return options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
 }
 
+function claudeChoice(options: SpawnOptions): string[] {
+  return [...(options.model ? ['--model', options.model] : []), ...(options.effort ? ['--effort', options.effort] : [])];
+}
+
+function codexChoice(options: SpawnOptions): string[] {
+  return [
+    ...(options.model ? ['-m', options.model] : []),
+    ...(options.effort ? ['-c', `model_reasoning_effort="${options.effort}"`] : []),
+  ];
+}
+
 function roomCliArgs(kind: CliKind, options: SpawnOptions): string[] {
-  if (kind === 'claude') return [...ROOM_CLAUDE_ARGS, '--add-dir', options.sharedDir, ...sessionFlag(options)];
+  if (kind === 'claude') return [...ROOM_CLAUDE_ARGS, ...claudeChoice(options), '--add-dir', options.sharedDir, ...sessionFlag(options)];
   const resume = options.resume ? ['resume', requireSessionId(options.sessionId)] : [];
-  return [...ROOM_CODEX_ARGS, ...resume, PROMPT_FROM_STDIN];
+  return [...ROOM_CODEX_ARGS, ...codexChoice(options), ...resume, PROMPT_FROM_STDIN];
 }
 
 function binaryFor(kind: CliKind, env: SpawnOptions['env']): string {
