@@ -152,6 +152,10 @@ function webPrompt(
   return { text: `${intro}\n\n${history}`, attachHistory: false, placeHistory: false };
 }
 
+function openrouterPrompt(participant: RoomParticipant, continuation: PromptPhase): ParticipantPrompt {
+  return { text: introFor(participant, continuation), attachHistory: false, placeHistory: true };
+}
+
 export function buildParticipantPrompt(
   participant: RoomParticipant,
   roomId: string,
@@ -159,5 +163,6 @@ export function buildParticipantPrompt(
   continuation: PromptPhase = false,
 ): ParticipantPrompt {
   if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, roomId, entries, continuation);
+  if (participant.kind === 'openrouter') return openrouterPrompt(participant, continuation);
   return webPrompt(participant, roomId, entries, continuation);
 }

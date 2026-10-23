@@ -1,6 +1,8 @@
 // room-table.ts
-import { AGENT_LABELS, isSiteKind, type AgentKind } from '../shared/agents';
+import { isSiteKind } from '../shared/agents';
 import { emptyRoomModels, type RoomModels } from '../shared/cli-models';
+import type { ModelItem } from '../shared/openrouter';
+import { OPENROUTER_KIND, kindLabel, type RoomKind } from '../shared/room-model';
 import {
   addMenuOptions,
   addRow,
@@ -13,24 +15,27 @@ import {
   rowLabel,
   type FormRow,
 } from '../shared/room-view';
+import { api } from './api';
 import { el } from './dom';
+import { OpenRouterCells } from './room-openrouter-row';
 
 type RowAction = 'up' | 'down' | 'remove';
 type FocusTarget = { id: string; field: RowAction } | 'add';
 
 interface RowView {
   id: string;
-  kind: AgentKind;
+  kind: RoomKind;
   root: HTMLTableRowElement;
+  openrouter: OpenRouterCells | null;
   model: HTMLInputElement | null;
   effort: HTMLSelectElement | null;
   final: HTMLInputElement;
   buttons: Record<RowAction, HTMLButtonElement>;
 }
 
-const COLUMNS = ['#', 'Agent', 'Model', 'Effort', 'Final'];
+const COLUMNS = ['#', 'Agent', 'Model', 'Effort', 'Web', 'Final'];
 const COLUMN_COUNT = COLUMNS.length + 1;
-const CLI_KINDS: readonly AgentKind[] = ['claude', 'codex'];
+const CLI_KINDS: readonly RoomKind[] = ['claude', 'codex'];
 const NOT_APPLICABLE = '—';
 
 function actionButton(action: RowAction, glyph: string): HTMLButtonElement {
@@ -53,9 +58,11 @@ export class RoomTable {
   private readonly body = el('tbody');
   private readonly trigger = el('button', 'room-button room-add', 'Add participant');
   private readonly menu = el('div', 'room-add-menu');
-  private readonly lists = new Map<AgentKind, HTMLDataListElement>();
+  private readonly lists = new Map<RoomKind, HTMLDataListElement>();
   private views: RowView[] = [];
   private models: RoomModels = emptyRoomModels();
+  private openrouterModels: readonly ModelItem[] = [];
+  private signedIn = false;
   private finalId = '';
   private busy = false;
   private changeListener: (() => void) | null = null;
@@ -106,6 +113,16 @@ export class RoomTable {
       if (!this.menu.hidden && !adder.contains(event.relatedTarget as Node | null)) this.closeMenu(false);
     });
     this.render([]);
+    api.onOpenRouterChanged((status) => (this.signedIn = status.state === 'connected'));
+    void api.openrouterStatus().then((status) => (this.signedIn = status.state === 'connected'));
+    void this.loadOpenRouterModels(false);
+  }
+
+  private async loadOpenRouterModels(refresh: boolean): Promise<void> {
+    const result = await api.openrouterModels(refresh).catch(() => null);
+    if (result === null || !result.ok) return;
+    this.openrouterModels = result.models;
+    for (const view of this.views) view.openrouter?.setModels(result.models);
   }
 
   onChange(listener: () => void): void {
@@ -118,12 +135,18 @@ export class RoomTable {
   }
 
   rows(): FormRow[] {
-    return this.views.map((view) => ({
-      id: view.id,
-      kind: view.kind,
-      ...(view.model === null ? {} : { model: view.model.value }),
-      ...(view.effort === null ? {} : { effort: view.effort.value }),
-    }));
+    return this.views.map((view) => {
+      if (view.openrouter !== null) {
+        const { model, ...rest } = view.openrouter.value();
+        return { id: view.id, kind: view.kind, ...(model === '' ? {} : { model }), ...rest };
+      }
+      return {
+        id: view.id,
+        kind: view.kind,
+        ...(view.model === null ? {} : { model: view.model.value }),
+        ...(view.effort === null ? {} : { effort: view.effort.value }),
+      };
+    });
   }
 
   ids(): string[] {
@@ -167,6 +190,7 @@ export class RoomTable {
       view.final.disabled = this.busy;
       if (view.model !== null) view.model.disabled = this.busy;
       if (view.effort !== null) view.effort.disabled = this.busy;
+      view.openrouter?.setBusy(this.busy);
       view.buttons.remove.disabled = this.busy;
       view.buttons.up.disabled = this.busy || view === this.views[0];
       view.buttons.down.disabled = this.busy || last;
@@ -188,6 +212,11 @@ export class RoomTable {
     select.value = current;
   }
 
+  private afterEdit(): void {
+    this.nameRows();
+    this.changeListener?.();
+  }
+
   private nameRows(): void {
     const rows = this.rows();
     this.views.forEach((view, index) => {
@@ -196,9 +225,10 @@ export class RoomTable {
       view.buttons.down.setAttribute('aria-label', `Move ${name} down`);
       view.buttons.remove.setAttribute('aria-label', `Remove ${name}`);
       view.final.setAttribute('aria-label', `Final writer: ${name}`);
-      const place = `row ${index + 1} ${AGENT_LABELS[view.kind]}`;
+      const place = `row ${index + 1} ${kindLabel(view.kind)}`;
       view.model?.setAttribute('aria-label', `Model of ${place}`);
       view.effort?.setAttribute('aria-label', `Effort of ${place}`);
+      view.openrouter?.name(place);
     });
   }
 
@@ -206,7 +236,7 @@ export class RoomTable {
     const root = el('tr');
     root.dataset['row'] = row.id;
     const place = el('td', 'room-table-number', String(index + 1));
-    const agent = el('th', undefined, AGENT_LABELS[row.kind]);
+    const agent = el('th', undefined, kindLabel(row.kind));
     agent.scope = 'row';
     const final = el('input');
     final.type = 'radio';
@@ -218,10 +248,17 @@ export class RoomTable {
       this.changeListener?.();
     });
     const buttons = { up: actionButton('up', '↑'), down: actionButton('down', '↓'), remove: actionButton('remove', '×') };
-    const view: RowView = { id: row.id, kind: row.kind, root, model: null, effort: null, final, buttons };
+    const orCells = row.kind === OPENROUTER_KIND ? new OpenRouterCells(row, () => this.afterEdit()) : null;
+    const view: RowView = { id: row.id, kind: row.kind, root, openrouter: orCells, model: null, effort: null, final, buttons };
     const modelCell = el('td');
     const effortCell = el('td');
-    if (!isSiteKind(row.kind)) {
+    const webCell = el('td', 'room-or-web');
+    if (orCells !== null) {
+      orCells.setModels(this.openrouterModels);
+      modelCell.append(...orCells.modelNodes);
+      effortCell.append(...orCells.effortNodes);
+      webCell.append(...orCells.webNodes);
+    } else if (!isSiteKind(row.kind)) {
       const model = el('input');
       model.type = 'text';
       model.value = row.model ?? '';
@@ -261,7 +298,8 @@ export class RoomTable {
     finalCell.append(final);
     const actions = el('td', 'room-table-actions');
     actions.append(buttons.up, buttons.down, buttons.remove);
-    root.append(place, agent, view.model === null ? notApplicable() : modelCell, view.effort === null ? notApplicable() : effortCell, finalCell, actions);
+    const hasModel = view.model !== null || orCells !== null;
+    root.append(place, agent, hasModel ? modelCell : notApplicable(), hasModel ? effortCell : notApplicable(), orCells === null ? notApplicable() : webCell, finalCell, actions);
     return view;
   }
 
@@ -312,8 +350,9 @@ export class RoomTable {
 
   private openMenu(): void {
     if (this.busy) return;
+    if (this.signedIn && this.openrouterModels.length === 0) void this.loadOpenRouterModels(true);
     this.menu.replaceChildren(
-      ...addMenuOptions(this.rows()).map((option) => {
+      ...addMenuOptions(this.rows(), undefined, this.signedIn).map((option) => {
         const item = el('button', 'room-add-item');
         item.type = 'button';
         item.dataset['add'] = option.kind;

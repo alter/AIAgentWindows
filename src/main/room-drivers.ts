@@ -9,6 +9,7 @@ import type { RoomParticipant } from '../shared/room-model';
 import type { SiteLogValue } from '../shared/site-log';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
+import type { ChatInput, ChatOptions } from './openrouter/chat';
 import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
 import type { SiteLogger } from './site-log-file';
 import { SiteAdapterError, type NetWatch, type PageRunner, type SiteAdapter } from './site-adapters/types';
@@ -40,6 +41,10 @@ export interface SiteSeat {
   newChat?(timeoutMs: number, signal: AbortSignal): Promise<void>;
 }
 
+export interface OpenRouterTurns {
+  chat(input: ChatInput, options: ChatOptions): Promise<string | null>;
+}
+
 export interface RoomDriverDeps {
   cwd: string;
   sharedDir: string;
@@ -47,6 +52,7 @@ export interface RoomDriverDeps {
   loginShell?: boolean;
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
   siteFor(participant: RoomParticipant): SiteSeat | null;
+  openrouter?: OpenRouterTurns;
   timing?: Partial<RoomTiming>;
   siteLog?: SiteLogger;
   debugRoot?: string;
@@ -134,6 +140,43 @@ class CliDriver implements ParticipantDriver {
 
   dispose(): void {
     this.session = null;
+  }
+}
+
+class OpenRouterDriver implements ParticipantDriver {
+  constructor(
+    private readonly participant: RoomParticipant,
+    private readonly turns: OpenRouterTurns | undefined,
+    private readonly running: Set<AbortController>,
+  ) {}
+
+  async turn(request: TurnRequest): Promise<string | null> {
+    if (this.turns === undefined) throw new Error('OpenRouter is not available');
+    const own = new AbortController();
+    this.running.add(own);
+    try {
+      const reply = await this.turns.chat(
+        {
+          model: this.participant.model ?? '',
+          system: request.text,
+          user: request.historyText ?? '',
+          effort: this.participant.effort ?? null,
+          web: this.participant.web === true,
+        },
+        { timeoutMs: request.timeoutMs, signal: AbortSignal.any([request.signal, own.signal]) },
+      );
+      return withoutMarkers(reply);
+    } finally {
+      this.running.delete(own);
+    }
+  }
+
+  async reset(): Promise<void> {
+    return undefined;
+  }
+
+  dispose(): void {
+    return undefined;
   }
 }
 
@@ -299,6 +342,7 @@ export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const folders = new FolderNames();
   const factory: DriverFactory = async (participant) => {
     if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
+    if (participant.kind === 'openrouter') return new OpenRouterDriver(participant, deps.openrouter, running);
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
     return new SiteDriver(seat, timing, deps.siteLog ?? (() => undefined), deps.debugRoot ?? null);

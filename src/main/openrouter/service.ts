@@ -9,6 +9,7 @@ import {
   type OpenRouterNotice,
   type OpenRouterStatus,
 } from '../../shared/openrouter';
+import { ChatError, NOT_SIGNED_IN_TEXT, type ChatInput, type ChatOptions } from './chat';
 import { OpenRouterError, type OpenRouterClient } from './client';
 import type { KeyStore } from './key-store';
 import { startCallbackServer, type CallbackServer } from './loopback';
@@ -128,6 +129,17 @@ export class OpenRouterService {
     this.stopPending();
     await this.deps.store.clear();
     this.signedOut('key-rejected');
+  }
+
+  async chat(input: ChatInput, options: ChatOptions): Promise<string | null> {
+    const key = this.deps.store.bearer();
+    if (key === null) throw new ChatError('failed', NOT_SIGNED_IN_TEXT);
+    try {
+      return await this.deps.client.chat(key, input, options);
+    } catch (error) {
+      if (error instanceof ChatError && error.code === 'unauthorized' && this.deps.store.bearer() === key) await this.keyRejected();
+      throw error;
+    }
   }
 
   models(refresh: boolean): Promise<OpenRouterModels> {

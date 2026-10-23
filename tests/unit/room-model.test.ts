@@ -429,3 +429,98 @@ describe('entriesBeforeRound', () => {
     expect(entriesBeforeRound([turn('a', 1)], 1)).toEqual([]);
   });
 });
+
+describe('openrouter participant', () => {
+  const base = { prompt: 'q', mode: 'relay', rounds: 2, turnTimeoutMs: 5000 };
+  const config = (participants: unknown[]) => parseRoomConfig({ ...base, participants });
+  const row = (extra: Record<string, unknown>) => ({ id: 'openrouter', kind: 'openrouter', ...extra });
+
+  it('an openrouter participant needs a model id of the allowed shape', () => {
+    for (const model of ['acme/free-model:free', 'a/b-c.d_e:x', 'openrouter/free', 'x'.repeat(200)]) {
+      expect(config([row({ model })]).ok).toBe(true);
+    }
+    for (const model of [undefined, '', 'Acme/Model', 'a b/c', 'a"b/c', '~acme/latest', 'a;b', 'a\nb', 'x'.repeat(201), 7, null]) {
+      expect(config([row({ model })]).ok).toBe(false);
+    }
+  });
+
+  it('keeps model, effort, web and name, builds the label from them, and several rows may share a room', () => {
+    const parsed = config([
+      row({ model: 'acme/paid-model', effort: 'high', web: false, modelName: 'Acme Paid' }),
+      row({ id: 'openrouter-2', model: 'acme/free-model:free', modelName: 'Acme Free' }),
+    ]);
+    expect(parsed.ok && parsed.config.participants).toEqual([
+      { id: 'openrouter', kind: 'openrouter', model: 'acme/paid-model', effort: 'high', web: false, modelName: 'Acme Paid', label: 'OpenRouter \u00b7 Acme Paid \u00b7 high' },
+      { id: 'openrouter-2', kind: 'openrouter', model: 'acme/free-model:free', web: false, modelName: 'Acme Free', label: 'OpenRouter \u00b7 Acme Free' },
+    ]);
+  });
+
+  it('web is on for a paid model and off for a :free one or the free router unless the row says otherwise', () => {
+    const web = (extra: Record<string, unknown>) => {
+      const parsed = config([row(extra)]);
+      return parsed.ok ? parsed.config.participants[0]?.web : 'invalid';
+    };
+    expect(web({ model: 'acme/paid-model' })).toBe(true);
+    expect(web({ model: 'acme/free-model:free' })).toBe(false);
+    expect(web({ model: 'openrouter/free' })).toBe(false);
+    expect(web({ model: 'acme/free-model:free', web: true })).toBe(true);
+    expect(web({ model: 'acme/paid-model', web: false })).toBe(false);
+    expect(web({ model: 'acme/paid-model', web: 'yes' })).toBe('invalid');
+  });
+
+  it('the label uses the model id when no name is given and stays within the entry label limit', () => {
+    const plain = config([row({ model: 'acme/paid-model' })]);
+    expect(plain.ok && plain.config.participants[0]?.label).toBe('OpenRouter \u00b7 acme/paid-model');
+    const model = `a/${'x'.repeat(198)}`;
+    const long = config([row({ model, effort: 'x'.repeat(16), modelName: 'N'.repeat(200) })]);
+    expect(long.ok).toBe(true);
+    if (!long.ok) return;
+    const label = long.config.participants[0]?.label ?? '';
+    expect(label.length).toBeLessThanOrEqual(128);
+    const record = parseRoomRecord(
+      recordOf(
+        { config: { mode: 'relay', rounds: 1, participants: long.config.participants, finalizerId: 'openrouter', turnTimeoutMs: 5000, debugSites: false } },
+        [entryOf('prompt', 'hello'), { authorId: 'openrouter', label, time: 2, kind: 'reply', text: 'ok', round: 1 }],
+      ),
+    );
+    expect(record?.entries).toHaveLength(2);
+  });
+
+  it('refuses a name with a control character or over 200 characters and a web flag or name on any other kind', () => {
+    for (const modelName of ['', 'a\nb', 'N'.repeat(201), 3]) expect(config([row({ model: 'a/b', modelName })]).ok).toBe(false);
+    expect(config([row({ model: 'a/b', effort: 'High' })]).ok).toBe(false);
+    expect(config([{ id: 'claude', kind: 'claude', web: true }]).ok).toBe(false);
+    expect(config([{ id: 'claude', kind: 'claude', modelName: 'x' }]).ok).toBe(false);
+  });
+
+  it('numbers the rows openrouter, openrouter-2, ...', () => {
+    expect(nextParticipantId('openrouter', [])).toBe('openrouter');
+    expect(nextParticipantId('openrouter', ['openrouter', 'claude'])).toBe('openrouter-2');
+  });
+
+  it('a record written before this kind existed loads unchanged, and a record with openrouter rows keeps their settings', () => {
+    const old = parseRoomRecord(recordOf());
+    expect(old?.config.participants).toEqual([A]);
+    const participants = [{ id: 'openrouter', kind: 'openrouter', label: 'x', model: 'acme/paid-model', web: false, modelName: 'Acme Paid' }];
+    const kept = parseRoomRecord(recordOf({ config: { mode: 'relay', rounds: 1, participants, finalizerId: 'openrouter', turnTimeoutMs: 5000, debugSites: false } }));
+    expect(kept?.config.participants[0]).toMatchObject({ model: 'acme/paid-model', web: false, label: 'OpenRouter \u00b7 Acme Paid' });
+  });
+
+  it('a resume does not match when the web flag or the model of an openrouter row changed', () => {
+    const point = { prompt: 'q', done: [] };
+    const run: RoomParticipant = { id: 'openrouter', kind: 'openrouter', label: 'OpenRouter', model: 'a/b', web: true };
+    const setup = { mode: 'relay' as const, rounds: 1, participants: [run], finalizerId: 'openrouter' };
+    const config = { ...setup, prompt: 'q', turnTimeoutMs: 1000, debugSites: false };
+    expect(resumeMatches(point, setup, config)).toBe(true);
+    expect(resumeMatches(point, setup, { ...config, participants: [{ ...run, web: false }] })).toBe(false);
+    expect(resumeMatches(point, setup, { ...config, participants: [{ ...run, model: 'a/c' }] })).toBe(false);
+  });
+});
+
+describe('instanceLabel for openrouter', () => {
+  it('is OpenRouter with the name or the id, and the effort', () => {
+    expect(instanceLabel({ kind: 'openrouter', model: 'a/b' })).toBe('OpenRouter \u00b7 a/b');
+    expect(instanceLabel({ kind: 'openrouter', model: 'a/b', modelName: 'Ab', effort: 'low' })).toBe('OpenRouter \u00b7 Ab \u00b7 low');
+    expect(instanceLabel({ kind: 'openrouter' })).toBe('OpenRouter');
+  });
+});

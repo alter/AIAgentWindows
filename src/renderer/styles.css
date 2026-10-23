@@ -485,6 +485,11 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-table input[type="text"], .room-table select { min-height: 24px; padding: 3px 6px; font-size: 13px; }
 .room-table input[type="text"] { width: 100%; min-width: 120px; }
 .room-table-actions { white-space: nowrap; }
+.room-or-tools { display: flex; gap: 4px; margin-bottom: 4px; }
+.room-or-tools input[type="text"] { min-width: 80px; }
+.room-table select[data-row-field="model"] { width: 100%; min-width: 200px; max-width: 360px; }
+.room-or-hint { display: block; margin-top: 2px; font-size: 11px; }
+.room-or-web { min-width: 110px; }
 .room-table-action {
   min-width: 28px;
   min-height: 28px;

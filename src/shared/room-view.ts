@@ -1,13 +1,16 @@
 // room-view.ts
-import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type AgentKind, type SiteKind } from './agents';
+import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from './agents';
 import { emptyRoomModels, type RoomModels } from './cli-models';
+import type { ModelItem } from './openrouter';
 import { renderCarryHistory } from './room-history';
 import {
+  OPENROUTER_KIND,
   OWNER_ID,
   ROOM_ID,
   ROOM_PARTICIPANTS,
   defaultFinalizerId,
   instanceLabel,
+  kindLabel,
   nextParticipantId,
   roomPlan,
   parseRoomConfig,
@@ -18,6 +21,7 @@ import {
   type RoomEntry,
   type RoomEntryState,
   type RoomEvent,
+  type RoomKind,
   type RoomListItem,
   type PausedSession,
   type RoomMode,
@@ -52,9 +56,11 @@ export type RoomStartResult = { ok: true; roomId: string; historyPath: string; d
 
 export interface FormRow {
   id: string;
-  kind: AgentKind;
+  kind: RoomKind;
   model?: string;
   effort?: string;
+  web?: boolean;
+  modelName?: string;
 }
 
 export interface RoomFormValues {
@@ -142,8 +148,15 @@ const DEFAULT_ROWS: readonly FormRow[] = ROOM_PARTICIPANTS.filter((item) => !isS
 function rowParticipant(row: FormRow): RoomParticipant {
   const model = row.model?.trim() ?? '';
   const effort = row.effort?.trim() ?? '';
-  const parts = { kind: row.kind, ...(model === '' ? {} : { model }), ...(effort === '' ? {} : { effort }) };
-  return { id: row.id, ...parts, label: instanceLabel(parts) };
+  const named = row.kind === OPENROUTER_KIND && row.modelName !== undefined && row.modelName !== '';
+  const parts = {
+    kind: row.kind,
+    ...(model === '' ? {} : { model }),
+    ...(effort === '' ? {} : { effort }),
+    ...(named ? { modelName: row.modelName } : {}),
+  };
+  const web = row.kind === OPENROUTER_KIND && row.web !== undefined ? { web: row.web } : {};
+  return { id: row.id, ...parts, ...web, label: instanceLabel(parts) };
 }
 
 function tickedParticipants(checked: readonly string[], rows: readonly FormRow[]): RoomParticipant[] {
@@ -161,7 +174,7 @@ export function defaultRows(): FormRow[] {
 }
 
 export interface AddMenuOption {
-  kind: AgentKind;
+  kind: RoomKind;
   label: string;
   available: boolean;
   note: string;
@@ -172,14 +185,22 @@ function siteNote(rows: readonly FormRow[], kind: SiteKind, withAdapter: readonl
   return withAdapter.includes(kind) ? '' : missingAdapterNote(AGENT_LABELS[kind]);
 }
 
-export function addMenuOptions(rows: readonly FormRow[], withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): AddMenuOption[] {
-  return AGENT_KINDS.map((kind) => {
+export const OPENROUTER_SIGN_IN_NOTE = 'Sign in to OpenRouter first';
+
+export function addMenuOptions(
+  rows: readonly FormRow[],
+  withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER,
+  openrouterSignedIn = true,
+): AddMenuOption[] {
+  const agents = AGENT_KINDS.map((kind): AddMenuOption => {
     const note = isSiteKind(kind) ? siteNote(rows, kind, withAdapter) : '';
     return { kind, label: AGENT_LABELS[kind], available: note === '', note };
   });
+  const openrouter: AddMenuOption = { kind: OPENROUTER_KIND, label: kindLabel(OPENROUTER_KIND), available: openrouterSignedIn, note: openrouterSignedIn ? '' : OPENROUTER_SIGN_IN_NOTE };
+  return [...agents, openrouter];
 }
 
-export function addRow(rows: readonly FormRow[], kind: AgentKind, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): FormRow[] {
+export function addRow(rows: readonly FormRow[], kind: RoomKind, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): FormRow[] {
   if (isSiteKind(kind)) return siteNote(rows, kind, withAdapter) === '' ? [...rows, { id: kind, kind }] : [...rows];
   return [...rows, { id: nextParticipantId(kind, rows.map((row) => row.id)), kind }];
 }
@@ -203,7 +224,7 @@ export function removeRow(rows: readonly FormRow[], id: string): FormRow[] {
   return rows.filter((row) => row.id !== id);
 }
 
-export function modelSuggestions(kind: AgentKind, models: RoomModels = emptyRoomModels()): string[] {
+export function modelSuggestions(kind: RoomKind, models: RoomModels = emptyRoomModels()): string[] {
   if (kind === 'claude') return [...models.claude.models];
   if (kind === 'codex') return models.codex.models.map((item) => item.id);
   return [];
@@ -213,12 +234,17 @@ function withCurrent(levels: readonly string[], current: string): string[] {
   return current === '' || levels.includes(current) ? [...levels] : [...levels, current];
 }
 
-export function effortChoices(kind: AgentKind, model: string, current: string, models: RoomModels = emptyRoomModels()): string[] {
+export function effortChoices(kind: RoomKind, model: string, current: string, models: RoomModels = emptyRoomModels()): string[] {
   if (kind === 'claude') return withCurrent(models.claude.efforts, current);
   if (kind !== 'codex') return [];
   const known = models.codex.models.find((item) => item.id === model.trim());
   const union = [...new Set(models.codex.models.flatMap((item) => item.efforts))];
   return withCurrent(known === undefined ? union : known.efforts, current);
+}
+
+export function openrouterEffortChoices(model: ModelItem | undefined, current: string): string[] {
+  if (model !== undefined) return [...model.efforts];
+  return current === '' ? [] : [current];
 }
 
 export interface FinalizerChoice {
@@ -402,7 +428,14 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
     rounds: String(config.rounds),
     timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
     checked: config.participants.map((participant) => participant.id),
-    rows: config.participants.map(({ id, kind, model, effort }) => ({ id, kind, ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }) })),
+    rows: config.participants.map(({ id, kind, model, effort, web, modelName }) => ({
+      id,
+      kind,
+      ...(model === undefined ? {} : { model }),
+      ...(effort === undefined ? {} : { effort }),
+      ...(web === undefined ? {} : { web }),
+      ...(modelName === undefined ? {} : { modelName }),
+    })),
     finalizerId: config.finalizerId,
     debugSites: config.debugSites,
   };

@@ -864,11 +864,11 @@ describe('participant row logic', () => {
     expect(addRow(defaultRows(), 'chatgpt', ['chatgpt']).map((row) => row.id)).toEqual(['claude', 'codex', 'chatgpt']);
   });
 
-  it('offers the five kinds in menu order and disables a site that is in the table or has no adapter, with its reason', () => {
+  it('offers the five agent kinds and OpenRouter in menu order and disables a site that is in the table or has no adapter, with its reason', () => {
     const rows = addRow(defaultRows(), 'grok');
     const options = addMenuOptions(rows, ['chatgpt', 'grok']);
-    expect(options.map((option) => option.kind)).toEqual(['claude', 'codex', 'chatgpt', 'grok', 'deepseek']);
-    expect(options.map((option) => option.available)).toEqual([true, true, true, false, false]);
+    expect(options.map((option) => option.kind)).toEqual(['claude', 'codex', 'chatgpt', 'grok', 'deepseek', 'openrouter']);
+    expect(options.map((option) => option.available)).toEqual([true, true, true, false, false, true]);
     expect(options[0]).toEqual({ kind: 'claude', label: 'Claude Code', available: true, note: '' });
     expect(options[3]?.note).toBe('Grok is already in the table');
     expect(options[4]?.note).toBe('DeepSeek has no site adapter');

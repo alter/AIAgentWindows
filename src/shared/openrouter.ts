@@ -46,12 +46,17 @@ export interface ModelItem {
   promptUsdPerMillion: number | null;
   completionUsdPerMillion: number | null;
   free: boolean;
+  efforts: string[];
 }
 
 export type ModelFilter = 'all' | 'free' | 'paid';
 export type ModelSort = 'name' | 'price' | 'context';
 
 export const MODEL_FILTERS: readonly ModelFilter[] = ['all', 'free', 'paid'];
+export const MODEL_ID_PATTERN = /^[a-z0-9._/:-]{1,200}$/;
+export const GATEWAY_EFFORTS: readonly string[] = ['max', 'xhigh', 'high', 'medium', 'low', 'minimal', 'none'];
+export const WEB_SEARCH_USD = 0.007;
+const EFFORT_SHAPE = /^[a-z]{1,16}$/;
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -150,6 +155,17 @@ function expired(value: unknown, nowMs: number): boolean {
   return typeof value === 'string' && Date.parse(value) <= nowMs;
 }
 
+function isEffort(value: unknown): value is string {
+  return typeof value === 'string' && EFFORT_SHAPE.test(value);
+}
+
+function parseEfforts(reasoning: unknown): string[] {
+  if (!isRecord(reasoning)) return [];
+  const listed = reasoning['supported_efforts'];
+  const offered = listed === null ? GATEWAY_EFFORTS : Array.isArray(listed) ? (listed as unknown[]).filter(isEffort) : [];
+  return [...new Set(offered)].filter((effort) => reasoning['mandatory'] !== true || effort !== 'none');
+}
+
 function parseModel(raw: unknown, nowMs: number): ModelItem | null {
   if (!isRecord(raw)) return null;
   const id = raw['id'];
@@ -166,6 +182,7 @@ function parseModel(raw: unknown, nowMs: number): ModelItem | null {
     promptUsdPerMillion: prompt,
     completionUsdPerMillion: completion,
     free: isFreeModel(id, prompt, completion),
+    efforts: parseEfforts(raw['reasoning']),
   };
 }
 
@@ -209,6 +226,27 @@ export function sortModels(models: readonly ModelItem[], sort: ModelSort): Model
     return left < right ? -1 : left > right ? 1 : 0;
   };
   return [...models].sort((a, b) => compare(a, b) || byId(a, b));
+}
+
+export function pickableModels(models: readonly ModelItem[]): ModelItem[] {
+  return models.filter((model) => MODEL_ID_PATTERN.test(model.id));
+}
+
+export function effortSupported(model: ModelItem | undefined, effort: string): boolean {
+  return effort === '' || model === undefined || model.efforts.includes(effort);
+}
+
+export function modelPick(model: ModelItem): { model: string; modelName: string; web: boolean } {
+  return { model: model.id, modelName: model.name, web: !model.free };
+}
+
+function dollars(value: number | null): string {
+  return value === null ? '?' : `$${Number(value.toFixed(4))}`;
+}
+
+export function modelPriceText(model: ModelItem): string {
+  if (model.free) return 'free';
+  return `${dollars(model.promptUsdPerMillion)} in / ${dollars(model.completionUsdPerMillion)} out per 1M tokens`;
 }
 
 function count(value: unknown): number | null {

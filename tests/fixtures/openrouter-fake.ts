@@ -14,6 +14,19 @@ export interface RecordedRequest {
   body: string;
 }
 
+export interface ChatCall {
+  n: number;
+  body: { model?: string; messages?: { role: string; content: string }[]; reasoning?: { effort?: string }; tools?: { type: string }[]; stream?: boolean } | null;
+  headers: Record<string, string | string[] | undefined>;
+}
+
+export interface ChatScript {
+  status?: number;
+  headers?: Record<string, string>;
+  body?: unknown;
+  hang?: boolean;
+}
+
 export interface FakeOpenRouter {
   base: string;
   key: string;
@@ -23,6 +36,9 @@ export interface FakeOpenRouter {
   expireCodes: boolean;
   revoked: boolean;
   models: unknown;
+  chat: (call: ChatCall) => ChatScript | undefined;
+  chatCalls: ChatCall[];
+  chatClosed: number;
   hitCallback(callbackUrl: string, query: string): Promise<{ status: number; body: string }>;
   issueCode(challenge: string): string;
   close(): Promise<void>;
@@ -40,7 +56,7 @@ export function fakeModels(): unknown {
   return {
     data: [
       entry('acme/free-model:free', 'Acme Free', '0', '0'),
-      entry('acme/paid-model', 'Acme Paid', '0.000003', '0.000015'),
+      entry('acme/paid-model', 'Acme Paid', '0.000003', '0.000015', { reasoning: { supported_efforts: ['high', 'medium', 'low'] } }),
       entry('openrouter/free', 'Free Models Router', '0', '0'),
       entry('acme/markup', FAKE_MODEL_MARKUP, '0.000001', '0.000002'),
       entry('acme/image-only', 'Image Maker', '0.000001', '0.000002', { architecture: { output_modalities: ['image'] } }),
@@ -58,6 +74,14 @@ function challengeOf(verifier: string): string {
 function json(response: http.ServerResponse, status: number, body: unknown): void {
   response.writeHead(status, { 'Content-Type': 'application/json' });
   response.end(JSON.stringify(body));
+}
+
+function parseBody(body: string): ChatCall['body'] {
+  try {
+    return JSON.parse(body) as ChatCall['body'];
+  } catch {
+    return null;
+  }
 }
 
 function localGet(target: string): Promise<{ status: number; body: string }> {
@@ -83,6 +107,9 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     expireCodes: false,
     revoked: false,
     models: fakeModels(),
+    chat: () => undefined,
+    chatCalls: [],
+    chatClosed: 0,
     hitCallback: (callbackUrl, query) => localGet(`${callbackUrl}${query}`),
     issueCode: (challenge) => {
       const code = `code-${randomBytes(8).toString('hex')}`;
@@ -115,6 +142,34 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     }
     entry.used = true;
     json(response, 200, { key: fake.key, user_id: 'user_fake' });
+  };
+
+  const chatReply = (call: ChatCall, response: http.ServerResponse): void => {
+    const script = fake.chat(call);
+    if (script?.hang === true) return;
+    const model = call.body?.model ?? 'unknown';
+    const fallback = {
+      id: `gen-${call.n}`,
+      model,
+      object: 'chat.completion',
+      choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: `Reply from ${model} number ${call.n}` } }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    };
+    response.writeHead(script?.status ?? 200, { 'Content-Type': 'application/json', ...script?.headers });
+    response.end(JSON.stringify(script?.body ?? fallback));
+  };
+
+  const chat = (request: http.IncomingMessage, body: string, response: http.ServerResponse): void => {
+    const call: ChatCall = { n: fake.chatCalls.length + 1, body: parseBody(body), headers: request.headers };
+    fake.chatCalls.push(call);
+    response.on('close', () => {
+      if (!response.writableFinished) fake.chatClosed += 1;
+    });
+    if (fake.revoked || request.headers.authorization !== `Bearer ${fake.key}`) {
+      json(response, 401, { error: { message: 'No cookie auth credentials found', code: 401 } });
+      return;
+    }
+    chatReply(call, response);
   };
 
   const server = http.createServer((request, response) => {
@@ -162,6 +217,8 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
         json(response, 200, {
           data: { label: 'fake', is_free_tier: true, limit_remaining: null, free_model_daily_requests: { used: 3, limit: 50, remaining: 47 } },
         });
+      } else if (request.method === 'POST' && url.pathname === '/api/v1/chat/completions') {
+        chat(request, body, response);
       } else if (request.method === 'GET' && url.pathname === '/api/v1/models') {
         json(response, 200, fake.models);
       } else {

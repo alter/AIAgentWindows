@@ -115,6 +115,22 @@ async function start(): Promise<void> {
   );
   const active = controller;
   await active.restore();
+  const testMode = openrouterTestMode(process.env);
+  const base = openrouterBase(process.env);
+  const openrouterService = new OpenRouterService({
+    client: new OpenRouterClient({ base }),
+    store: new KeyStore(testMode ? testSecretBox() : electronSecretBox(safeStorage, process.platform), {
+      read: () => active.openrouterCipher(),
+      write: (cipher) => active.setOpenrouterCipher(cipher),
+    }),
+    base,
+    openExternal: testMode ? fetchOpener() : (url) => shell.openExternal(url),
+    emit: (status) => {
+      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.openrouterChanged, status);
+    },
+  });
+  openrouter = openrouterService;
+  await openrouterService.init();
   const roomsDir = path.join(sharedDir, 'rooms');
   const debugRoot = path.join(userData, 'debug', 'sites');
   const drivers = createRoomDrivers({
@@ -126,6 +142,7 @@ async function start(): Promise<void> {
     timing: roomTimingOverride(process.env),
     siteLog,
     debugRoot,
+    openrouter: openrouterService,
     siteFor: createSiteSeats({
       agents: () => active.snapshot().agents,
       page: (agent) => siteViews.pageFor(agent.id, agent.kind),
@@ -147,25 +164,10 @@ async function start(): Promise<void> {
     paste: (id, text) => active.paste(id, text),
     copy: (text) => clipboard.writeText(text),
     models: createModelCatalog({ cwd: roomsDir, platform: process.platform, loginShell: roomLoginShell(process.env), env: process.env }),
+    openrouter: openrouterService,
   });
   room = roomService;
   await roomService.init();
-  const testMode = openrouterTestMode(process.env);
-  const base = openrouterBase(process.env);
-  const openrouterService = new OpenRouterService({
-    client: new OpenRouterClient({ base }),
-    store: new KeyStore(testMode ? testSecretBox() : electronSecretBox(safeStorage, process.platform), {
-      read: () => active.openrouterCipher(),
-      write: (cipher) => active.setOpenrouterCipher(cipher),
-    }),
-    base,
-    openExternal: testMode ? fetchOpener() : (url) => shell.openExternal(url),
-    emit: (status) => {
-      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.openrouterChanged, status);
-    },
-  });
-  openrouter = openrouterService;
-  await openrouterService.init();
   registerIpc(active, roomService, openrouterService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(

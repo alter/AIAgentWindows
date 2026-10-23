@@ -28,11 +28,14 @@ WRITE-SET
   src/shared/room-model.ts
   src/shared/room-view.ts
   src/shared/openrouter.ts
+  src/shared/room-history.ts
+  src/shared/agents.ts
   src/main/room-drivers.ts
   src/main/openrouter/
   src/main/room-service.ts
   src/main/index.ts
   src/renderer/room-table.ts
+  src/renderer/room-openrouter-row.ts
   src/renderer/styles.css
   src/renderer/contrast-pairs.json
   tests/unit/

@@ -5,6 +5,10 @@ import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { listRecords, readRecord, stopInterrupted, trashRoom, writeRecord, type TrashItem } from './room-archive';
 import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
+import type { OpenRouterModels } from '../shared/ipc';
+import { OPENROUTER_KIND } from '../shared/room-model';
+import type { OpenRouterStatus } from '../shared/openrouter';
+import { openrouterProblem } from './openrouter/gate';
 import type { RoomTerminals } from './room-drivers';
 import {
   applyRoomEvent,
@@ -19,6 +23,11 @@ import {
   type RoomStartResult,
 } from '../shared/room-view';
 
+export interface OpenRouterGate {
+  status(): OpenRouterStatus;
+  models(refresh: boolean): Promise<OpenRouterModels>;
+}
+
 export interface RoomServiceDeps {
   roomsDir: string;
   debugRoot?: string;
@@ -29,6 +38,7 @@ export interface RoomServiceDeps {
   paste(agentId: string, text: string): boolean;
   copy(text: string): void;
   models(): Promise<RoomModels>;
+  openrouter?: OpenRouterGate;
   now?(): number;
   newId?(): string;
 }
@@ -85,8 +95,16 @@ export class RoomService {
     return true;
   }
 
+  private async openrouterProblem(config: RoomConfig): Promise<string | null> {
+    const gate = this.deps.openrouter;
+    if (gate === undefined || !config.participants.some((participant) => participant.kind === OPENROUTER_KIND)) return null;
+    return openrouterProblem(config.participants, gate.status(), (await gate.models(false)).models);
+  }
+
   async start(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult> {
     try {
+      const problem = await this.openrouterProblem(config);
+      if (problem !== null) return { ok: false, error: problem };
       const from = continueId === undefined ? undefined : await this.continuation(continueId, resume === true ? config : undefined);
       const run = this.room.start(config, from);
       void run.done.catch(() => undefined);

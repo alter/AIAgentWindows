@@ -131,6 +131,7 @@ describe('model list parse', () => {
       promptUsdPerMillion: 1,
       completionUsdPerMillion: 2,
       free: false,
+      efforts: [],
     });
     expect(free?.free).toBe(true);
     expect(free?.promptUsdPerMillion).toBe(0);

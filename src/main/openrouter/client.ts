@@ -8,6 +8,7 @@ import {
   type KeyInfo,
   type ModelItem,
 } from '../../shared/openrouter';
+import { runChat, type ChatInput, type ChatOptions } from './chat';
 
 export class OpenRouterError extends Error {
   constructor(
@@ -47,6 +48,10 @@ export class OpenRouterClient {
   async models(): Promise<ModelItem[]> {
     const raw = await this.send('/api/v1/models', { method: 'GET', headers: {} }, MAX_MODELS_BYTES);
     return parseModels(raw, (this.deps.now ?? Date.now)());
+  }
+
+  chat(key: string, input: ChatInput, options: ChatOptions): Promise<string | null> {
+    return runChat({ base: this.deps.base, ...(this.deps.fetch === undefined ? {} : { fetch: this.deps.fetch }) }, key, input, options);
   }
 
   private async send(path: string, init: { method: string; body?: string; headers: Record<string, string> }, maxBytes: number): Promise<unknown> {

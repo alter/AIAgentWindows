@@ -210,7 +210,7 @@ test('the Add participant menu works from the keyboard and disables a site that 
     await trigger.focus();
     await page.keyboard.press('ArrowDown');
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(items).toHaveCount(5);
+    await expect(items).toHaveCount(6);
     await expect(items.first()).toBeFocused();
     await page.keyboard.press('End');
     await expect(items.last()).toBeFocused();
@@ -244,7 +244,7 @@ test('a table is read as a table: headers with scope, buttons named after the ro
   try {
     await field(page, 'open').click();
     await expect(field(page, 'pane')).toBeVisible();
-    await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(6);
+    await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(7);
     await tableRow(page, 'claude').locator('[data-row-field="model"]').fill('opus');
     await expect(tableRow(page, 'claude').locator('[data-row-field="up"]')).toHaveAttribute('aria-label', /Claude Code · opus/);
     await expect(tableRow(page, 'claude').locator('[data-row-field="remove"]')).toHaveAttribute('aria-label', /Claude Code · opus/);

@@ -1,5 +1,5 @@
 ---
-status: todo
+status: paused
 created: 2026-10-23
 ---
 # OpenRouter in the Room
@@ -8,10 +8,10 @@ created: 2026-10-23
 Owner, 2026-10-23: OpenRouter paid and free models as Room participants, passing context like the other chats.
 
 ## Acceptance criteria
-- [ ] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
-- [ ] AC2 Rules: unit tests for the openrouter participant (model id shape, effort only from supported_efforts, web default on for paid / off for :free, labels); seen red first
-- [ ] AC3 Run: `npx vitest run tests/integration/openrouter-room.test.ts` exit 0 on the fake server — two OpenRouter rows and a stub CLI relayed; every OpenRouter request carries the whole history, reasoning effort and the web_search tool as set; replies in order in the record; 401/402/429/200-with-error/length-empty end as failed turns with readable text; abort on Stop; a reply carrying an entry marker stays inside its entry; reverse control (history dropped) red, output in NOTES.md
-- [ ] AC4 Smoke: electron-smoke exit 0 — two OpenRouter rows added from the menu, models picked with the Free filter, relay on the fake server, history order, markup in a reply shown as text — windows hidden
+- [x] AC1 Fast tier green: every command of docs/PROJECT.md §6 fast tier exits 0
+- [x] AC2 Rules: unit tests for the openrouter participant (model id shape, effort only from supported_efforts, web default on for paid / off for :free, labels); seen red first
+- [x] AC3 Run: `npx vitest run tests/integration/openrouter-room.test.ts` exit 0 on the fake server — two OpenRouter rows and a stub CLI relayed; every OpenRouter request carries the whole history, reasoning effort and the web_search tool as set; replies in order in the record; 401/402/429/200-with-error/length-empty end as failed turns with readable text; abort on Stop; a reply carrying an entry marker stays inside its entry; reverse control (history dropped) red, output in NOTES.md
+- [x] AC4 Smoke: electron-smoke exit 0 — two OpenRouter rows added from the menu, models picked with the Free filter, relay on the fake server, history order, markup in a reply shown as text — windows hidden
 - [ ] AC5 HUMAN (excluded from /run): the owner runs a real room with a free and a paid OpenRouter model
 
 ## Stack
@@ -31,8 +31,12 @@ As tasks/10-app-shell/06-room-layout/PLAN.md; OpenRouter per docs/tech/openroute
 - The chat agent (18), streaming in the Room
 
 ## Tasks
-- [ ] T00 Baseline: the coordinator's last verified run before T01 — verify: the Log line exists
-- [ ] T01 Room participant (S1–S5): model rules red first; OpenRouterDriver in room-drivers; row with model picker, effort, web; integration and smoke with reverse control — verify: AC2, AC3 + fast tier + electron-smoke
-- [ ] T02 Ledger and notes — verify: tasks/check.py no new problem + fast tier
+- [x] T00 Baseline: the coordinator's last verified run before T01 — verify: the Log line exists
+- [x] T01 Room participant (S1–S5): model rules red first; OpenRouterDriver in room-drivers; row with model picker, effort, web; integration and smoke with reverse control — verify: AC2, AC3 + fast tier + electron-smoke
+- [x] T02 Ledger and notes — verify: tasks/check.py no new problem + fast tier
 
 ## Log
+- 2026-10-23 coordinator: T00 baseline = verification run on b124b70 (16-openrouter-account): fast tier 12 commands exit 0, vitest 1063/1063, coverage 100.00 %, electron-smoke 61/61; tasks/check.py baseline 7 problems
+- 2026-10-23 T01 done: OpenRouter participant (kind, row with Free/Paid filter, effort from supported_efforts, web flag; chat driver with 401/402/429/200-error/length handling, abort on Stop and timeout); vitest 1112/1112 (T00 1063, +49), coverage 100.00 %, fast tier all exit 0, build ok, electron-smoke 65/65 (T00 61, +4), reverse controls (history dropped, abort signal dropped) red then restored, tasks/check.py 7 problems; write-set additions agents.ts, room-history.ts, room-openrouter-row.ts (NOTES.md)
+- 2026-10-23 coordinator: T01 verified (diff reviewed: bearer read in main at turn time, 401 through keyRejected, abort on Stop/timeout/shutdown; fast tier 12 exit 0, vitest 1112/1112, coverage 100.00 %, electron-smoke 65/65) — this run
+- 2026-10-23 T02 done: OpenRouter ledger row (Room participants built), NOTES summary, labels status:review; tasks/check.py 7 (baseline); paused on AC5 HUMAN

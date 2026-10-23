@@ -1,5 +1,6 @@
 // room-model.ts
 import { AGENT_KINDS, AGENT_LABELS, isSiteKind, type AgentKind } from './agents';
+import { MODEL_ID_PATTERN, isFreeModel } from './openrouter';
 
 export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 50;
@@ -24,18 +25,26 @@ const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const PARTICIPANT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 export const MODEL_PATTERN = /^[A-Za-z0-9._:[\]-]{1,64}$/;
 export const EFFORT_PATTERN = /^[a-z]{1,16}$/;
+export const OPENROUTER_KIND = 'openrouter';
+export const MAX_MODEL_NAME_CHARS = 200;
+const OPENROUTER_LABEL = 'OpenRouter';
+const LABEL_NAME_CHARS = 80;
 const ENTRY_KINDS: readonly RoomEntryKind[] = ['prompt', 'reply', 'final', 'error'];
 const RECORD_STATUSES: readonly RoomRecordStatus[] = ['running', 'done', 'stopped', 'failed'];
 
 export type RoomMode = 'broadcast' | 'relay';
 export type RoomEntryKind = 'prompt' | 'reply' | 'final' | 'error';
 
+export type RoomKind = AgentKind | typeof OPENROUTER_KIND;
+
 export interface RoomParticipant {
   id: string;
-  kind: AgentKind;
+  kind: RoomKind;
   label: string;
   model?: string;
   effort?: string;
+  web?: boolean;
+  modelName?: string;
 }
 
 export interface RoomConfig {
@@ -103,17 +112,31 @@ export type RoomEvent =
   | { type: 'entry'; roomId: string; entry: RoomEntry }
   | { type: 'finished'; roomId: string; status: RoomStatus };
 
-export const ROOM_PARTICIPANTS: readonly RoomParticipant[] = AGENT_KINDS.map((kind) => ({
+export const ROOM_PARTICIPANTS: readonly (RoomParticipant & { kind: AgentKind })[] = AGENT_KINDS.map((kind) => ({
   id: kind,
   kind,
   label: AGENT_LABELS[kind],
 }));
 
-export function instanceLabel(parts: { kind: AgentKind; model?: string; effort?: string }): string {
-  return [AGENT_LABELS[parts.kind], parts.model, parts.effort].filter((part) => part !== undefined).join(' \u00b7 ');
+export function kindLabel(kind: RoomKind): string {
+  return kind === OPENROUTER_KIND ? OPENROUTER_LABEL : AGENT_LABELS[kind];
 }
 
-export function nextParticipantId(kind: AgentKind, existing: readonly string[]): string {
+function shortName(text: string): string {
+  if (text.length <= LABEL_NAME_CHARS) return text;
+  let keep = LABEL_NAME_CHARS - 1;
+  const last = text.charCodeAt(keep - 1);
+  if (last >= 0xd800 && last <= 0xdbff) keep -= 1;
+  return `${text.slice(0, keep)}\u2026`;
+}
+
+export function instanceLabel(parts: { kind: RoomKind; model?: string; effort?: string; modelName?: string }): string {
+  const name = parts.kind === OPENROUTER_KIND ? (parts.modelName ?? parts.model) : parts.model;
+  const shown = parts.kind === OPENROUTER_KIND && name !== undefined ? shortName(name) : name;
+  return [kindLabel(parts.kind), shown, parts.effort].filter((part) => part !== undefined).join(' \u00b7 ');
+}
+
+export function nextParticipantId(kind: RoomKind, existing: readonly string[]): string {
   if (!existing.includes(kind)) return kind;
   let number = 2;
   while (existing.includes(`${kind}-${number}`)) number += 1;
@@ -161,8 +184,8 @@ function isBoundedString(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.length >= 1 && value.length <= max;
 }
 
-function isAgentKind(value: unknown): value is AgentKind {
-  return typeof value === 'string' && (AGENT_KINDS as readonly string[]).includes(value);
+function isRoomKind(value: unknown): value is RoomKind {
+  return typeof value === 'string' && (value === OPENROUTER_KIND || (AGENT_KINDS as readonly string[]).includes(value));
 }
 
 function parseShaped(value: unknown, pattern: RegExp): string | null | undefined {
@@ -170,10 +193,23 @@ function parseShaped(value: unknown, pattern: RegExp): string | null | undefined
   return typeof value === 'string' && pattern.test(value) ? value : null;
 }
 
+function parseOpenRouterParticipant(id: string, value: Record<string, unknown>): RoomParticipant | null {
+  const model = parseShaped(value['model'], MODEL_ID_PATTERN);
+  const effort = parseShaped(value['effort'], EFFORT_PATTERN);
+  const { modelName, web } = value;
+  if (typeof model !== 'string' || effort === null) return null;
+  if (modelName !== undefined && (typeof modelName !== 'string' || modelName.length > MAX_MODEL_NAME_CHARS || modelName.length < 1 || hasControl(modelName))) return null;
+  if (web !== undefined && typeof web !== 'boolean') return null;
+  const parts = { kind: OPENROUTER_KIND, model, ...(effort === undefined ? {} : { effort }), ...(modelName === undefined ? {} : { modelName }) } as const;
+  return { id, ...parts, web: web ?? !isFreeModel(model, null, null), label: instanceLabel(parts) };
+}
+
 function parseParticipant(value: unknown): RoomParticipant | null {
   if (!isRecord(value)) return null;
   const { id, kind } = value;
-  if (typeof id !== 'string' || !PARTICIPANT_ID_PATTERN.test(id) || !isAgentKind(kind)) return null;
+  if (typeof id !== 'string' || !PARTICIPANT_ID_PATTERN.test(id) || !isRoomKind(kind)) return null;
+  if (kind === OPENROUTER_KIND) return parseOpenRouterParticipant(id, value);
+  if (value['web'] !== undefined || value['modelName'] !== undefined) return null;
   const model = parseShaped(value['model'], MODEL_PATTERN);
   const effort = parseShaped(value['effort'], EFFORT_PATTERN);
   if (model === null || effort === null) return null;
@@ -186,7 +222,7 @@ function parseParticipants(value: unknown): RoomParticipant[] | null {
   if (!Array.isArray(value) || value.length < 1 || value.length > MAX_PARTICIPANTS) return null;
   const parsed: RoomParticipant[] = [];
   const seen = new Set<string>();
-  const sites = new Set<AgentKind>();
+  const sites = new Set<RoomKind>();
   for (const item of value) {
     const participant = parseParticipant(item);
     if (!participant || seen.has(participant.id)) return null;
@@ -358,7 +394,7 @@ export function resumePoint(record: Pick<RoomRecord, 'status' | 'entries'>): Res
 }
 
 function sameParticipant(a: RoomParticipant, b: RoomParticipant): boolean {
-  return a.id === b.id && a.kind === b.kind && a.model === b.model && a.effort === b.effort;
+  return a.id === b.id && a.kind === b.kind && a.model === b.model && a.effort === b.effort && a.web === b.web;
 }
 
 function sameSetup(a: Pick<RoomConfig, 'mode' | 'rounds' | 'finalizerId' | 'participants'>, b: Pick<RoomConfig, 'mode' | 'rounds' | 'finalizerId' | 'participants'>): boolean {

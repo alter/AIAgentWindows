@@ -60,11 +60,11 @@ export function parseAgentTitle(value: unknown): string | null {
   return title.length >= 1 && title.length <= MAX_AGENT_TITLE_CHARS ? title : null;
 }
 
-export function isCliKind(kind: AgentKind): kind is CliKind {
+export function isCliKind(kind: string): kind is CliKind {
   return kind === 'claude' || kind === 'codex';
 }
 
-export function isSiteKind(kind: AgentKind): kind is SiteKind {
+export function isSiteKind(kind: string): kind is SiteKind {
   return kind === 'chatgpt' || kind === 'grok' || kind === 'deepseek';
 }
 
