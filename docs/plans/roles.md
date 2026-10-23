@@ -8,7 +8,7 @@ created: 2026-10-24
 Inside a project the owner assigns roles to models (for example 3× Claude Sonnet programmers, Claude Haiku web researcher, Codex + Claude Fable architects, OpenRouter GLM secops). An orchestrator model (a CLI kind, for example Claude Opus effort high) routes work and context between them on its own: implementation → testing → secops attack → architects patch → back. Code moves between roles as git branches, not as text: every writing role works in its own worktree and branch, testers and secops take the programmer's branch into their own worktree, and finished work is merged by the app into an integration branch of the project that the owner merges into their working branch by hand. Nothing is pushed. Drafted 2026-10-24 from `docs/plans/projects.md` after the agent's review; starts after the owner's real project-room run (projects AC5) and after T03 of that plan says which write-mode flags exist.
 
 ## Entry condition
-- `docs/plans/projects.md` closed (T08) and its AC5 run done by the owner
+- `docs/plans/projects.md` closed (T09) and its AC5 run done by the owner
 - `docs/tech/claude-code@2.1.308.md` and `docs/tech/codex@0.164.0.md` hold the write-mode and hook-isolation facts (projects T03); `docs/tech/git@2.50.1.md` holds the worktree facts (projects T02)
 
 ## Acceptance criteria
