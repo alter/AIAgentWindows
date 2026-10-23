@@ -7,7 +7,7 @@ GOAL
   Serves no gate.
 
 CONTEXT
-  docs/tech/electron@44.6.0.md:85-88 (nativeTheme.themeSource; Playwright emulation, EL1-EL3)
+  docs/tech/electron@44.6.0.md (nativeTheme.themeSource and Playwright emulation, items EL1-EL3)
   src/main/state-file.ts (app state persisted by the main process)
   src/main/index.ts, src/main/ipc-handlers.ts, src/shared/ipc.ts, src/preload/index.ts
   src/renderer/sidebar.ts, src/renderer/styles.css (palette tokens by prefers-color-scheme)
@@ -65,4 +65,4 @@ ROLE
   APP, QA, HUMAN
 
 DEPENDS
-  10-app-shell/05-design-contrast
+  10-app-shell/10-copy-feedback
