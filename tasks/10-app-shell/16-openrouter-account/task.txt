@@ -1,0 +1,77 @@
+TASK: openrouter account — sign in with OpenRouter, keep the key safe, list paid and free models
+
+GOAL
+  The owner connects an OpenRouter account in one click (PKCE with a localhost
+  callback) or by pasting a key; the key is kept encrypted by the main process;
+  the app lists OpenRouter models with a Free / Paid filter and shows the free
+  daily allowance. The base the Room participant and the chat agent build on.
+  Owner's request of 2026-10-23 (docs/PROJECT.md §3, OpenRouter row).
+
+CONTEXT
+  docs/tech/openrouter@2026-10-23.md (S1 PKCE, S2 keys, S3 models and free tier, S6 Electron side, Implications)
+  docs/tech/electron@44.6.0.md (safeStorage, shell.openExternal)
+  src/main/agent-controller.ts (state persistence into agents.json)
+  src/shared/ipc.ts, src/preload/index.ts, src/main/ipc-handlers.ts
+  src/renderer/sidebar.ts (bottom area with the Theme switch)
+
+SCOPE
+  + S1 main-process module src/main/openrouter/: PKCE sign-in (S256 verifier/challenge, random state, loopback http server on 127.0.0.1 port 0 with callback_url http://localhost:<port>/callback, shell.openExternal, one callback then close, 10-minute limit, POST /api/v1/auth/keys), paste-key and paste-code fallback, sign out
+  + S2 key storage: safeStorage encryption, ciphertext only in the app state, the key never leaves the main process (not to the renderer, not to site views, not to logs); 401 clears it
+  + S3 pure rules in src/shared/openrouter.ts: model list parse (text-output models, pricing strings to numbers, expiration hidden), free rule (id ends with :free, or zero prompt and completion price, plus openrouter/free), filter and sort, key-info parse
+  + S4 GET /api/v1/models cached per app run, GET /api/v1/key after sign-in for free_model_daily_requests and is_free_tier; attribution headers on every request
+  + S5 UI: an "OpenRouter" block at the bottom of the sidebar: Connect (and "Paste key" fallback) when signed out; connected state with free requests left today and Disconnect when signed in; palette tokens only
+  + S6 base URL overridable only in test mode, so tests run against a local fake server and never reach openrouter.ai
+  − Room participants of OpenRouter — 10-app-shell/17-openrouter-room
+  − the chat agent — 10-app-shell/18-openrouter-chat
+  − buying credits, management keys — not requested
+  indivisible: sign-in, key store and model list share one client and one IPC surface
+
+WRITE-SET
+  src/main/openrouter/
+  src/shared/openrouter.ts
+  src/shared/agents.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/agent-controller.ts
+  src/main/index.ts
+  src/renderer/openrouter-account.ts
+  src/renderer/sidebar.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/
+  tests/integration/
+  tests/full/
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/16-openrouter-account/
+
+DATA
+  openrouter.key: dir=in; type=string from POST /api/v1/auth/keys or pasted; size=1..512 chars; null=yes; interpretable=no; validated=tests/unit/openrouter.test.ts::a pasted key is trimmed and refused when empty, too long or with whitespace inside; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/guides/overview/auth/oauth.md
+  openrouter.callback: dir=in; type=query string code and state on the loopback request; size=code 1..512, state 43 chars; null=no; interpretable=no; validated=tests/integration/openrouter-signin.test.ts::a callback with a wrong state is refused and no key is stored; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/guides/overview/auth/oauth.md
+  openrouter.models: dir=in; type=JSON from GET /api/v1/models (id, name, pricing strings, context_length, supported_parameters); size=under 4 MB; null=no; interpretable=yes; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties.md
+
+SECURITY
+  sink sidebar-openrouter-block: consumes openrouter.models; protection=textContent only, never innerHTML; test=tests/full/openrouter-account.spec.ts::a model name with markup is shown as text
+  sink loopback-callback-page: consumes openrouter.callback; protection=a fixed static page, no echo of query values; test=tests/integration/openrouter-signin.test.ts::the callback page echoes nothing from the request
+
+OUTCOME
+  An integration run against a local fake OpenRouter signs in by PKCE (state
+  checked, code exchanged, key stored encrypted, never sent to the renderer),
+  lists models with the free filter and reads the key info; a smoke run shows
+  the connected block; every task of
+  tasks/10-app-shell/16-openrouter-account/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/openrouter.test.ts: model parse, free rule, filter, key-info parse, pasted key rules
+  3. [fast] tests/integration/openrouter-signin.test.ts: PKCE against a fake server — challenge is S256 of the verifier, wrong state refused, expired code refused, key stored as ciphertext only, 401 clears it
+  4. [fast] reverse control: skip the state check in the callback handler → tests/integration/openrouter-signin.test.ts::a callback with a wrong state is refused and no key is stored
+  5. [full] electron-smoke: connect against the fake server (openExternal replaced in test mode), the block shows connected, the renderer never receives the key, disconnect
+  6. [fast] HUMAN: the owner connects a real OpenRouter account once and records in NOTES.md the unverified paths of the study (exchange success, GET /key)
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/14-agent-identity

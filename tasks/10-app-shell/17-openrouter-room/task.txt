@@ -1,0 +1,72 @@
+TASK: openrouter room — OpenRouter models take part in a Room like the CLIs and sites
+
+GOAL
+  An "OpenRouter" row in the participants table picks any OpenRouter model
+  (Free / Paid filter), an effort when the model supports one, and web search
+  on or off; several OpenRouter rows can share a room; each turn gets the whole
+  room history like every other participant. Owner's request and answer of
+  2026-10-23 (docs/PROJECT.md §3, OpenRouter row).
+
+CONTEXT
+  docs/tech/openrouter@2026-10-23.md (S3 models, S4 completions and reasoning, S5 web search, errors, Implications: Room turns)
+  src/main/room-drivers.ts (CliDriver, SiteDriver: one turn per call)
+  src/shared/room-model.ts (RoomParticipant, kinds, parse), src/shared/room-history.ts (buildParticipantPrompt)
+  src/renderer/room-table.ts, src/shared/room-view.ts (Add participant menu, rows)
+  tasks/10-app-shell/16-openrouter-account/PLAN.md
+
+SCOPE
+  + S1 participant kind `openrouter` with `model` (an OpenRouter id), optional `effort` (only a value in the model's supported_efforts) and `web` (boolean); parse and validation in room-model; old records load
+  + S2 table row: Model is a searchable select of the cached model list with a Free / Paid / All filter (price shown), Effort shows the model's supported efforts or "—", a Web checkbox (on by default for paid models, off for :free, with the per-search price noted); "OpenRouter" in Add participant is disabled with its reason when signed out
+  + S3 driver: one non-streaming POST /api/v1/chat/completions per turn with the participant prompt built like for the CLIs, reasoning effort when set, the web_search server tool when on, attribution headers; the reply is choices[0].message.content; abort on Stop and on the turn timeout
+  + S4 errors as failed turns with a readable text: 401 (signed out), 402 (no credits), 429 (Retry-After honoured once), 200 with error or finish_reason error, empty content with finish_reason length ("raise the limit")
+  + S5 labels "OpenRouter · <model name>" (+ effort), unique ids per row
+  − the chat agent — 10-app-shell/18-openrouter-chat
+  − streaming in the room — not needed, one reply per turn
+  indivisible: the participant kind, its row and its driver form one contract tested by one integration run
+
+WRITE-SET
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/openrouter.ts
+  src/main/room-drivers.ts
+  src/main/openrouter/
+  src/main/room-service.ts
+  src/main/index.ts
+  src/renderer/room-table.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/
+  tests/integration/
+  tests/full/
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/17-openrouter-room/
+
+DATA
+  openrouter.reply: dir=in; type=string choices[0].message.content; size=up to the room's MAX_REPLY_CHARS; null=yes; interpretable=yes; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api_reference/errors-and-debugging.md
+  participant.model: dir=in; type=OpenRouter model id from the cached list; size=1..200 chars, [a-z0-9._/:-]; null=no; interpretable=no; validated=tests/unit/room-model.test.ts::an openrouter participant needs a model id of the allowed shape; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties.md
+
+SECURITY
+  sink room-feed: consumes openrouter.reply; protection=textContent only (existing feed); test=tests/full/openrouter-room.spec.ts::markup in an OpenRouter reply is shown as text
+  sink room-history-file: consumes openrouter.reply; protection=entry marker escaping with the nonce (existing history writer); test=tests/integration/openrouter-room.test.ts::a reply carrying an entry marker stays inside its entry
+
+OUTCOME
+  An integration run on a fake OpenRouter server relays a room with two
+  OpenRouter rows and one stub CLI: each OpenRouter request carries the whole
+  history, the effort and the web tool as set, the replies land in
+  <shared>/rooms/<id>.json in order, and 402/429/error replies end as failed
+  turns; every task of tasks/10-app-shell/17-openrouter-room/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit: participant parse, effort only from supported_efforts, web default by price, labels
+  3. [fast] tests/integration/openrouter-room.test.ts: request bodies (history, reasoning, tools), replies in order, error mapping, abort on Stop
+  4. [fast] reverse control: drop the history from the OpenRouter request → tests/integration/openrouter-room.test.ts::every OpenRouter turn carries the whole room history
+  5. [full] electron-smoke: add two OpenRouter rows from the menu, pick models with the Free filter, relay on the fake server, history order
+  6. [fast] HUMAN: the owner runs a real room with a free and a paid OpenRouter model
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/16-openrouter-account

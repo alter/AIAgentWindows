@@ -1,0 +1,76 @@
+TASK: openrouter chat — a sidebar agent that chats with one OpenRouter model
+
+GOAL
+  "OpenRouter" in the sidebar "+" menu creates a chat agent: a pane with the
+  conversation, a model picker (Free / Paid filter), effort and web search
+  controls, streaming replies with Stop, and the conversation kept across
+  restarts. Owner's answer of 2026-10-23 ("Room + отдельный чат").
+
+CONTEXT
+  docs/tech/openrouter@2026-10-23.md (S4 streaming, reasoning, S5 web search, errors, Implications: chat pane)
+  src/shared/agents.ts (AgentKind, Agent), src/main/agent-controller.ts
+  src/renderer/content.ts (panes per agent kind), src/renderer/sidebar.ts ("+" menu)
+  src/renderer/room-feed.ts (entries drawn with textContent, Copy)
+  tasks/10-app-shell/16-openrouter-account/PLAN.md
+
+SCOPE
+  + S1 agent kind `openrouter` with its model, effort and web settings; label "OpenRouter · <model name>" until renamed; old state files load
+  + S2 chat pane: messages (user and model) drawn with textContent, an input with Enter to send and Shift+Enter for a new line, Stop while streaming, Copy on each reply, model picker with the Free / Paid / All filter, effort and Web controls as in the room row
+  + S3 streaming in the main process (SSE: comments skipped, deltas accumulated, [DONE], usage from the last chunk, mid-stream error shown as a failed reply); deltas reach the renderer through an event channel; Stop aborts the request
+  + S4 the conversation is stored per agent in <shared>/openrouter/<agentId>.json (atomic writes, unreadable files refused and never rewritten) and sent as messages on every request; closing the agent keeps the file
+  + S5 errors as a failed reply with readable text (401, 402, 429, length with empty content)
+  − Room participants — 10-app-shell/17-openrouter-room
+  − images and files in the chat — not requested
+  − markdown rendering — replies are plain text, as in the Room feed
+  indivisible: the pane, the stream channel and the conversation store change together for one agent kind
+
+WRITE-SET
+  src/shared/agents.ts
+  src/shared/openrouter.ts
+  src/shared/openrouter-chat.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/ipc-handlers.ts
+  src/main/agent-controller.ts
+  src/main/openrouter/
+  src/main/index.ts
+  src/renderer/openrouter-pane.ts
+  src/renderer/content.ts
+  src/renderer/sidebar.ts
+  src/renderer/icons.ts
+  src/renderer/styles.css
+  src/renderer/contrast-pairs.json
+  tests/unit/
+  tests/integration/
+  tests/full/
+  tests/fixtures/
+  docs/PROJECT.md
+  tasks/10-app-shell/18-openrouter-chat/
+
+DATA
+  openrouter.delta: dir=in; type=string choices[0].delta.content per SSE chunk; size=up to MAX_REPLY_CHARS in total; null=yes; interpretable=yes; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api_reference/streaming.md
+  chat.message: dir=in; type=string typed by the owner; size=1..100000 chars; null=no; interpretable=yes; source=https://web.archive.org/web/20261023/https://openrouter.ai/docs/api_reference/overview.md
+
+SECURITY
+  sink openrouter-pane: consumes openrouter.delta, chat.message; protection=textContent only, never innerHTML; test=tests/full/openrouter-chat.spec.ts::markup in a streamed reply and in the owner's message is shown as text
+  sink conversation-file: consumes openrouter.delta, chat.message; protection=JSON.stringify with atomic write, parse with a schema on read; test=tests/unit/openrouter-chat.test.ts::an unreadable or malformed conversation file is refused
+
+OUTCOME
+  A smoke run on a fake OpenRouter server creates an OpenRouter agent, sends
+  two messages, sees the streamed replies, stops one mid-stream, restarts the
+  app and finds the conversation; the second request carried the first
+  exchange; every task of tasks/10-app-shell/18-openrouter-chat/PLAN.md is [x] or [!].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/openrouter-chat.test.ts: SSE parser (comments, split chunks, [DONE], mid-stream error), conversation parse and limits
+  3. [fast] tests/integration: streaming against the fake server, abort on Stop, messages carry the conversation
+  4. [fast] reverse control: skip comment lines check in the SSE parser → tests/unit/openrouter-chat.test.ts::comment lines are ignored
+  5. [full] electron-smoke: create the agent, send, stream, Stop, restart keeps the conversation, markup shown as text
+  6. [fast] HUMAN: the owner chats with a free and a paid model
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/17-openrouter-room
