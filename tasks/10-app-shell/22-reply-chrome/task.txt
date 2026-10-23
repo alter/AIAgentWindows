@@ -1,0 +1,56 @@
+TASK: site replies without page chrome — buttons and screen-reader labels left out
+
+GOAL
+  In the owner's room room-20261023-191123-53ed7f (2026-10-23) both Grok
+  replies began with "Grok" and "Worked for 56s" and ended with follow-up
+  suggestions ("Сколько в моей стране?" ...); that text went into the history
+  and to every other participant. The captured page (debug/sites/<room>/grok-12ca13/dom-end.html)
+  shows the source: an sr-only h2 "Grok" with data-no-copy="true", a button
+  "Worked for 56s" in the thinking container, suggestion buttons. The generic
+  reader (src/main/site-adapters/generic-scripts.ts collect, SKIP_TAGS line 3)
+  skips no button and no visually hidden label. Serves no gate.
+
+CONTEXT
+  src/main/site-adapters/generic-scripts.ts (SKIP_TAGS, collect/walk, conversationText)
+  src/main/site-adapters/reply-lines.ts, src/main/site-adapters/decide.ts
+  tests/unit/generic-adapter.test.ts, tests/fixtures/sites/generic.html
+  docs/site-debug.md
+
+SCOPE
+  + S1 the reply reader leaves out the text of button and [role="button"] elements, of elements marked data-no-copy="true", and of visually hidden labels (the sr-only pattern: clipped to 1 px or clip-path inset 100 %) — generic rules, no site selectors
+  + S2 a jsdom fixture shaped like the captured Grok turn (synthetic text, no owner content): screen-reader author label, "Worked for" button, reply paragraphs, suggestion buttons; the reply equals the paragraphs only
+  + S3 the other site fixtures keep their replies (no text lost: a reply paragraph containing a link or inline code stays whole)
+  − per-site selectors — excluded by the adapter design (02-room T22)
+  − cleaning replies already stored in saved rooms — they stay as recorded
+  indivisible: one reader function and its fixtures
+
+WRITE-SET
+  src/main/site-adapters/generic-scripts.ts
+  tests/unit/generic-adapter.test.ts
+  tests/unit/site-adapters.test.ts
+  tests/fixtures/sites/
+  tasks/10-app-shell/22-reply-chrome/
+
+DATA
+  site.reply: dir=in; type=text read from the site's page; size=up to the room's MAX_REPLY_CHARS; null=yes; interpretable=yes; source=https://github.com/electron/electron/blob/v44.6.0/docs/api/web-frame-main.md
+
+SECURITY
+  sink room-history-file: consumes site.reply; protection=entry marker escaping with the nonce (existing history writer, unchanged); test=tests/unit/generic-adapter.test.ts::a reply leaves out buttons and screen-reader labels
+
+OUTCOME
+  tests/unit/generic-adapter.test.ts::a reply leaves out buttons and screen-reader labels
+  passes on the Grok-shaped fixture and every existing site fixture keeps its
+  reply; tasks/10-app-shell/22-reply-chrome/PLAN.md has every non-HUMAN item [x].
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] tests/unit/generic-adapter.test.ts: Grok-shaped fixture reply equals the reply paragraphs; link and inline code inside a reply stay
+  3. [full] electron-smoke exit 0 (no regression of the site specs)
+  4. [fast] reverse control: BUTTON removed from the skipped set → tests/unit/generic-adapter.test.ts::a reply leaves out buttons and screen-reader labels
+  5. [fast] HUMAN: the owner runs a room with Grok and finds no "Worked for" or suggestions in its entries
+
+ROLE
+  APP, QA, HUMAN
+
+DEPENDS
+  10-app-shell/21-popup-placement

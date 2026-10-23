@@ -1,7 +1,14 @@
 <!doctype html>
 <!-- composer.html -->
 <html lang="en">
-  <head><meta charset="utf-8" /><title>Composer fixture</title></head>
+  <head>
+    <meta charset="utf-8" />
+    <title>Composer fixture</title>
+    <style>
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+      .clipped { position: absolute; clip-path: inset(50%); }
+    </style>
+  </head>
   <body>
     <nav id="history"><ul><li>Older chat about cats</li></ul></nav>
     <main id="log"><div class="msg assistant">Welcome. Ask me anything.</div></main>
@@ -129,6 +136,17 @@
         if (think > 0) setTimeout(stream, think, text);
         else stream(text);
       }
+      function streamChrome(reply) {
+        reply.innerHTML = '<h2 class="sr-only" data-no-copy="true">Assistant</h2>'
+          + '<div class="thinking-container"><button type="button" data-testid="canvas-trigger"><span>Worked for 56s</span></button></div>'
+          + '<span class="sr-only">Assistant said</span>'
+          + '<span class="clipped">Screen reader only note</span>'
+          + '<p>Rivers carve valleys over <a href="https://example.test/rivers">long stretches of time</a>.</p>'
+          + '<p>Call <code>flow()</code> to start the water.</p>'
+          + '<div role="button" tabindex="0">Share this answer with others</div>'
+          + '<div class="suggestions"><button type="button">How deep can a valley get?</button><button type="button"><span>Which river is the longest?</span></button></div>';
+        stop.hidden = true;
+      }
       function stream(text) {
         const gap = Number(query.get('gap') || 0);
         const lock = query.has('lock');
@@ -136,6 +154,7 @@
         if (stopVisible) stop.hidden = false;
         if (lock) { ta.disabled = true; ce.removeAttribute('contenteditable'); }
         const reply = add('assistant', []);
+        if (query.has('chrome')) return streamChrome(reply);
         const row = document.createElement('p');
         reply.appendChild(row);
         const fixed = query.get('reply');

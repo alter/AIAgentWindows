@@ -255,6 +255,13 @@ describe('generic adapter: turn', () => {
     expect(await runAdapterTurn(adapter, page.runner, history, FAST)).toBe('Same answer, repeated verbatim');
   });
 
+  it('a reply leaves out buttons and screen-reader labels', async () => {
+    const page = openPage('?chrome=1');
+    const adapter = createGenericAdapter('fixture', OPTIONS);
+    const reply = await runAdapterTurn(adapter, page.runner, 'Tell me about rivers', FAST);
+    expect(reply).toBe('Rivers carve valleys over long stretches of time.\nCall flow() to start the water.');
+  });
+
   it('returns reply markup as text', async () => {
     const page = openPage();
     const adapter = createGenericAdapter('fixture', OPTIONS);

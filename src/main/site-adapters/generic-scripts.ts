@@ -1,6 +1,8 @@
 // generic-scripts.ts
 const PRELUDE = String.raw`
-const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'SVG', 'CANVAS', 'IFRAME']);
+const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA', 'SVG', 'CANVAS', 'IFRAME', 'BUTTON']);
+const CLIP_ZERO = /^rect\(\s*0(px)?[\s,]+0(px)?[\s,]+0(px)?[\s,]+0(px)?\s*\)$/;
+const CLIP_PATH_HIDDEN = /^inset\(\s*(50|100)%\s*\)$/;
 const STOP_NAME = /(^|[^a-z])(stop|cancel)([^a-z]|$)|останов|отмен/i;
 const SEND_NAME = /send|submit|отправ/i;
 const OTHER_NAME = /attach|upload|file|photo|image|mic|voice|dictat|record|search|think|reason|tool|model|menu|more|copy|share|прикреп|добав|голос|поиск/i;
@@ -88,6 +90,23 @@ function findComposer() {
   return best;
 }
 
+function tinyBox(style) {
+  return parseFloat(style.width) <= 1 && parseFloat(style.height) <= 1;
+}
+
+function screenReaderOnly(style) {
+  if (style.position !== 'absolute') return false;
+  if (CLIP_PATH_HIDDEN.test(String(style.clipPath || '').trim())) return true;
+  return CLIP_ZERO.test(String(style.clip || '').trim()) && tinyBox(style);
+}
+
+function pageChrome(node, style) {
+  return SKIP_TAGS.has(node.tagName.toUpperCase())
+    || node.getAttribute('role') === 'button'
+    || node.getAttribute('data-no-copy') === 'true'
+    || screenReaderOnly(style);
+}
+
 function collect(root, skip) {
   let out = '';
   const breakLine = () => {
@@ -104,8 +123,9 @@ function collect(root, skip) {
       return;
     }
     if (node.nodeType !== 1 || node === skip) return;
-    if (SKIP_TAGS.has(node.tagName.toUpperCase()) || node.hidden || node.getAttribute('aria-hidden') === 'true') return;
+    if (node.hidden || node.getAttribute('aria-hidden') === 'true') return;
     const style = getComputedStyle(node);
+    if (pageChrome(node, style)) return;
     if (style.display === 'none' || style.visibility === 'hidden') return;
     if (node.tagName === 'BR') {
       out += '\n';
