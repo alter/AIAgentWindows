@@ -1,7 +1,7 @@
 // room-archive.ts
 import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { MAX_RECORD_BYTES, isRoomId, parseRoomRecord, type RoomListItem, type RoomRecord } from '../shared/room-model';
+import { MAX_RECORD_BYTES, isRoomId, parseRoomRecord, roomTitle, type RoomListItem, type RoomRecord } from '../shared/room-model';
 
 export const LIST_LIMIT = 200;
 const FIRST_PROMPT_CHARS = 120;
@@ -71,6 +71,7 @@ export async function listRecords(roomsDir: string): Promise<RoomListItem[]> {
         updatedAt: record.updatedAt,
         status: record.status,
         firstPrompt: firstPromptLine(record),
+        title: roomTitle(record),
       });
     }
   }

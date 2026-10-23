@@ -9,6 +9,9 @@ export const MAX_TURN_TIMEOUT_MS = 3_600_000;
 export const DEFAULT_TURN_TIMEOUT_MS = 600000;
 export const MAX_PARTICIPANTS = 16;
 export const MAX_ID_CHARS = 128;
+export const MAX_TITLE_CHARS = 80;
+export const DERIVED_TITLE_CHARS = 60;
+export const EMPTY_ROOM_TITLE = 'New room';
 export const MAX_REPLY_CHARS = 1_000_000;
 export const MAX_HISTORY_CHARS = 4_000_000;
 export const MAX_ERROR_CHARS = 500;
@@ -71,9 +74,10 @@ export interface RoomRecord {
   config: RoomRecordConfig;
   entries: RoomEntry[];
   nonce: string;
+  title?: string;
 }
 export type RoomListItem =
-  | { id: string; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string }
+  | { id: string; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string; title: string }
   | { id: string; unreadable: true };
 
 export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
@@ -268,6 +272,40 @@ function parseRecordConfig(value: unknown): RoomRecordConfig | null {
   return { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites };
 }
 
+function isControl(code: number): boolean {
+  return code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
+}
+
+function hasControl(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) if (isControl(text.charCodeAt(index))) return true;
+  return false;
+}
+
+function blankControls(text: string): string {
+  let out = '';
+  for (let index = 0; index < text.length; index += 1) out += isControl(text.charCodeAt(index)) ? ' ' : (text[index] ?? '');
+  return out;
+}
+
+export function parseRoomTitle(value: unknown): string | null {
+  if (typeof value !== 'string' || hasControl(value)) return null;
+  const title = value.trim();
+  return title.length >= 1 && title.length <= MAX_TITLE_CHARS ? title : null;
+}
+
+export function derivedRoomTitle(record: Pick<RoomRecord, 'entries'>): string {
+  const prompt = record.entries.find((entry) => entry.kind === 'prompt');
+  const line = (prompt?.text ?? '').split(/\r\n|[\n\r]/)[0] ?? '';
+  const flat = blankControls(line).replace(/\s+/g, ' ').trim();
+  if (flat === '') return EMPTY_ROOM_TITLE;
+  const letters = Array.from(flat);
+  return letters.length > DERIVED_TITLE_CHARS ? `${letters.slice(0, DERIVED_TITLE_CHARS).join('')}…` : flat;
+}
+
+export function roomTitle(record: Pick<RoomRecord, 'entries' | 'title'>): string {
+  return record.title ?? derivedRoomTitle(record);
+}
+
 export function parseRoomRecord(value: unknown): RoomRecord | null {
   if (!isRecord(value) || value['version'] !== 1) return null;
   const { id, createdAt, updatedAt, status, nonce } = value;
@@ -276,5 +314,11 @@ export function parseRoomRecord(value: unknown): RoomRecord | null {
   const config = parseRecordConfig(value['config']);
   const entries = parseEntries(value['entries']);
   if (!config || !entries) return null;
-  return { version: 1, id, createdAt, updatedAt, status: status as RoomRecordStatus, config, entries, nonce };
+  const record: RoomRecord = { version: 1, id, createdAt, updatedAt, status: status as RoomRecordStatus, config, entries, nonce };
+  if (value['title'] !== undefined) {
+    const title = parseRoomTitle(value['title']);
+    if (title === null) return null;
+    record.title = title;
+  }
+  return record;
 }

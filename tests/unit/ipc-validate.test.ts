@@ -139,6 +139,19 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomOpen, null).ok).toBe(false);
   });
 
+  it('room rename rejects a malformed id or title', () => {
+    expect(INVOKE_CHANNELS.roomRename).toBe('room:rename');
+    expect(validateRequest(INVOKE_CHANNELS.roomRename, { id: 'room-1_a', title: ' New name ' })).toEqual({ ok: true, value: { id: 'room-1_a', title: 'New name' } });
+    for (const id of ['../x', 'a/b', '', 7, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomRename, { id, title: 'ok' }).ok).toBe(false);
+    }
+    for (const title of ['', '   ', 'x'.repeat(81), 'a\nb', 'a\u0000b', 7, null, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomRename, { id: 'room-1_a', title }).ok).toBe(false);
+    }
+    expect(validateRequest(INVOKE_CHANNELS.roomRename, null).ok).toBe(false);
+    expect(validateRequest(INVOKE_CHANNELS.roomRename, 'room-1_a').ok).toBe(false);
+  });
+
   it('takes no payload for state, select and stop', () => {
     for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomNew, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);

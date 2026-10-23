@@ -265,7 +265,7 @@ describe('listRecords', () => {
     await writeRecord(dir, record({ id: 'mid', updatedAt: 200, entries: [entry({ kind: 'reply', text: 'r' }), entry({ text: 'later prompt' })] }));
     const list = await listRecords(dir);
     expect(list.map((item) => item.id)).toEqual(['new', 'mid', 'old']);
-    expect(list[0]).toEqual({ id: 'new', unreadable: false, createdAt: 1000, updatedAt: 300, status: 'stopped', firstPrompt: 'newer' });
+    expect(list[0]).toEqual({ id: 'new', unreadable: false, createdAt: 1000, updatedAt: 300, status: 'stopped', firstPrompt: 'newer', title: 'newer' });
     expect(list[1]).toMatchObject({ firstPrompt: 'later prompt' });
     expect(list[2]).toMatchObject({ firstPrompt: 'older' });
   });

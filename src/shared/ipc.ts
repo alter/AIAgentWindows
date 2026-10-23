@@ -2,7 +2,7 @@
 import { AGENT_KINDS, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
-import { isRoomId, parseRoomConfig, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
+import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
 
 export const INVOKE_CHANNELS = {
@@ -18,6 +18,7 @@ export const INVOKE_CHANNELS = {
   roomState: 'room:state',
   roomList: 'room:list',
   roomOpen: 'room:open',
+  roomRename: 'room:rename',
   roomNew: 'room:new',
   roomSelect: 'room:select',
   roomStart: 'room:start',
@@ -91,6 +92,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomState]: undefined;
   [INVOKE_CHANNELS.roomList]: undefined;
   [INVOKE_CHANNELS.roomOpen]: { id: string };
+  [INVOKE_CHANNELS.roomRename]: { id: string; title: string };
   [INVOKE_CHANNELS.roomNew]: undefined;
   [INVOKE_CHANNELS.roomSelect]: undefined;
   [INVOKE_CHANNELS.roomStart]: RoomStartRequest;
@@ -123,6 +125,7 @@ export interface AppApi {
   roomState(): Promise<RoomSnapshot>;
   roomList(): Promise<RoomListItem[]>;
   roomOpen(id: string): Promise<RoomOpenResult>;
+  roomRename(id: string, title: string): Promise<boolean>;
   roomNew(): Promise<boolean>;
   roomSelect(): Promise<void>;
   roomStart(config: RoomConfig, continueId?: string): Promise<RoomStartResult>;
@@ -215,6 +218,11 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.roomList]: noPayload,
   [INVOKE_CHANNELS.roomOpen]: (payload) =>
     isRecord(payload) && isRoomId(payload['id']) ? { id: payload['id'] } : null,
+  [INVOKE_CHANNELS.roomRename]: (payload) => {
+    if (!isRecord(payload) || !isRoomId(payload['id'])) return null;
+    const title = parseRoomTitle(payload['title']);
+    return title === null ? null : { id: payload['id'], title };
+  },
   [INVOKE_CHANNELS.roomNew]: noPayload,
   [INVOKE_CHANNELS.roomSelect]: noPayload,
   [INVOKE_CHANNELS.roomStart]: parseRoomStart,

@@ -3,8 +3,8 @@ import path from 'node:path';
 import { Room, type DriverFactory, type RoomContinuation } from './room';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
-import { listRecords, readRecord, stopInterrupted } from './room-archive';
-import { isRoomId, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
+import { listRecords, readRecord, stopInterrupted, writeRecord } from './room-archive';
+import { isRoomId, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { RoomTerminals } from './room-drivers';
 import {
   applyRoomEvent,
@@ -104,7 +104,22 @@ export class RoomService {
     if (this.snapshot.roomId !== id) throw new Error('only the opened room can be continued');
     const record = await readRecord(this.deps.roomsDir, id);
     if (record === null) throw new Error('the room cannot be read');
-    return { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt };
+    return { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt, ...(record.title === undefined ? {} : { title: record.title }) };
+  }
+
+  async rename(id: string, title: string): Promise<boolean> {
+    const clean = parseRoomTitle(title);
+    if (!isRoomId(id) || clean === null) return false;
+    if (this.room.retitle(id, clean)) return true;
+    const record = await readRecord(this.deps.roomsDir, id);
+    if (record === null) return false;
+    if (this.room.retitle(id, clean)) return true;
+    try {
+      await writeRecord(this.deps.roomsDir, { ...record, title: clean });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   stop(): void {

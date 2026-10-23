@@ -26,6 +26,7 @@ function buildHandlers(controller: AgentController, room: RoomService): Handlers
     [INVOKE_CHANNELS.roomState]: () => room.state(),
     [INVOKE_CHANNELS.roomList]: () => room.list(),
     [INVOKE_CHANNELS.roomOpen]: ({ id }) => room.open(id),
+    [INVOKE_CHANNELS.roomRename]: ({ id, title }) => room.rename(id, title),
     [INVOKE_CHANNELS.roomNew]: () => room.newRoom(),
     [INVOKE_CHANNELS.roomSelect]: () => controller.selectRoom(),
     [INVOKE_CHANNELS.roomStart]: ({ config, continueId }) => room.start(config, continueId),

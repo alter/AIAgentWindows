@@ -7,11 +7,16 @@ import {
   MIN_ROUNDS,
   defaultFinalizerId,
   instanceLabel,
+  derivedRoomTitle,
   nextParticipantId,
   parseRoomConfig,
+  parseRoomRecord,
+  parseRoomTitle,
+  roomTitle,
   ROOM_PARTICIPANTS,
   relaySchedule,
   truncateText,
+  type RoomEntry,
   type RoomParticipant,
 } from '../../src/shared/room-model';
 
@@ -266,5 +271,66 @@ describe('nextParticipantId', () => {
     expect(nextParticipantId('claude', ['codex', 'claude-2'])).toBe('claude');
     expect(nextParticipantId('claude', ['claude', 'claude-3'])).toBe('claude-2');
     expect(nextParticipantId('codex', ['claude'])).toBe('codex');
+  });
+});
+
+function entryOf(kind: RoomEntry['kind'], text: string): RoomEntry {
+  return { authorId: 'owner', label: 'Owner', time: 1, kind, text };
+}
+
+function recordOf(extra: Record<string, unknown> = {}, entries: RoomEntry[] = [entryOf('prompt', 'hello')]): Record<string, unknown> {
+  return {
+    version: 1,
+    id: 'r1',
+    createdAt: 1,
+    updatedAt: 2,
+    status: 'done',
+    config: { mode: 'relay', rounds: 1, participants: [A], finalizerId: 'a', turnTimeoutMs: 5000, debugSites: false },
+    entries,
+    nonce: 'abcd1234abcd1234',
+    ...extra,
+  };
+}
+
+describe('room title', () => {
+  it('parses a record without a title unchanged and derives the title from the first prompt', () => {
+    const parsed = parseRoomRecord(recordOf());
+    expect(parsed).not.toBeNull();
+    expect(parsed).not.toHaveProperty('title');
+    expect(roomTitle(parsed ?? { entries: [] })).toBe('hello');
+  });
+
+  it('keeps a stored title, trimmed, and prefers it over the derived one', () => {
+    const parsed = parseRoomRecord(recordOf({ title: '  Plan B  ' }));
+    expect(parsed?.title).toBe('Plan B');
+    expect(roomTitle(parsed ?? { entries: [] })).toBe('Plan B');
+  });
+
+  it('refuses a record whose title is empty, over 80 characters, has a control character or is not a string', () => {
+    for (const title of ['', '   ', 'x'.repeat(81), 'a\nb', 'a\u0000b', 'a\u007fb', 'a\u2028b', 7, null]) {
+      expect(parseRoomRecord(recordOf({ title }))).toBeNull();
+    }
+    expect(parseRoomRecord(recordOf({ title: 'x'.repeat(80) }))?.title).toBe('x'.repeat(80));
+  });
+
+  it('validates a title on its own', () => {
+    expect(parseRoomTitle(' ok ')).toBe('ok');
+    expect(parseRoomTitle('')).toBeNull();
+    expect(parseRoomTitle('x'.repeat(81))).toBeNull();
+    expect(parseRoomTitle('a\tb')).toBeNull();
+    expect(parseRoomTitle(undefined)).toBeNull();
+  });
+
+  it('derives from the first line of the first prompt, whitespace collapsed, cut at 60 characters', () => {
+    expect(derivedRoomTitle({ entries: [entryOf('reply', 'r'), entryOf('prompt', '  what   is\tup \n second line')] })).toBe('what is up');
+    expect(derivedRoomTitle({ entries: [entryOf('prompt', 'y'.repeat(60))] })).toBe('y'.repeat(60));
+    expect(derivedRoomTitle({ entries: [entryOf('prompt', 'y'.repeat(61))] })).toBe(`${'y'.repeat(60)}…`);
+    expect(derivedRoomTitle({ entries: [entryOf('prompt', 'a\u0001b')] })).toBe('a b');
+  });
+
+  it('is New room when there is no prompt or the first line is empty', () => {
+    expect(derivedRoomTitle({ entries: [] })).toBe('New room');
+    expect(derivedRoomTitle({ entries: [entryOf('reply', 'x')] })).toBe('New room');
+    expect(derivedRoomTitle({ entries: [entryOf('prompt', '\n\nlater')] })).toBe('New room');
   });
 });

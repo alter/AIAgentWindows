@@ -831,7 +831,7 @@ describe('snapshot from a record', () => {
 });
 
 describe('roomListOption', () => {
-  const readable = { id: 'r1', unreadable: false as const, createdAt: 1_700_000_000_000, updatedAt: 1_700_000_100_000, status: 'stopped' as const, firstPrompt: 'what is\n  up' };
+  const readable = { id: 'r1', unreadable: false as const, createdAt: 1_700_000_000_000, updatedAt: 1_700_000_100_000, status: 'stopped' as const, firstPrompt: 'what is\n  up', title: 'what is up' };
 
   it('a readable room can be chosen and shows its status and first prompt', () => {
     const option = roomListOption(readable);

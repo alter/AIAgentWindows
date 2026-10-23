@@ -83,6 +83,7 @@ export interface RoomContinuation {
   entries: RoomEntry[];
   nonce: string;
   createdAt: number;
+  title?: string;
 }
 
 export interface RoomRun {
@@ -156,6 +157,7 @@ class RunState {
   private readonly nonce: string;
   private readonly createdAt: number;
   private historyState: HistoryState;
+  title: string | undefined;
   private writing: Promise<void> = Promise.resolve();
 
   constructor(
@@ -175,6 +177,7 @@ class RunState {
     this.chars = this.entries.reduce((sum, entry) => sum + entry.text.length, 0);
     this.nonce = from?.nonce ?? newNonce(random);
     this.createdAt = from?.createdAt ?? now();
+    this.title = from?.title;
     this.historyState = from === undefined ? 'create' : 'reopen';
   }
 
@@ -221,6 +224,7 @@ class RunState {
       config: { mode, rounds, participants, finalizerId, turnTimeoutMs, debugSites },
       entries: [...this.entries],
       nonce: this.nonce,
+      ...(this.title === undefined ? {} : { title: this.title }),
     };
   }
 
@@ -250,6 +254,12 @@ export class Room {
     const run = new RunState(roomId, historyPath, this.deps.roomsDir, config, total, this.deps.newNonce, () => this.now(), from);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
+  }
+
+  retitle(id: string, title: string): boolean {
+    if (this.current === null || this.current.id !== id) return false;
+    this.current.title = title;
+    return true;
   }
 
   stop(): void {
