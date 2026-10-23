@@ -1,5 +1,5 @@
 ---
-status: running
+status: paused
 created: 2026-10-24
 ---
 # Projects, project rooms in PLAN mode, roles with an orchestrator
@@ -61,3 +61,4 @@ Electron 44.6.0, Node 22 (docs/tech/node@22.20.5.md), TypeScript 6.0.3, vitest 5
 
 ## Log
 - 2026-10-24 T00: branch `projects` created from main aa401b8 (tag v0.0.1); baseline = coordinator's verification run on aa401b8 (22-reply-chrome, same tree): fast tier 12 commands exit 0, vitest 1197/1197, coverage 100.00 %, electron-smoke 69/69; tasks/check.py 7 problems
+- 2026-10-24 stopped by the owner before T01 ("останови реализацию плана"); nothing after T00 was started
