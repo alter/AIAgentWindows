@@ -3,6 +3,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { addParticipant, rowIds, table, tableRow, tableRows } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -58,7 +59,6 @@ async function finishOneRoom(page: Page): Promise<void> {
   await field(page, 'open').click();
   await expect(field(page, 'pane')).toBeVisible();
   await field(page, 'prompt').fill('layout question');
-  for (const id of PARTICIPANTS) await page.locator(`input[data-participant="${id}"]`).check();
   await field(page, 'mode').selectOption('broadcast');
   await field(page, 'rounds').fill('1');
   await field(page, 'start').click();
@@ -141,5 +141,126 @@ test('markup in a room title is shown as text', async () => {
     expect(await first.page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
   } finally {
     await first.app.close();
+  }
+});
+
+function authorsInRecord(base: string): string[] {
+  const dir = path.join(base, 'profile', 'shared', 'rooms');
+  const names = readdirSync(dir).filter((name) => name.endsWith('.md'));
+  expect(names).toHaveLength(1);
+  return readFileSync(path.join(dir, names[0] as string), 'utf8')
+    .split('\n')
+    .map((line) => /^<<<entry-\w+ author="(.*)" time=\S+ kind=(\w+)>>>$/.exec(line))
+    .filter((match): match is RegExpExecArray => match !== null && match[2] === 'reply')
+    .map((match) => match[1] as string);
+}
+
+async function activeRowField(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const node = document.activeElement as HTMLElement | null;
+    return `${node?.closest('tr')?.dataset['row'] ?? ''}:${node?.dataset['rowField'] ?? ''}`;
+  });
+}
+
+test('three participant rows reordered with the buttons are relayed in the table order', async () => {
+  const base = newBase();
+  const { app, page } = await launch(base);
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    await addParticipant(page, 'claude');
+    await tableRow(page, 'claude-2').locator('[data-row-field="model"]').fill('sonnet');
+    expect(await rowIds(page)).toEqual(['claude', 'codex', 'claude-2']);
+    const up = (id: string): Locator => tableRow(page, id).locator('[data-row-field="up"]');
+    const down = (id: string): Locator => tableRow(page, id).locator('[data-row-field="down"]');
+    await expect(up('claude')).toBeDisabled();
+    await expect(down('claude-2')).toBeDisabled();
+    await up('claude-2').click();
+    await up('claude-2').click();
+    expect(await rowIds(page)).toEqual(['claude-2', 'claude', 'codex']);
+    expect(await activeRowField(page)).toBe('claude-2:down');
+    await expect(up('claude-2')).toBeDisabled();
+    await down('claude-2').press('Enter');
+    expect(await rowIds(page)).toEqual(['claude', 'claude-2', 'codex']);
+    expect(await activeRowField(page)).toBe('claude-2:down');
+    await down('claude-2').press('Space');
+    expect(await rowIds(page)).toEqual(['claude', 'codex', 'claude-2']);
+    await up('codex').click();
+    await down('claude').click();
+    expect(await rowIds(page)).toEqual(['codex', 'claude-2', 'claude']);
+    await expect(tableRow(page, 'claude-2').locator('[data-row-field="model"]')).toHaveValue('sonnet');
+    await field(page, 'prompt').fill('order question');
+    await field(page, 'mode').selectOption('relay');
+    await field(page, 'rounds').fill('1');
+    await field(page, 'start').click();
+    await expect(field(page, 'status')).toContainText('done', { timeout: (3 + 1) * TURN_BUDGET_MS + RUN_BASE_MS });
+    expect(authorsInRecord(base)).toEqual(['Codex', 'Claude Code \u00b7 sonnet', 'Claude Code']);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the Add participant menu works from the keyboard and disables a site that is already a row', async () => {
+  const { app, page } = await launch(newBase());
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    const trigger = field(page, 'add-participant');
+    const items = field(page, 'add-menu').locator('[role="menuitem"]');
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    await expect(items).toHaveCount(5);
+    await expect(items.first()).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(field(page, 'add-menu')).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await trigger.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await expect(items.nth(3)).toBeFocused();
+    await page.keyboard.press('Enter');
+    expect(await rowIds(page)).toEqual(['claude', 'codex', 'grok']);
+    await expect(trigger).toBeFocused();
+    await expect(tableRow(page, 'grok').locator('[data-row-field="model"]')).toHaveCount(0);
+    await trigger.press('Enter');
+    const grok = field(page, 'add-menu').locator('[data-add="grok"]');
+    await expect(grok).toHaveAttribute('aria-disabled', 'true');
+    await expect(grok).not.toHaveText('Grok');
+    await grok.click({ force: true });
+    expect(await rowIds(page)).toEqual(['claude', 'codex', 'grok']);
+    await expect(field(page, 'add-menu').locator('[data-add="claude"]')).not.toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+  } finally {
+    await app.close();
+  }
+});
+
+test('a table is read as a table: headers with scope, buttons named after the row, focus kept after a move and a removal', async () => {
+  const { app, page } = await launch(newBase());
+  try {
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
+    await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(6);
+    await tableRow(page, 'claude').locator('[data-row-field="model"]').fill('opus');
+    await expect(tableRow(page, 'claude').locator('[data-row-field="up"]')).toHaveAttribute('aria-label', /Claude Code · opus/);
+    await expect(tableRow(page, 'claude').locator('[data-row-field="remove"]')).toHaveAttribute('aria-label', /Claude Code · opus/);
+    await addParticipant(page, 'chatgpt');
+    expect(await rowIds(page)).toEqual(['claude', 'codex', 'chatgpt']);
+    await tableRow(page, 'codex').locator('[data-row-field="remove"]').focus();
+    await page.keyboard.press('Enter');
+    expect(await rowIds(page)).toEqual(['claude', 'chatgpt']);
+    expect(await activeRowField(page)).toBe('chatgpt:remove');
+    await page.keyboard.press('Enter');
+    expect(await rowIds(page)).toEqual(['claude']);
+    expect(await activeRowField(page)).toBe('claude:remove');
+    await page.keyboard.press('Enter');
+    await expect(tableRows(page)).toHaveCount(0);
+    await expect(field(page, 'add-participant')).toBeFocused();
+  } finally {
+    await app.close();
   }
 });

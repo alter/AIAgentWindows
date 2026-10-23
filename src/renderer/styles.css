@@ -409,15 +409,65 @@ select:disabled, input[type="text"]:disabled, input[type="number"]:disabled, .ro
 .room-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .room-row label { display: inline-flex; align-items: center; gap: 6px; }
 .room-row input[type="number"] { width: 64px; }
-.room-row label.unavailable { padding: 0 6px; border: 1px dashed var(--border); border-radius: 6px; }
-.room-unavailable { font-size: 11px; }
-.room-people { gap: 6px 8px; }
-.room-participant { display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
-.room-participant input[type="text"] { width: 120px; padding: 2px 4px; }
-.room-participant select { max-width: 96px; font-size: 12px; }
-.room-row-remove { padding: 0 6px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
-.room-row-remove:disabled { border-style: dashed; border-color: var(--border); cursor: default; }
-.room-add { padding: 2px 10px; font-size: 12px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.room-table-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.room-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--content-bg); color: var(--text); }
+.room-table th, .room-table td { padding: 4px 8px; border: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.room-table thead th { background: var(--surface); font-weight: 700; }
+.room-table tbody th { font-weight: 400; }
+.room-table-number { width: 2.5em; text-align: right; }
+.room-table input[type="text"], .room-table select { min-height: 24px; padding: 3px 6px; font-size: 13px; }
+.room-table input[type="text"] { width: 100%; min-width: 120px; }
+.room-table input[type="radio"] { width: 24px; height: 24px; margin: 0; }
+.room-table-actions { white-space: nowrap; }
+.room-table-action {
+  min-width: 28px;
+  min-height: 28px;
+  margin-right: 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.room-table-action:hover:not(:disabled) { background: var(--hover-bg); }
+.room-table-action:disabled { border-style: dashed; cursor: default; }
+.room-table-empty td { font-style: italic; }
+.room-add-box { position: relative; }
+.room-add { padding: 4px 12px; font-size: 12px; }
+.room-add-menu {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  min-width: 260px;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--menu-bg);
+  color: var(--text);
+}
+.room-add-menu[hidden] { display: none; }
+.room-add-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.room-add-item:hover { background: var(--hover-bg); }
+.room-add-item:focus-visible { outline-offset: -2px; }
+.room-add-item[aria-disabled="true"] { border: 1px dashed var(--border); cursor: default; }
+.room-add-note { font-size: 11px; }
 .room-row select, .room-row input[type="number"] { font: inherit; }
 .room-button {
   padding: 6px 14px;

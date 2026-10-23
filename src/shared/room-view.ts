@@ -1,5 +1,5 @@
 // room-view.ts
-import { SITE_KINDS_WITH_ADAPTER, isSiteKind, type AgentKind, type SiteKind } from './agents';
+import { AGENT_KINDS, AGENT_LABELS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type AgentKind, type SiteKind } from './agents';
 import { emptyRoomModels, type RoomModels } from './cli-models';
 import { renderCarryHistory } from './room-history';
 import {
@@ -145,17 +145,56 @@ function rowParticipant(row: FormRow): RoomParticipant {
 }
 
 function tickedParticipants(checked: readonly string[], rows: readonly FormRow[]): RoomParticipant[] {
-  const sites = ROOM_PARTICIPANTS.filter((item) => isSiteKind(item.kind) && checked.includes(item.id));
+  const rowIds = rows.map((row) => row.id);
+  const sites = ROOM_PARTICIPANTS.filter((item) => isSiteKind(item.kind) && checked.includes(item.id) && !rowIds.includes(item.id));
   return [...rows.filter((row) => checked.includes(row.id)).map(rowParticipant), ...sites];
+}
+
+export function rowLabel(row: FormRow): string {
+  return rowParticipant(row).label;
 }
 
 export function defaultRows(): FormRow[] {
   return DEFAULT_ROWS.map((row) => ({ ...row }));
 }
 
-export function addRow(rows: readonly FormRow[], kind: AgentKind): FormRow[] {
-  if (isSiteKind(kind)) return [...rows];
+export interface AddMenuOption {
+  kind: AgentKind;
+  label: string;
+  available: boolean;
+  note: string;
+}
+
+function siteNote(rows: readonly FormRow[], kind: SiteKind, withAdapter: readonly SiteKind[]): string {
+  if (rows.some((row) => row.kind === kind)) return `${AGENT_LABELS[kind]} is already in the table`;
+  return withAdapter.includes(kind) ? '' : missingAdapterNote(AGENT_LABELS[kind]);
+}
+
+export function addMenuOptions(rows: readonly FormRow[], withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): AddMenuOption[] {
+  return AGENT_KINDS.map((kind) => {
+    const note = isSiteKind(kind) ? siteNote(rows, kind, withAdapter) : '';
+    return { kind, label: AGENT_LABELS[kind], available: note === '', note };
+  });
+}
+
+export function addRow(rows: readonly FormRow[], kind: AgentKind, withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER): FormRow[] {
+  if (isSiteKind(kind)) return siteNote(rows, kind, withAdapter) === '' ? [...rows, { id: kind, kind }] : [...rows];
   return [...rows, { id: nextParticipantId(kind, rows.map((row) => row.id)), kind }];
+}
+
+export function moveRow(rows: readonly FormRow[], id: string, step: -1 | 1): FormRow[] {
+  const from = rows.findIndex((row) => row.id === id);
+  const to = from + step;
+  if (from < 0 || to < 0 || to >= rows.length) return [...rows];
+  const moved = [...rows];
+  [moved[from], moved[to]] = [moved[to] as FormRow, moved[from] as FormRow];
+  return moved;
+}
+
+export function focusAfterRemove(rows: readonly FormRow[], id: string): string | null {
+  const at = rows.findIndex((row) => row.id === id);
+  if (at < 0) return null;
+  return (rows[at + 1] ?? rows[at - 1])?.id ?? null;
 }
 
 export function removeRow(rows: readonly FormRow[], id: string): FormRow[] {
@@ -361,7 +400,7 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
     rounds: String(config.rounds),
     timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
     checked: config.participants.map((participant) => participant.id),
-    rows: config.participants.filter((participant) => !isSiteKind(participant.kind)).map(({ id, kind, model, effort }) => ({ id, kind, ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }) })),
+    rows: config.participants.map(({ id, kind, model, effort }) => ({ id, kind, ...(model === undefined ? {} : { model }), ...(effort === undefined ? {} : { effort }) })),
     finalizerId: config.finalizerId,
     debugSites: config.debugSites,
   };

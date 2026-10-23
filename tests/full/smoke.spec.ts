@@ -56,7 +56,7 @@ function launch(userData: string, folder: string, extraEnv: Record<string, strin
 }
 
 async function addAgent(page: Page, kind: string): Promise<void> {
-  await page.locator('button[aria-haspopup="menu"]').click();
+  await page.locator('.add-button').click();
   await page.locator(`.menu-item[data-kind="${kind}"]`).click();
 }
 
@@ -86,7 +86,7 @@ test('in test mode the main window stays hidden', async () => {
 
   const hidden = await launch(userData, folder);
   const hiddenPage = await hidden.firstWindow();
-  await expect(hiddenPage.locator('button[aria-haspopup="menu"]')).toBeAttached();
+  await expect(hiddenPage.locator('.add-button')).toBeAttached();
   expect(await visible(hidden)).toEqual([false]);
   if (process.platform === 'darwin') {
     expect(await hidden.evaluate(({ app }) => app.dock?.isVisible())).toBe(false);

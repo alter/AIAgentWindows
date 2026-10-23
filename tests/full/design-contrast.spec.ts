@@ -46,7 +46,7 @@ test('the body and terminal backgrounds follow the system colour scheme live, li
   const app = await launch(userData, folder);
   try {
     const page = await app.firstWindow();
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.add-button').click();
     await page.locator('.menu-item[data-kind="claude"]').click();
     await expect(page.locator('.terminal-pane:not([hidden]) .xterm-rows')).toContainText('STUB-CLI BANNER');
 
@@ -87,7 +87,6 @@ test('a click on the head of a Room feed entry opens it and the head draws an ar
     await page.locator('[data-room="open"]').click();
     await expect(page.locator('[data-room="pane"]')).toBeVisible();
     await page.locator('[data-room="prompt"]').fill('arrow question');
-    for (const id of ['claude', 'codex']) await page.locator(`input[data-participant="${id}"]`).check();
     await page.locator('[data-room="mode"]').selectOption('broadcast');
     await page.locator('[data-room="rounds"]').fill('1');
     await page.locator('[data-room="start"]').click();

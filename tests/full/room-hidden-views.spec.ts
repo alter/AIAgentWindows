@@ -5,6 +5,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { setParticipants } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -93,7 +94,7 @@ async function launch(siteUrl: string): Promise<{ app: ElectronApplication; page
     },
   });
   const page = await app.firstWindow();
-  await page.locator('button[aria-haspopup="menu"]').click();
+  await page.locator('.add-button').click();
   await page.locator('.menu-item[data-kind="deepseek"]').click();
   await expect(page.locator('.agent-item')).toHaveCount(1);
   await expect(page.locator('.nav-address')).toHaveText(siteUrl);
@@ -104,7 +105,7 @@ async function runRoom(page: Page): Promise<void> {
   await page.locator('[data-room="open"]').click();
   await expect(page.locator('[data-room="pane"]')).toBeVisible();
   await page.locator('[data-room="prompt"]').fill('hidden view question');
-  await page.locator('input[data-participant="deepseek"]').check();
+  await setParticipants(page, ['deepseek']);
   await page.locator('[data-room="mode"]').selectOption('broadcast');
   await page.locator('[data-room="rounds"]').fill('1');
   await page.locator('[data-room="start"]').click();

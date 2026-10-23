@@ -62,7 +62,6 @@ function finishedWithin(participants: number, rounds: number): { timeout: number
 
 async function fill(page: Page, rounds: number, prompt: string): Promise<void> {
   await field(page, 'prompt').fill(prompt);
-  for (const id of PARTICIPANTS) await page.locator(`input[data-participant="${id}"]`).check();
   await field(page, 'mode').selectOption('relay');
   await field(page, 'rounds').fill(String(rounds));
 }
@@ -108,7 +107,7 @@ test('a finished room survives an app restart, is reopened from the list and con
   const second = await launch(base);
   const { page } = second;
   try {
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.add-button').click();
     await page.locator('.menu-item[data-kind="claude"]').click();
     await expect(page.locator('.agent-item')).toHaveCount(1);
     await expect(treeItems(page)).toHaveCount(1);

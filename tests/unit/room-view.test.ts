@@ -5,12 +5,16 @@ import type { RoomEntry, RoomEvent, RoomPlan, RoomRecord, RoomRecordConfig } fro
 import type { RoomModels } from '../../src/shared/cli-models';
 import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
 import {
+  addMenuOptions,
   addRow,
   defaultRows,
   effortChoices,
   finalizerChoices,
+  focusAfterRemove,
   modelSuggestions,
+  moveRow,
   removeRow,
+  rowLabel,
   applyRoomEvent,
   carryText,
   emptyRoomSnapshot,
@@ -805,7 +809,7 @@ describe('snapshot from a record', () => {
     });
   });
 
-  it('prefills a row per CLI participant with its model and effort and none for a site, and turns back into the same config', () => {
+  it('prefills a row per participant in relay order, with model and effort for a CLI one, and turns back into the same config', () => {
     const participants = [
       { id: 'claude', kind: 'claude' as const, label: 'Claude Code \u00b7 opus \u00b7 high', model: 'opus', effort: 'high' },
       { id: 'claude-2', kind: 'claude' as const, label: 'Claude Code \u00b7 sonnet', model: 'sonnet' },
@@ -817,6 +821,7 @@ describe('snapshot from a record', () => {
     expect(form.rows).toEqual([
       { id: 'claude', kind: 'claude', model: 'opus', effort: 'high' },
       { id: 'claude-2', kind: 'claude', model: 'sonnet' },
+      { id: 'grok', kind: 'grok' },
     ]);
     expect(formToConfig({ ...form, prompt: 'again' })).toEqual({ ok: true, config: { ...config, prompt: 'again' } });
   });
@@ -840,11 +845,83 @@ describe('participant row logic', () => {
     },
   };
 
-  it('adds a row of a CLI kind with the next free id and refuses a site kind', () => {
+  it('adds a row of a CLI kind with the next free id', () => {
     const first = addRow(defaultRows(), 'claude');
     expect(first.map((row) => row.id)).toEqual(['claude', 'codex', 'claude-2']);
     expect(addRow(removeRow(first, 'claude'), 'claude').map((row) => row.id)).toEqual(['codex', 'claude-2', 'claude']);
-    expect(addRow(first, 'grok')).toEqual(first);
+  });
+
+  it('adds a site as a row of its own once, and refuses one that is present or has no adapter', () => {
+    const withSite = addRow(defaultRows(), 'grok');
+    expect(withSite).toEqual([...defaultRows(), { id: 'grok', kind: 'grok' }]);
+    expect(addRow(withSite, 'grok')).toEqual(withSite);
+    expect(addRow(defaultRows(), 'grok', ['chatgpt'])).toEqual(defaultRows());
+    expect(addRow(defaultRows(), 'chatgpt', ['chatgpt']).map((row) => row.id)).toEqual(['claude', 'codex', 'chatgpt']);
+  });
+
+  it('offers the five kinds in menu order and disables a site that is in the table or has no adapter, with its reason', () => {
+    const rows = addRow(defaultRows(), 'grok');
+    const options = addMenuOptions(rows, ['chatgpt', 'grok']);
+    expect(options.map((option) => option.kind)).toEqual(['claude', 'codex', 'chatgpt', 'grok', 'deepseek']);
+    expect(options.map((option) => option.available)).toEqual([true, true, true, false, false]);
+    expect(options[0]).toEqual({ kind: 'claude', label: 'Claude Code', available: true, note: '' });
+    expect(options[3]?.note).toBe('Grok is already in the table');
+    expect(options[4]?.note).toBe('DeepSeek has no site adapter');
+    expect(addMenuOptions(defaultRows()).every((option) => option.available)).toBe(true);
+  });
+
+  it('moves a row one place up or down and keeps every id once', () => {
+    const rows = [...addRow(addRow(defaultRows(), 'claude'), 'grok')];
+    expect(moveRow(rows, 'claude-2', -1).map((row) => row.id)).toEqual(['claude', 'claude-2', 'codex', 'grok']);
+    expect(moveRow(rows, 'claude', 1).map((row) => row.id)).toEqual(['codex', 'claude', 'claude-2', 'grok']);
+    const moved = moveRow(moveRow(rows, 'grok', -1), 'grok', -1);
+    expect(moved.map((row) => row.id)).toEqual(['claude', 'grok', 'codex', 'claude-2']);
+    expect(new Set(moved.map((row) => row.id)).size).toBe(rows.length);
+    expect(rows.map((row) => row.id)).toEqual(['claude', 'codex', 'claude-2', 'grok']);
+  });
+
+  it('refuses a move past either end and of a row that is not there', () => {
+    const rows = addRow(defaultRows(), 'grok');
+    expect(moveRow(rows, 'claude', -1)).toEqual(rows);
+    expect(moveRow(rows, 'grok', 1)).toEqual(rows);
+    expect(moveRow(rows, 'nobody', 1)).toEqual(rows);
+  });
+
+  it('after a removal the focus goes to the next row, else the previous, else nowhere', () => {
+    const rows = addRow(addRow(defaultRows(), 'claude'), 'grok');
+    expect(focusAfterRemove(rows, 'claude')).toBe('codex');
+    expect(focusAfterRemove(rows, 'codex')).toBe('claude-2');
+    expect(focusAfterRemove(rows, 'grok')).toBe('claude-2');
+    expect(focusAfterRemove([{ id: 'claude', kind: 'claude' }], 'claude')).toBeNull();
+    expect(focusAfterRemove(rows, 'nobody')).toBeNull();
+  });
+
+  it('the final writer survives the removal of another row and falls back by the default rule when its own row goes', () => {
+    const rows = addRow(addRow(addRow(defaultRows(), 'claude'), 'grok'), 'chatgpt');
+    const ids = (list: readonly { id: string }[]): string[] => list.map((row) => row.id);
+    const withoutCodex = removeRow(rows, 'codex');
+    expect(resolveFinalizer(ids(withoutCodex), 'grok', withoutCodex)).toBe('grok');
+    const withoutClaude = removeRow(rows, 'claude');
+    expect(resolveFinalizer(ids(withoutClaude), 'claude', withoutClaude)).toBe('claude-2');
+    const noClaude = removeRow(removeRow(rows, 'claude'), 'claude-2');
+    expect(resolveFinalizer(ids(noClaude), 'claude', noClaude)).toBe('codex');
+    const sitesOnly = [{ id: 'grok', kind: 'grok' as const }, { id: 'chatgpt', kind: 'chatgpt' as const }];
+    expect(resolveFinalizer(ids(sitesOnly), 'codex', sitesOnly)).toBe('grok');
+  });
+
+  it('a site row sits in the relay order where the table has it', () => {
+    const rows = [{ id: 'codex', kind: 'codex' as const }, { id: 'grok', kind: 'grok' as const }, { id: 'claude', kind: 'claude' as const, model: 'opus' }];
+    const form: RoomFormValues = { prompt: 'q', mode: 'relay', rounds: '1', timeoutMinutes: '1', checked: ['codex', 'grok', 'claude'], rows, finalizerId: 'grok' };
+    const result = formToConfig(form);
+    expect(result.ok && result.config.participants.map((item) => item.id)).toEqual(['codex', 'grok', 'claude']);
+    expect(result.ok && result.config.finalizerId).toBe('grok');
+    expect(finalizerChoices(form.checked, rows).map((item) => item.id)).toEqual(['codex', 'grok', 'claude']);
+  });
+
+  it('names a row by its instance label', () => {
+    expect(rowLabel({ id: 'claude', kind: 'claude', model: ' opus ', effort: 'high' })).toBe('Claude Code \u00b7 opus \u00b7 high');
+    expect(rowLabel({ id: 'grok', kind: 'grok' })).toBe('Grok');
+    expect(rowLabel({ id: 'claude-2', kind: 'claude', model: '', effort: '' })).toBe('Claude Code');
   });
 
   it('removes only the row with that id', () => {

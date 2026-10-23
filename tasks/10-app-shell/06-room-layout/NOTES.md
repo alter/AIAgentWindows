@@ -76,3 +76,21 @@ Smoke rewrites: tests/full/room.spec.ts (two steps) and tests/full/room-archive.
 Checks: fast tier 12 commands exit 0 (coverage 100.00 %); `npm run -s build` then electron-smoke 41/41.
 
 Write set gained src/renderer/content.ts (T02): Content is the only owner of the RoomPane, so the tree callbacks (watchRooms, roomOpen, roomNew, roomRename) pass through it.
+
+## 2026-10-23 T03 participants table
+
+Design: `src/renderer/room-table.ts` (`RoomTable`) is one real `<table>` (`data-room="participants"`, `aria-label`): `<th scope="col">` for #, Agent, Model, Effort, Final and a visually hidden Actions; the Agent cell is `<th scope="row">`. A CLI row has the model input (datalist from `room:models`) and the effort select (codex levels per chosen model); a site row shows "—" with a visually hidden "not applicable". Final is a radio group (`name="room-final"`). Actions are three buttons (up, down, remove) named by the instance label ("Move Claude Code · opus · high up"), refreshed on every model or effort edit; up is disabled on the first row, down on the last. The "Add participant" button (`aria-haspopup="menu"`, `aria-expanded`) opens a `role="menu"` of the five kinds: ArrowDown/Up/Home/End move, Enter/Space activate, Escape closes and returns focus to the button, leaving the widget closes it; a site already in the table or without an adapter is `aria-disabled` with its reason as visible text.
+
+Shared logic (src/shared/room-view.ts): `moveRow`, `focusAfterRemove`, `addMenuOptions`, `rowLabel`; `addRow` now appends a site row once (refused when present or without an adapter); `formFromRecord` returns a row for every participant in relay order; `formToConfig` keeps a site row at its place in the order (a site in `checked` and not in `rows` is still appended, as before). A removed final writer's row falls back through the existing `resolveFinalizer` default rule.
+
+Red first: the new `participant row logic` tests in tests/unit/room-view.test.ts failed before the logic, `Tests  9 failed | 77 passed (86)` (`moveRow`, `addMenuOptions`, `focusAfterRemove`, `rowLabel` not functions; a site row not at its place in the order; `addRow` of a site unchanged); after: 86/86.
+
+Reverse controls on the smoke (each run restored afterwards, `npx playwright test --project=electron-smoke tests/full/room-layout.spec.ts -g ...`):
+- Start sends the rows sorted by id instead of the table order -> `three participant rows reordered with the buttons are relayed in the table order` red (`Expected ["Codex","Claude Code · sonnet","Claude Code"]`, received sonnet first).
+- After a removal the focus always goes to Add participant -> `a table is read as a table ...` red (`Expected "chatgpt:remove", Received ":"`).
+
+Smoke: new tests in tests/full/room-layout.spec.ts (three rows reordered with the buttons and from the keyboard, relay, the authors in `<shared>/rooms/<id>.md` equal the table order; the Add menu from the keyboard and a present site disabled with its reason; table headers, button names, focus after move and removal). Existing specs rewritten onto the table through tests/full/room-table-helpers.ts (`setParticipants`, `addParticipant`, `removeParticipant`, `rowIds`): room, room-participants, room-archive, room-hidden-views, room-site-debug, design-contrast; the finalizer test now drives the radios (default Claude Code, fall-back after removing the final writer's row, move up after re-adding). `button[aria-haspopup="menu"]` in seven specs became `.add-button` (the pane now has a second such button).
+
+Decisions: the table starts with the Claude Code and Codex rows (the old checkboxes started unticked); every row takes part, there is no ticked state; a row has no checkbox. When a moved row reaches an end its pressed arrow is disabled, so the focus goes to the other arrow of the same row. After Add the focus returns to the Add participant button.
+
+Checks: fast tier 12 commands exit 0 (coverage 100.00 %, 943 tests); `npm run -s build` then electron-smoke 44/44.

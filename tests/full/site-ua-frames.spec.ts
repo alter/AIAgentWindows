@@ -62,7 +62,7 @@ test('a cross-site iframe in its own process reports the owner identity like the
   const app = await launch(fixture.topUrl);
   try {
     const page = await app.firstWindow();
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.add-button').click();
     await page.locator('.menu-item[data-kind="grok"]').click();
     await expect(page.locator('.agent-item')).toHaveCount(1);
 

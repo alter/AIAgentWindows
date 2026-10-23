@@ -3,6 +3,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Loc
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { addParticipant, removeParticipant, rowIds } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -62,7 +63,6 @@ async function configure(page: Page, instance: Instance): Promise<void> {
   await target.locator('[data-row-field="model"]').fill(instance.model);
   await expect(target.locator(`[data-row-field="effort"] option[value="${instance.effort}"]`)).toHaveCount(1);
   await target.locator('[data-row-field="effort"]').selectOption(instance.effort);
-  await target.locator(`input[data-participant="${instance.id}"]`).check();
 }
 
 async function historyHeadings(page: Page): Promise<string[]> {
@@ -100,8 +100,10 @@ test('two stub Claude instances relay for 2 rounds with their own labels, models
   const first = await launch(base);
   try {
     const { page } = first;
-    await field(page, 'add-claude').click();
+    await removeParticipant(page, 'codex');
+    await addParticipant(page, 'claude');
     await expect(row(page, SECOND.id)).toBeVisible();
+    expect(await rowIds(page)).toEqual([FIRST.id, SECOND.id]);
     await configure(page, FIRST);
     await configure(page, SECOND);
     await field(page, 'prompt').fill('two instances');

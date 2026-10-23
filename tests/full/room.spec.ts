@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { addParticipant, removeParticipant, rowIds, setParticipants, tableRow } from './room-table-helpers';
 
 const root = path.resolve(__dirname, '..', '..');
 const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
@@ -55,7 +56,6 @@ function finishedWithin(participants: number, rounds: number): { timeout: number
 
 async function fill(page: Page, mode: 'broadcast' | 'relay', rounds: number, prompt: string): Promise<void> {
   await field(page, 'prompt').fill(prompt);
-  for (const id of PARTICIPANTS) await page.locator(`input[data-participant="${id}"]`).check();
   await field(page, 'mode').selectOption(mode);
   await field(page, 'rounds').fill(String(rounds));
 }
@@ -126,15 +126,15 @@ test('a 2-round relay shows each round, the final turn, per-participant chips an
 test('a second Claude row with a model and effort is a separate participant of the started run', async () => {
   const { app, page } = await open();
   try {
-    await field(page, 'add-claude').click();
-    const second = page.locator('[data-row="claude-2"]');
+    await removeParticipant(page, 'codex');
+    await addParticipant(page, 'claude');
+    const second = tableRow(page, 'claude-2');
     await expect(second).toBeVisible();
     await second.locator('[data-row-field="model"]').fill('sonnet');
     await expect(second.locator('[data-row-field="effort"] option[value="medium"]')).toHaveCount(1);
     await second.locator('[data-row-field="effort"]').selectOption('medium');
-    await second.locator('input[data-participant="claude-2"]').check();
-    await page.locator('input[data-participant="claude"]').check();
-    await expect(field(page, 'finalizer').locator('option')).toHaveText(['Claude Code', 'Claude Code \u00b7 sonnet \u00b7 medium']);
+    expect(await rowIds(page)).toEqual(['claude', 'claude-2']);
+    await expect(second.locator('[data-row-field="final"]')).not.toBeChecked();
     await field(page, 'prompt').fill('two claude rows');
     await field(page, 'mode').selectOption('broadcast');
     await field(page, 'rounds').fill('1');
@@ -153,14 +153,21 @@ test('the finalizer lists the ticked participants, defaults to Claude Code and w
   const { app, page } = await open();
   try {
     await fill(page, 'relay', 1, 'finalizer question');
-    const options = field(page, 'finalizer').locator('option');
-    await expect(options).toHaveText(['Claude Code', 'Codex']);
-    await expect(field(page, 'finalizer')).toHaveValue('claude');
-    await field(page, 'finalizer').selectOption('codex');
-    await page.locator('input[data-participant="claude"]').uncheck();
-    await expect(options).toHaveText(['Codex']);
-    await page.locator('input[data-participant="claude"]').check();
-    await field(page, 'finalizer').selectOption('codex');
+    const finalOf = (id: string): Locator => tableRow(page, id).locator('[data-row-field="final"]');
+    expect(await rowIds(page)).toEqual(['claude', 'codex']);
+    await expect(finalOf('claude')).toBeChecked();
+    await finalOf('codex').check();
+    await removeParticipant(page, 'codex');
+    await expect(finalOf('claude')).toBeChecked();
+    await addParticipant(page, 'codex');
+    await finalOf('codex').check();
+    await removeParticipant(page, 'claude');
+    await expect(finalOf('codex')).toBeChecked();
+    await addParticipant(page, 'claude');
+    expect(await rowIds(page)).toEqual(['codex', 'claude']);
+    await tableRow(page, 'claude').locator('[data-row-field="up"]').click();
+    expect(await rowIds(page)).toEqual(['claude', 'codex']);
+    await finalOf('codex').check();
     await field(page, 'start').click();
     await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 1));
     expect(await historyHeadings(page)).toEqual(['Owner | prompt', 'Claude Code | reply', 'Codex | reply', 'Codex | final']);
@@ -228,7 +235,7 @@ test('Stop in the middle ends the run at the current step', async () => {
 test('a carried result is pasted into the working session and not submitted', async () => {
   const { app, page } = await open({ AIAW_STUB_REPLY: 'CARRY-ME-PLEASE' });
   try {
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.add-button').click();
     await page.locator('.menu-item[data-kind="claude"]').click();
     await expect(page.locator('.agent-item')).toHaveCount(1);
     await expect(page.locator('.xterm-rows')).toContainText('STUB-CLI BANNER');
@@ -328,7 +335,7 @@ test('a web participant whose view was never opened answers on its first turn', 
   try {
     const page = await first.firstWindow();
     for (const kind of ['claude', 'deepseek']) {
-      await page.locator('button[aria-haspopup="menu"]').click();
+      await page.locator('.add-button').click();
       await page.locator(`.menu-item[data-kind="${kind}"]`).click();
     }
     await expect(page.locator('.agent-item')).toHaveCount(2);
@@ -344,7 +351,7 @@ test('a web participant whose view was never opened answers on its first turn', 
     const views = await second.evaluate(({ webContents }) => webContents.getAllWebContents().map((item) => item.getURL()));
     expect(views.filter((url) => url.startsWith('http://127.0.0.1'))).toEqual([]);
     await field(page, 'prompt').fill('first turn question');
-    await page.locator('input[data-participant="deepseek"]').check();
+    await setParticipants(page, ['deepseek']);
     await field(page, 'mode').selectOption('broadcast');
     await field(page, 'rounds').fill('1');
     await field(page, 'start').click();
@@ -419,12 +426,12 @@ test('a second run opens a new chat and its reply is complete although identical
   const { port } = server.address() as AddressInfo;
   const { app, page } = await open({ AIAW_SITE_URL_DEEPSEEK: `http://127.0.0.1:${port}/` });
   try {
-    await page.locator('button[aria-haspopup="menu"]').click();
+    await page.locator('.add-button').click();
     await page.locator('.menu-item[data-kind="deepseek"]').click();
     await page.locator('[data-room="open"]').click();
     await expect(page.locator('[data-room="pane"]')).toBeVisible();
     await field(page, 'prompt').fill('same question');
-    await page.locator('input[data-participant="deepseek"]').check();
+    await setParticipants(page, ['deepseek']);
     await field(page, 'mode').selectOption('broadcast');
     await field(page, 'rounds').fill('1');
     await field(page, 'start').click();
@@ -510,7 +517,7 @@ test('a finished room is listed, New room clears the feed and the list reopens i
     await treeItems(page).first().click();
     await expect(page.locator('.room-entry')).toHaveCount(feedCount);
     await expect(field(page, 'prompt')).toHaveValue('');
-    await expect(page.locator('input[data-participant="claude"]')).toBeChecked();
+    await expect(tableRow(page, 'claude')).toBeVisible();
     const before = (await field(page, 'status').textContent()) ?? '';
     await field(page, 'prompt').fill('second question');
     await field(page, 'start').click();
