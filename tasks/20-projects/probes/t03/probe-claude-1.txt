@@ -1,0 +1,33 @@
+[control2] exit=124 args: 
+  out: 
+  marks: apikeyhelper local-hook project-hook user-hook 
+[restricted] exit=1 args: --restricted
+  out: Not logged in · Please run /login 
+  marks: 
+[restricted-strict] exit=1 args: --restricted --strict-mcp-config
+  out: Not logged in · Please run /login 
+  marks: 
+[disableAllHooks] exit=124 args: --settings {"disableAllHooks":true}
+  out: 
+  marks: apikeyhelper 
+[srcEmpty] exit=1 args: --setting-sources 
+  out: Not logged in · Please run /login 
+  marks: 
+[srcUser] exit=1 args: --setting-sources user
+  out: Not logged in · Please run /login 
+  marks: user-hook 
+[srcProject] exit=124 args: --setting-sources project
+  out: 
+  marks: apikeyhelper project-hook 
+[srcLocal] exit=1 args: --setting-sources local
+  out: Not logged in · Please run /login 
+  marks: local-hook 
+[srcUserProj] exit=124 args: --setting-sources user,project
+  out: 
+  marks: apikeyhelper project-hook user-hook 
+[safemode] exit=124 args: --safe-mode
+  out: 
+  marks: apikeyhelper 
+[bare] exit=1 args: --bare
+  out: Not logged in · Please run /login 
+  marks: 
