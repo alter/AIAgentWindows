@@ -3,6 +3,7 @@ import { AGENT_KINDS, parseAgentTitle, type Agent, type AgentKind } from './agen
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
+import { MAX_PASTE_CHARS, type ModelItem, type OpenRouterMode, type OpenRouterStatus } from './openrouter';
 import { isSidebarWidth } from './site-layout';
 import { isThemeChoice, type ThemeChoice } from './theme';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
@@ -38,6 +39,13 @@ export const INVOKE_CHANNELS = {
   themeSet: 'theme:set',
   layoutGet: 'layout:get',
   layoutSidebar: 'layout:sidebar',
+  openrouterStatus: 'openrouter:status',
+  openrouterConnect: 'openrouter:connect',
+  openrouterPaste: 'openrouter:paste',
+  openrouterCancel: 'openrouter:cancel',
+  openrouterDisconnect: 'openrouter:disconnect',
+  openrouterRefresh: 'openrouter:refresh',
+  openrouterModels: 'openrouter:models',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -47,6 +55,7 @@ export const EVENT_CHANNELS = {
   siteState: 'site:state',
   roomEvent: 'room:event',
   roomTerminalData: 'room:terminal-data',
+  openrouterChanged: 'openrouter:changed',
 } as const;
 
 export const MAX_PTY_WRITE_BYTES = 1024 * 1024;
@@ -88,6 +97,11 @@ export interface RoomStartRequest {
   resume?: boolean;
 }
 
+export interface OpenRouterModels {
+  ok: boolean;
+  models: ModelItem[];
+}
+
 export interface InvokeRequests {
   [INVOKE_CHANNELS.listAgents]: undefined;
   [INVOKE_CHANNELS.addAgent]: { kind: AgentKind };
@@ -119,6 +133,13 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.themeSet]: { choice: ThemeChoice };
   [INVOKE_CHANNELS.layoutGet]: undefined;
   [INVOKE_CHANNELS.layoutSidebar]: { width: number };
+  [INVOKE_CHANNELS.openrouterStatus]: undefined;
+  [INVOKE_CHANNELS.openrouterConnect]: { mode: OpenRouterMode };
+  [INVOKE_CHANNELS.openrouterPaste]: { text: string };
+  [INVOKE_CHANNELS.openrouterCancel]: undefined;
+  [INVOKE_CHANNELS.openrouterDisconnect]: undefined;
+  [INVOKE_CHANNELS.openrouterRefresh]: undefined;
+  [INVOKE_CHANNELS.openrouterModels]: { refresh: boolean };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -158,12 +179,20 @@ export interface AppApi {
   themeSet(choice: ThemeChoice): Promise<void>;
   layoutGet(): Promise<number>;
   layoutSidebar(width: number): Promise<void>;
+  openrouterStatus(): Promise<OpenRouterStatus>;
+  openrouterConnect(mode: OpenRouterMode): Promise<OpenRouterStatus>;
+  openrouterPaste(text: string): Promise<OpenRouterStatus>;
+  openrouterCancel(): Promise<OpenRouterStatus>;
+  openrouterDisconnect(): Promise<OpenRouterStatus>;
+  openrouterRefresh(): Promise<OpenRouterStatus>;
+  openrouterModels(refresh: boolean): Promise<OpenRouterModels>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
   onSiteState(listener: (event: SiteStateEvent) => void): () => void;
   onRoomEvent(listener: (event: RoomEvent) => void): () => void;
   onRoomTerminalData(listener: (event: PtyDataEvent) => void): () => void;
+  onOpenRouterChanged(listener: (status: OpenRouterStatus) => void): () => void;
 }
 
 type Parser<T> = (payload: unknown) => T | null;
@@ -280,6 +309,25 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
     if (!isRecord(payload)) return null;
     const width = payload['width'];
     return isSidebarWidth(width) ? { width } : null;
+  },
+  [INVOKE_CHANNELS.openrouterStatus]: noPayload,
+  [INVOKE_CHANNELS.openrouterConnect]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const mode = payload['mode'];
+    return mode === 'browser' || mode === 'code' ? { mode } : null;
+  },
+  [INVOKE_CHANNELS.openrouterPaste]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const text = payload['text'];
+    return typeof text === 'string' && text.length <= MAX_PASTE_CHARS ? { text } : null;
+  },
+  [INVOKE_CHANNELS.openrouterCancel]: noPayload,
+  [INVOKE_CHANNELS.openrouterDisconnect]: noPayload,
+  [INVOKE_CHANNELS.openrouterRefresh]: noPayload,
+  [INVOKE_CHANNELS.openrouterModels]: (payload) => {
+    if (!isRecord(payload)) return null;
+    const refresh = payload['refresh'];
+    return typeof refresh === 'boolean' ? { refresh } : null;
   },
 };
 

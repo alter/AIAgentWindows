@@ -36,12 +36,16 @@ export interface AppState {
   agents: Agent[];
   theme?: ThemeChoice;
   sidebarWidth?: number;
+  openrouterKey?: string;
 }
 
 export const MAX_AGENT_TITLE_CHARS = 80;
 export const STATE_VERSION = 1;
 export const MAX_STATE_BYTES = 1024 * 1024;
 export const MAX_CWD_BYTES = 4096;
+export const MAX_CIPHER_CHARS = 4096;
+
+const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -141,5 +145,7 @@ export function parseState(text: string): AppState {
   const state: AppState = { version: STATE_VERSION, agents };
   if (raw['theme'] !== undefined) state.theme = parseThemeChoice(raw['theme']);
   if (raw['sidebarWidth'] !== undefined) state.sidebarWidth = parseSidebarWidth(raw['sidebarWidth']);
+  const cipher = raw['openrouterKey'];
+  if (typeof cipher === 'string' && cipher.length <= MAX_CIPHER_CHARS && BASE64_PATTERN.test(cipher)) state.openrouterKey = cipher;
   return state;
 }

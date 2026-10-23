@@ -233,6 +233,25 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 
 .agent-list { list-style: none; margin: 0; padding: 4px 8px; overflow-y: auto; flex: 1; }
 .agent-empty { padding: 10px 8px; font-style: italic; }
+.or-account { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--text); }
+.or-title { margin: 0 0 4px; font-size: inherit; font-weight: 700; }
+.or-state, .or-free, .or-notice { margin: 0 0 6px; overflow-wrap: anywhere; }
+.or-notice { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn-bg); color: var(--text); }
+.or-account [hidden] { display: none; }
+.or-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.or-button, .or-button-plain { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; font: inherit; cursor: pointer; }
+.or-button { background: var(--button-bg); color: var(--on-fill); }
+.or-button-plain { background: transparent; color: var(--text); }
+.or-button-plain:hover { background: var(--sidebar-hover); }
+.or-paste { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 6px; }
+.or-paste-label { font-weight: 700; }
+.or-paste-input { flex: 1 1 100px; min-width: 0; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg); color: var(--text); font: inherit; }
+.or-models-summary { cursor: pointer; font-weight: 700; }
+.or-filter { margin: 6px 0; padding: 3px 6px; }
+.or-model-list { max-height: 180px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.or-model { display: flex; flex-direction: column; padding: 3px 0; border-bottom: 1px solid var(--border); }
+.or-model-name { overflow-wrap: anywhere; }
+.or-model-meta, .or-model-note { font-size: 12px; overflow-wrap: anywhere; }
 .theme-switch { padding: 8px 16px 12px; color: var(--text); }
 .theme-switch-label { display: block; padding-bottom: 4px; font-weight: 700; }
 .theme-switch-options { display: flex; flex-wrap: wrap; gap: 4px 12px; }

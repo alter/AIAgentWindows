@@ -4,6 +4,7 @@ import type { AgentsSnapshot } from '../shared/ipc';
 import type { ThemeChoice } from '../shared/theme';
 import { el } from './dom';
 import { kindIcon } from './icons';
+import { OpenRouterAccount } from './openrouter-account';
 import { RoomTree, type RoomTreeState } from './room-tree';
 import { ThemeSwitch } from './theme-switch';
 
@@ -37,6 +38,7 @@ export class Sidebar {
   readonly element = el('nav', 'sidebar');
   private readonly rooms: RoomTree;
   private readonly theme: ThemeSwitch;
+  private readonly account = new OpenRouterAccount();
   private readonly list = el('ul', 'agent-list');
   private readonly menu = el('div', 'add-menu');
   private readonly addButton = el('button', 'add-button', '+');
@@ -74,7 +76,7 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu, this.theme.element);
+    this.element.append(this.rooms.element, header, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);

@@ -34,6 +34,7 @@ export class AgentController {
   private roomOpen = false;
   private themeChoice: ThemeChoice;
   private sidebar: number;
+  private cipher: string | undefined;
   private readonly pty: PtyManager;
   private readonly backlogs = new Map<string, OutputBuffer>();
   private readonly spawnedAt = new Map<string, number>();
@@ -45,6 +46,7 @@ export class AgentController {
     this.selectedId = this.agents[0]?.id ?? null;
     this.themeChoice = parseThemeChoice(initial.theme);
     this.sidebar = parseSidebarWidth(initial.sidebarWidth);
+    this.cipher = initial.openrouterKey;
     this.pty = new PtyManager({
       onData: (id, data) => {
         if (!this.closed.has(id)) this.deps.emit(EVENT_CHANNELS.ptyData, { id, data, end: this.backlogOf(id).append(data) });
@@ -73,6 +75,15 @@ export class AgentController {
   async setSidebarWidth(width: number): Promise<void> {
     this.sidebar = width;
     this.deps.layoutSidebar?.(width);
+    await this.persist();
+  }
+
+  openrouterCipher(): string | null {
+    return this.cipher ?? null;
+  }
+
+  async setOpenrouterCipher(cipher: string | null): Promise<void> {
+    this.cipher = cipher ?? undefined;
     await this.persist();
   }
 
@@ -256,6 +267,7 @@ export class AgentController {
     const run = async (): Promise<void> => {
       await this.claimSessions();
       const state: AppState = { version: 1, agents: this.agents, theme: this.themeChoice, sidebarWidth: this.sidebar };
+      if (this.cipher !== undefined) state.openrouterKey = this.cipher;
       await saveState(this.deps.stateFile, state);
     };
     this.saving = this.saving.then(run, run);

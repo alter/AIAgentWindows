@@ -5,11 +5,13 @@ import {
   INVOKE_CHANNELS,
   type AgentsSnapshot,
   type AppApi,
+  type OpenRouterModels,
   type PtyBacklog,
   type PtyDataEvent,
   type PtyExitEvent,
   type SiteStateEvent,
 } from '../shared/ipc';
+import type { OpenRouterStatus } from '../shared/openrouter';
 import type { ThemeChoice } from '../shared/theme';
 import type { RoomModels } from '../shared/cli-models';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
@@ -60,12 +62,20 @@ const api: AppApi = {
   themeSet: (choice) => ipcRenderer.invoke(INVOKE_CHANNELS.themeSet, { choice }) as Promise<void>,
   layoutGet: () => ipcRenderer.invoke(INVOKE_CHANNELS.layoutGet) as Promise<number>,
   layoutSidebar: (width) => ipcRenderer.invoke(INVOKE_CHANNELS.layoutSidebar, { width }) as Promise<void>,
+  openrouterStatus: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterStatus) as Promise<OpenRouterStatus>,
+  openrouterConnect: (mode) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterConnect, { mode }) as Promise<OpenRouterStatus>,
+  openrouterPaste: (text) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterPaste, { text }) as Promise<OpenRouterStatus>,
+  openrouterCancel: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterCancel) as Promise<OpenRouterStatus>,
+  openrouterDisconnect: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterDisconnect) as Promise<OpenRouterStatus>,
+  openrouterRefresh: () => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterRefresh) as Promise<OpenRouterStatus>,
+  openrouterModels: (refresh) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterModels, { refresh }) as Promise<OpenRouterModels>,
   onAgentsChanged: (listener) => subscribe<AgentsSnapshot>(EVENT_CHANNELS.agentsChanged, listener),
   onPtyData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.ptyData, listener),
   onPtyExit: (listener) => subscribe<PtyExitEvent>(EVENT_CHANNELS.ptyExit, listener),
   onSiteState: (listener) => subscribe<SiteStateEvent>(EVENT_CHANNELS.siteState, listener),
   onRoomEvent: (listener) => subscribe<RoomEvent>(EVENT_CHANNELS.roomEvent, listener),
   onRoomTerminalData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.roomTerminalData, listener),
+  onOpenRouterChanged: (listener) => subscribe<OpenRouterStatus>(EVENT_CHANNELS.openrouterChanged, listener),
 };
 
 contextBridge.exposeInMainWorld('aiaw', api);

@@ -93,4 +93,13 @@ describe('state file', () => {
     await writeFile(file, JSON.stringify({ version: 1, agents: [], theme: 'neon' }), 'utf8');
     expect((await loadState(file)).theme).toBe('system');
   });
+  it('round-trips a stored key ciphertext and drops anything that is not base64 or is too long', async () => {
+    const file = path.join(dir, 'agents.json');
+    await saveState(file, { ...SAMPLE, openrouterKey: 'AQIDBA==' });
+    expect((await loadState(file)).openrouterKey).toBe('AQIDBA==');
+    for (const openrouterKey of ['sk-or-v1-plain key', '', 7, null, 'A'.repeat(4097)]) {
+      await writeFile(file, JSON.stringify({ version: 1, agents: [], openrouterKey }), 'utf8');
+      expect((await loadState(file)).openrouterKey).toBeUndefined();
+    }
+  });
 });

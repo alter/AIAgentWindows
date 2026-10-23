@@ -261,4 +261,39 @@ describe('theme channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.themeGet, undefined).ok).toBe(true);
     expect(validateRequest(INVOKE_CHANNELS.themeGet, { x: 1 }).ok).toBe(false);
   });
+  it('openrouter connect takes a known mode only', () => {
+    for (const mode of ['browser', 'code']) {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterConnect, { mode })).toEqual({ ok: true, value: { mode } });
+    }
+    for (const payload of [undefined, null, 'browser', {}, { mode: 'paste' }, { mode: 1 }]) {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterConnect, payload).ok).toBe(false);
+    }
+  });
+
+  it('openrouter paste takes text of a bounded size', () => {
+    expect(validateRequest(INVOKE_CHANNELS.openrouterPaste, { text: 'sk-or-v1-x' })).toEqual({ ok: true, value: { text: 'sk-or-v1-x' } });
+    expect(validateRequest(INVOKE_CHANNELS.openrouterPaste, { text: 'a'.repeat(4096) }).ok).toBe(true);
+    for (const payload of [undefined, null, 'x', {}, { text: 1 }, { text: 'a'.repeat(4097) }]) {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterPaste, payload).ok).toBe(false);
+    }
+  });
+
+  it('openrouter models takes a refresh flag', () => {
+    expect(validateRequest(INVOKE_CHANNELS.openrouterModels, { refresh: true })).toEqual({ ok: true, value: { refresh: true } });
+    for (const payload of [undefined, null, {}, { refresh: 'yes' }]) {
+      expect(validateRequest(INVOKE_CHANNELS.openrouterModels, payload).ok).toBe(false);
+    }
+  });
+
+  it('the other openrouter channels take no payload', () => {
+    for (const channel of [
+      INVOKE_CHANNELS.openrouterStatus,
+      INVOKE_CHANNELS.openrouterCancel,
+      INVOKE_CHANNELS.openrouterDisconnect,
+      INVOKE_CHANNELS.openrouterRefresh,
+    ]) {
+      expect(validateRequest(channel, undefined).ok).toBe(true);
+      expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
+    }
+  });
 });

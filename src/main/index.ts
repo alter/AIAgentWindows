@@ -1,5 +1,5 @@
 // index.ts
-import { app, BrowserWindow, clipboard, dialog, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, nativeTheme, safeStorage, shell } from 'electron';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { windowTitle } from '../shared/app-info';
@@ -9,6 +9,7 @@ import { applyRenderSwitches } from '../shared/render-switches';
 import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
+import { openrouterBase, openrouterTestMode } from '../shared/openrouter';
 import { AgentController } from './agent-controller';
 import { CAPTURE_AUTO_ENV } from './capture-auto';
 import { runAutoCapture } from './capture-auto-main';
@@ -17,6 +18,11 @@ import { codexHome, listRollouts } from './codex-rollouts';
 import { registerIpc } from './ipc-handlers';
 import { createRoomDrivers, type RoomDrivers } from './room-drivers';
 import { moveToFolder } from './room-archive';
+import { OpenRouterClient } from './openrouter/client';
+import { KeyStore } from './openrouter/key-store';
+import { electronSecretBox } from './openrouter/secret-box';
+import { OpenRouterService } from './openrouter/service';
+import { fetchOpener, testSecretBox } from './openrouter/test-mode';
 import { RoomService } from './room-service';
 import { createModelCatalog } from './cli-models';
 import { createSiteSeats } from './site-seats';
@@ -38,6 +44,7 @@ let controller: AgentController | null = null;
 let sites: SiteViews | null = null;
 let room: RoomService | null = null;
 let roomDrivers: RoomDrivers | null = null;
+let openrouter: OpenRouterService | null = null;
 
 async function pickFolder(): Promise<string | null> {
   const preset = process.env['AIAW_TEST_FOLDER'];
@@ -143,7 +150,23 @@ async function start(): Promise<void> {
   });
   room = roomService;
   await roomService.init();
-  registerIpc(active, roomService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
+  const testMode = openrouterTestMode(process.env);
+  const base = openrouterBase(process.env);
+  const openrouterService = new OpenRouterService({
+    client: new OpenRouterClient({ base }),
+    store: new KeyStore(testMode ? testSecretBox() : electronSecretBox(safeStorage, process.platform), {
+      read: () => active.openrouterCipher(),
+      write: (cipher) => active.setOpenrouterCipher(cipher),
+    }),
+    base,
+    openExternal: testMode ? fetchOpener() : (url) => shell.openExternal(url),
+    emit: (status) => {
+      if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.openrouterChanged, status);
+    },
+  });
+  openrouter = openrouterService;
+  await openrouterService.init();
+  registerIpc(active, roomService, openrouterService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(
     process.platform === 'darwin',
@@ -187,6 +210,7 @@ app.on('before-quit', (event) => {
     active?.shutdown();
     roomDrivers?.shutdown();
     sites?.closeAll();
+    openrouter?.shutdown();
     return;
   }
   quitting = true;
