@@ -49,3 +49,11 @@
 - Red first: before the CSS, the step fails at the arrow check: `Expected: true Received: false` at `expect(closed.drawn).toBe(true)`; green after the CSS (1 passed). Opening on click is native `<details>` behaviour and was green from the start in tests/full/room.spec.ts.
 - Reverse control for the click part: `.room-entry-head { pointer-events: none; }` appended to styles.css, rebuilt, same step -> red: `TimeoutError: locator.click: Timeout 30000ms exceeded ... <details ... class="room-entry kind-reply"> intercepts pointer events`. The line was removed and the build redone; styles.css holds only the arrow rules.
 - Gates: fast tier 12 commands exit 0 (920 tests, coverage 100.00 % floor 100.00), electron-smoke 38/38, 0 failures.
+
+## Summary (2026-10-23)
+- Gate `scripts/contrast_check.py`: 76 findings on the old stylesheet (58 literal colours, 14 opacity, 1 each palette, same-hue, contrast-wcag, contrast-apca) → 0 after T03; in the fast tier of docs/PROJECT.md §6.
+- Palettes: dark (`:root`) and light (`@media (prefers-color-scheme: light)`), 44 pairs in src/renderer/contrast-pairs.json checked in both.
+- Terminal: theme from the same values, switched live on the system setting, `minimumContrastRatio` 4.5.
+- Disclosure arrow on Room feed entries.
+- Checks this run: fast tier 12 commands exit 0, coverage 920/920 100 %, electron-smoke 38/38.
+- Open: AC5, the owner's look at both palettes (macOS Settings → Appearance light, then dark).
