@@ -517,10 +517,10 @@ export class ProjectTree {
     open.disabled = item.unreadable;
     open.classList.toggle('selected', item.selected);
     if (item.selected) open.setAttribute('aria-current', 'true');
-    if (section.busy) open.setAttribute('aria-disabled', 'true');
+    if (item.blocked) open.setAttribute('aria-disabled', 'true');
     open.append(el('span', 'rooms-item-label', item.label));
     open.addEventListener('click', () => {
-      if (!section.busy) this.handlers.onOpenRoom(item.id);
+      if (!item.blocked) this.handlers.onOpenRoom(item.id);
     });
     row.append(open);
     if (item.unreadable || section.busy) return row;

@@ -141,7 +141,7 @@ export class RoomPane {
     if (event.type === 'started') this.feed.reload(this.snapshot);
     else this.renderFeed();
     this.renderState();
-    if (event.type === 'finished') void this.refreshList();
+    if (event.type === 'finished' || this.isUnlisted(this.snapshot.roomId)) void this.refreshList();
   }
 
   terminalData(event: PtyDataEvent): void {
@@ -197,6 +197,10 @@ export class RoomPane {
     if (!wasOpen) return;
     if (next === null) await this.onNewRoom(projectId);
     else await this.openRoom(next);
+  }
+
+  private isUnlisted(roomId: string | null): boolean {
+    return roomId !== null && !this.listed.some((item) => item.id === roomId);
   }
 
   private async refreshList(): Promise<void> {

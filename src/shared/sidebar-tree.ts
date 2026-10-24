@@ -61,6 +61,7 @@ export interface TreeItem {
   kind: AgentKind | null;
   unreadable: boolean;
   selected: boolean;
+  blocked: boolean;
 }
 
 export interface TreeSection {
@@ -106,6 +107,7 @@ function agentItems(state: SidebarTreeState, owned: (agent: Agent) => boolean): 
     kind: agent.kind,
     unreadable: false,
     selected: !state.roomOpen && agent.id === state.selectedId,
+    blocked: false,
   }));
 }
 
@@ -116,6 +118,7 @@ function roomItems(state: SidebarTreeState, owned: (row: RoomTreeRow) => boolean
     kind: null,
     unreadable: row.unreadable,
     selected: row.current && state.roomOpen,
+    blocked: state.busy && !row.current,
   }));
 }
 

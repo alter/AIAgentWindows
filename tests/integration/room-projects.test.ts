@@ -234,6 +234,27 @@ describe('rooms of two projects in one app run', () => {
     expect((await app.rooms.open(other)).ok).toBe(true);
   });
 
+  it('opens the running room itself and returns its live snapshot, while another room stays refused', async () => {
+    const app = await stack();
+    const first = await addProject(app, 'first');
+    const other = await run(app, first.id);
+    stubEnv['AIAW_STUB_HANG'] = '1';
+    expect(app.rooms.newRoom(first.id)).toBe(true);
+    const finishedBefore = app.seen.filter((event) => event.type === 'finished').length;
+    const started = await app.rooms.start(config({ prompt: 'hang question one' }));
+    if (!started.ok) throw new Error(started.error);
+    await vi.waitFor(async () => expect((await app.rooms.list()).find((item) => item.id === started.roomId)).toBeDefined());
+    const before = app.rooms.state();
+    const again = await app.rooms.open(started.roomId);
+    expect(again.ok).toBe(true);
+    expect(again.ok ? again.snapshot : null).toBe(before);
+    expect(app.rooms.state()).toBe(before);
+    expect((await app.rooms.open(other)).ok).toBe(false);
+    expect(app.rooms.state()).toBe(before);
+    app.rooms.stop();
+    await vi.waitFor(() => expect(app.seen.filter((event) => event.type === 'finished')).toHaveLength(finishedBefore + 1), { timeout: 15000 });
+  });
+
   it('runs a room outside any project in its own subfolder of the rooms folder, as before', async () => {
     const app = await stack();
     await run(app, null);

@@ -72,6 +72,15 @@ describe('sidebar tree', () => {
     expect(section(state, ROOMS_SECTION).busy).toBe(false);
   });
 
+  it('blocks every room but the current one while busy, and no agent', () => {
+    const rows = [row('r1', 'Alpha', true), row('r2', 'Beta')];
+    const busy = reduceSidebarTree(withData(), { type: 'rooms', rows, busy: true });
+    expect(section(busy, ROOMS_SECTION).items.map((item) => item.blocked)).toEqual([false, true]);
+    expect(section(busy, AGENTS_SECTION).items.map((item) => item.blocked)).toEqual([false, false]);
+    const idle = reduceSidebarTree(busy, { type: 'rooms', rows, busy: false });
+    expect(section(idle, ROOMS_SECTION).items.map((item) => item.blocked)).toEqual([false, false]);
+  });
+
   it('collapses and expands the rooms section and keeps the items', () => {
     const state = withData();
     const collapsed = reduceSidebarTree(state, { type: 'toggle', key: ROOMS_SECTION });

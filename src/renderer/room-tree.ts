@@ -154,9 +154,9 @@ export class RoomTree {
     button.append(el('span', 'rooms-item-label', row.label));
     button.classList.toggle('selected', row.selected);
     if (row.selected) button.setAttribute('aria-current', 'true');
-    if (this.section.busy) button.setAttribute('aria-disabled', 'true');
+    if (row.blocked) button.setAttribute('aria-disabled', 'true');
     button.addEventListener('click', () => {
-      if (!this.section.busy) this.handlers.onOpen(row.id);
+      if (!row.blocked) this.handlers.onOpen(row.id);
     });
     button.addEventListener('keydown', (event) => {
       if (event.key === 'F2' && !row.unreadable) {
