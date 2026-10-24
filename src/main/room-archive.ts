@@ -100,9 +100,17 @@ function insideDirectory(root: string, name: string): string {
   return target;
 }
 
+const PACKS_SUFFIX = '.packs';
+
+export function roomPackPath(roomsDir: string, roomId: string, participantId: string, turn: number): string {
+  if (!isRoomId(roomId)) throw new Error('invalid room id');
+  const packs = insideDirectory(roomsDir, `${roomId}${PACKS_SUFFIX}`);
+  return path.join(insideDirectory(packs, participantId), `${turn}.md`);
+}
+
 export function roomPaths(roomsDir: string, id: string, debugRoot?: string): string[] {
   if (!isRoomId(id)) throw new Error('invalid room id');
-  const paths = [insideDirectory(roomsDir, `${id}.md`), recordPath(roomsDir, id)];
+  const paths = [insideDirectory(roomsDir, `${id}.md`), insideDirectory(roomsDir, `${id}${PACKS_SUFFIX}`), recordPath(roomsDir, id)];
   return debugRoot === undefined ? paths : [insideDirectory(debugRoot, id), ...paths];
 }
 

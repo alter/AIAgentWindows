@@ -244,26 +244,61 @@ describe('room relay', () => {
     for (const entry of errors) expect(entry.text.trim().length).toBeGreaterThan(0);
   });
 
-  it('passes the turn timeout and the history file to the driver for a long history', async () => {
+  it('passes the turn timeout and a per-turn history file to the driver for a long history', async () => {
     const t = rig();
     const run = t.room.start(config([C], { prompt: 'x'.repeat(13000), turnTimeoutMs: 4321 }));
     await run.done;
     const request = t.drivers.get('c')?.requests[0];
     expect(request?.timeoutMs).toBe(4321);
-    expect(request?.attachPath).toBe(run.historyPath);
+    expect(request?.attachPath).not.toBeNull();
+    expect(request?.attachPath).not.toBe(run.historyPath);
+    expect(path.dirname(request?.attachPath ?? '')).toBe(path.join(roomsDir, `${run.roomId}.packs`, 'c'));
+    expect(await readFile(request?.attachPath ?? '', 'utf8')).toContain('x'.repeat(13000));
     expect(request?.text).not.toContain('xxxxxxxxxx');
   });
 
-  it('refuses a second run while one is in progress and reuses the sessions afterwards', async () => {
+  it('gives a broadcast web participant a file with only the entries of the earlier rounds', async () => {
+    const attached: { path: string; text: string }[] = [];
+    const web: Behaviour = async (request, call) => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      attached.push({ path: request.attachPath ?? '', text: await readFile(request.attachPath ?? '', 'utf8') });
+      return `reply c${call}`;
+    };
+    const t = rig({ c: web });
+    const run = t.room.start(config([A, B, C], { mode: 'broadcast', rounds: 2, prompt: 'x'.repeat(13000) }));
+    const result = await run.done;
+    expect(result.status).toBe('done');
+    expect(attached).toHaveLength(2);
+    const [first, second] = attached;
+    expect(first?.text).toContain('x'.repeat(13000));
+    expect(first?.text).not.toContain('reply a1');
+    expect(first?.text).not.toContain('reply b1');
+    expect(groupsInOrder(second?.text ?? '', [['x'.repeat(100)], ['reply a1', 'reply b1', 'reply c1']])).toBe(true);
+    expect(second?.text).not.toContain('reply a2');
+    expect(second?.text).not.toContain('reply b2');
+    const live = await readFile(run.historyPath, 'utf8');
+    expect(live).toContain('reply a2');
+    expect(historyNonce(second?.text ?? '')).not.toBe(historyNonce(live));
+    expect(first?.path).not.toBe(second?.path);
+  });
+
+  it('refuses a second run while one is in progress and gives every run its own drivers, the first disposed', async () => {
     const t = rig();
     const first = t.room.start(config([A]));
     expect(t.room.isRunning()).toBe(true);
     expect(() => t.room.start(config([A]))).toThrow('already in progress');
     await first.done;
     expect(t.room.isRunning()).toBe(false);
+    const firstDriver = t.drivers.get('a');
+    expect(firstDriver?.disposed).toBe(1);
     await t.room.start(config([A])).done;
-    expect(t.created).toEqual(['a']);
-    expect(t.drivers.get('a')?.requests).toHaveLength(4);
+    expect(t.created).toEqual(['a', 'a']);
+    const secondDriver = t.drivers.get('a');
+    expect(secondDriver).not.toBe(firstDriver);
+    expect(firstDriver?.requests).toHaveLength(2);
+    expect(secondDriver?.requests).toHaveLength(2);
+    expect(firstDriver?.disposed).toBe(1);
+    expect(secondDriver?.disposed).toBe(1);
   });
 
   it('reports progress and the end of the run', async () => {
@@ -598,12 +633,9 @@ describe('room with stub CLIs', () => {
     expect(result.entries[1]?.text).not.toContain('history.md');
     expect(result.entries[1]?.text).not.toContain(roomsDir);
     const history = await readFile(run.historyPath, 'utf8');
-    const own = await readFile(path.join(roomsDir, 'codex-1', 'history.md'), 'utf8');
-    expect(historyNonce(own)).toBe(historyNonce(history));
-    expect(own).toContain(escapeBody(result.entries[3]?.text ?? 'missing'));
     const starts = (text: string): number => text.split('\n').filter((line) => line.startsWith('<<<entry-')).length;
     expect(starts(history)).toBe(6);
-    expect(starts(own)).toBe(4);
+    for (const folder of ['claude-1', 'codex-1']) await expect(stat(path.join(roomsDir, folder, 'history.md'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(ascending(positions(history, ['<<<entry-', 'author="Claude Code" time', 'author="Codex" time']))).toBe(true);
   });
 
@@ -634,6 +666,25 @@ describe('room with stub CLIs', () => {
     }
     expect(claude.map((call) => path.basename(call.cwd))).toEqual(['claude-1', 'claude-1', 'claude-1']);
     expect(codex.map((call) => path.basename(call.cwd))).toEqual(['codex-1', 'codex-1']);
+  });
+
+  it('names the folders again for every run and starts every CLI session fresh', async () => {
+    const other: RoomParticipant = { id: 'claude-2', kind: 'claude', label: 'Claude Code 2' };
+    const drivers = stubDrivers();
+    const room = new Room({ roomsDir, driverFor: drivers.factory });
+    rooms.push(room);
+    await room.start(config([A, other], { turnTimeoutMs: 10000, finalizerId: 'claude-2' })).done;
+    await room.start(config([other], { turnTimeoutMs: 10000 })).done;
+    await room.shutdown();
+    drivers.shutdown();
+    const all = await calls();
+    expect(all).toHaveLength(5);
+    expect(all.slice(0, 3).map((call) => path.basename(call.cwd))).toEqual(['claude-1', 'claude-2', 'claude-2']);
+    const next = all.slice(3);
+    expect(next.map((call) => path.basename(call.cwd))).toEqual(['claude-1', 'claude-1']);
+    expect(flagValue(next[0], '--session-id')).toBeDefined();
+    expect(next[0]?.argv).not.toContain('--resume');
+    expect(flagValue(next[0], '--session-id')).not.toBe(flagValue(all[1], '--session-id'));
   });
 
   it('runs two claude instances with their own model, effort, folder and session', async () => {
@@ -916,7 +967,8 @@ describe('room with a web participant', () => {
     const long = room.start(config([C], { prompt: 'y'.repeat(13000), turnTimeoutMs: 20000 }));
     const result = await long.done;
     expect(result.entries[1]?.kind).toBe('reply');
-    expect(attached).toEqual([[long.historyPath], [long.historyPath]]);
+    const packs = path.join(roomsDir, `${long.roomId}.packs`, 'c');
+    expect(attached).toEqual([[path.join(packs, '1.md')], [path.join(packs, '2.md')]]);
   });
 });
 
@@ -1505,7 +1557,7 @@ describe('room continuation', () => {
     const t = rig();
     const { record } = await firstRun(t);
     await t.room.start(config([A, B], { prompt: 'second question' }), from(record)).done;
-    const request = t.drivers.get('a')?.requests[2];
+    const request = t.drivers.get('a')?.requests[0];
     expect(groupsInOrder(request?.text ?? '', [['first question'], ['reply a1'], ['reply b1'], ['second question']])).toBe(true);
     expect(request?.historyText).toContain('reply a1');
   });

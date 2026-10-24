@@ -9,8 +9,6 @@ export interface ParticipantPrompt {
   placeHistory: boolean;
 }
 
-export const PARTICIPANT_HISTORY_FILE = 'history.md';
-
 const NONCE_BYTES = 12;
 
 function randomNonce(): string {

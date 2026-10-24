@@ -1,10 +1,10 @@
 // room-drivers.ts
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomTurnSpawn } from '../shared/cli-args';
-import { PARTICIPANT_HISTORY_FILE, stripEntryMarkerLines } from '../shared/room-history';
+import { stripEntryMarkerLines } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
 import type { SiteLogValue } from '../shared/site-log';
 import type { OutputSnapshot } from '../shared/output-buffer';
@@ -99,7 +99,6 @@ class CliDriver implements ParticipantDriver {
   async turn(request: TurnRequest): Promise<string | null> {
     const cwd = path.join(this.deps.cwd, this.folder);
     await mkdir(cwd, { recursive: true });
-    if (request.historyText !== null) await writeFile(path.join(cwd, PARTICIPANT_HISTORY_FILE), request.historyText, 'utf8');
     const session = this.session ?? { id: this.kind === 'claude' ? randomUUID() : null, started: false };
     const own = new AbortController();
     this.running.add(own);
@@ -339,9 +338,13 @@ export interface RoomDrivers {
 export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const timing: RoomTiming = { ...DEFAULT_ROOM_TIMING, ...deps.timing };
   const running = new Set<AbortController>();
-  const folders = new FolderNames();
-  const factory: DriverFactory = async (participant) => {
-    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, folders.of(participant));
+  let folders = { runId: '', names: new FolderNames() };
+  const foldersOf = (runId: string): FolderNames => {
+    if (folders.runId !== runId) folders = { runId, names: new FolderNames() };
+    return folders.names;
+  };
+  const factory: DriverFactory = async (participant, runId) => {
+    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, foldersOf(runId).of(participant));
     if (participant.kind === 'openrouter') return new OpenRouterDriver(participant, deps.openrouter, running);
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);

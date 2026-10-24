@@ -2,11 +2,12 @@
 import { randomBytes } from 'node:crypto';
 import { access, appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { writeRecord } from './room-archive';
+import { roomPackPath, writeRecord } from './room-archive';
 import {
   buildParticipantPrompt,
   newNonce,
   renderEntryBlock,
+  renderHistory,
   renderHistoryHeader,
   type PromptPhase,
 } from '../shared/room-history';
@@ -61,7 +62,7 @@ export class OwnerPause extends Error {
   }
 }
 
-export type DriverFactory = (participant: RoomParticipant) => Promise<ParticipantDriver>;
+export type DriverFactory = (participant: RoomParticipant, runId: string) => Promise<ParticipantDriver>;
 
 export interface RoomDeps {
   roomsDir: string;
@@ -157,6 +158,8 @@ class RunState {
   chars: number;
   total: number;
   readonly waiting = new Set<() => void>();
+  readonly drivers = new Map<string, Promise<ParticipantDriver>>();
+  private readonly packCounts = new Map<string, number>();
   readonly finalizer: RoomParticipant;
   private readonly nonce: string;
   private readonly createdAt: number;
@@ -188,6 +191,12 @@ class RunState {
 
   get signal(): AbortSignal {
     return this.controller.signal;
+  }
+
+  nextPackPath(participant: RoomParticipant): string {
+    const count = (this.packCounts.get(participant.id) ?? 0) + 1;
+    this.packCounts.set(participant.id, count);
+    return roomPackPath(this.roomsDir, this.id, participant.id, count);
   }
 
   isDone(participant: RoomParticipant, round: number): boolean {
@@ -252,7 +261,6 @@ class RunState {
 }
 
 export class Room {
-  private readonly drivers = new Map<string, Promise<ParticipantDriver>>();
   private current: RunState | null = null;
 
   constructor(private readonly deps: RoomDeps) {}
@@ -289,8 +297,12 @@ export class Room {
 
   async shutdown(): Promise<void> {
     this.stop();
-    const drivers = [...this.drivers.values()];
-    this.drivers.clear();
+    if (this.current !== null) await this.disposeDrivers(this.current);
+  }
+
+  private async disposeDrivers(run: RunState): Promise<void> {
+    const drivers = [...run.drivers.values()];
+    run.drivers.clear();
     for (const pending of drivers) {
       const driver = await pending.catch(() => null);
       driver?.dispose();
@@ -333,6 +345,7 @@ export class Room {
     } catch {
       status = 'failed';
     } finally {
+      await this.disposeDrivers(run).catch(() => undefined);
       await run.finish(status);
       this.current = null;
       this.emit({ type: 'finished', roomId: run.id, status });
@@ -394,14 +407,21 @@ export class Room {
     this.emit({ type: 'progress', roomId: run.id, participantId: participant.id, state, completed: run.completed, total: run.total });
   }
 
-  private driver(participant: RoomParticipant): Promise<ParticipantDriver> {
-    let driver = this.drivers.get(participant.id);
+  private driver(run: RunState, participant: RoomParticipant): Promise<ParticipantDriver> {
+    let driver = run.drivers.get(participant.id);
     if (driver === undefined) {
-      driver = this.deps.driverFor(participant);
-      this.drivers.set(participant.id, driver);
-      driver.catch(() => this.drivers.delete(participant.id));
+      driver = this.deps.driverFor(participant, run.id);
+      run.drivers.set(participant.id, driver);
+      driver.catch(() => run.drivers.delete(participant.id));
     }
     return driver;
+  }
+
+  private async attachment(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[]): Promise<string> {
+    const file = run.nextPackPath(participant);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, renderHistory(run.id, seen), 'utf8');
+    return file;
   }
 
   private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase, round?: number): Promise<boolean> {
@@ -426,12 +446,12 @@ export class Room {
   ): Promise<TurnOutcome> {
     let driver: ParticipantDriver | null = null;
     try {
-      driver = await this.driver(participant);
+      driver = await this.driver(run, participant);
       const prompt = buildParticipantPrompt(participant, run.id, seen, phase);
       const request: TurnRequest = {
         runId: run.id,
         text: prompt.text,
-        attachPath: prompt.attachHistory ? run.historyPath : null,
+        attachPath: prompt.attachHistory ? await this.attachment(run, participant, seen) : null,
         historyText: prompt.placeHistory ? run.render(seen) : null,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,

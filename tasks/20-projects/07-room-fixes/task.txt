@@ -1,0 +1,43 @@
+TASK: declared fixes of today's room
+
+GOAL
+  Three live defects of the room are fixed before rooms move into projects,
+  each by a test seen red first: a CLI participant no longer gets a
+  `history.md` written into its working folder; every run starts with its own
+  drivers and folder names, so a second room in one app run starts its CLI
+  sessions fresh; a web participant's attachment is a per-turn file rendered
+  from the turn's `seen` entries, so a broadcast participant never reads
+  same-round replies (docs/plans/projects.md D22, D26 driver-cache part, T10).
+  Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/main/room.ts
+  src/main/room-drivers.ts
+  src/main/room-archive.ts
+  src/shared/room-history.ts
+  tests/integration/room.test.ts
+  tests/integration/room-archive.test.ts
+  tests/unit/site-recorder.test.ts
+
+SCOPE
+  + main/room-drivers.ts: `CliDriver.turn` writes no `history.md`; `FolderNames` per run (the factory takes the run id)
+  + main/room.ts: drivers cached and disposed per run, `DriverFactory(participant, runId)`, the web attachment written per turn from `seen` by `renderHistory` into `<roomsDir>/<room id>.packs/<participant id>/<turn>.md`
+  + main/room-archive.ts: `roomPackPath`, `roomPaths` includes the `.packs` folder
+  + shared/room-history.ts: the unused `PARTICIPANT_HISTORY_FILE` removed
+  + tests: room.test.ts (history.md absent, drivers per run, folders per run, broadcast attachment, packs path), room-archive.test.ts (packs trashed), site-recorder.test.ts (run id argument)
+  − the nonce, the context pack (12-context-pack), the per-run room context `Room.start(ctx)` (08-room-run-context), anything project-specific
+
+OUTCOME
+  tests/integration/room.test.ts and tests/integration/room-archive.test.ts pass; each fix has a test that was red before it.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/integration/room.test.ts tests/integration/room-archive.test.ts tests/unit/site-recorder.test.ts tests/unit/room-history.test.ts exits 0
+  3. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

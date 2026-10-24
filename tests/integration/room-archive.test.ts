@@ -377,6 +377,17 @@ describe('room delete in the service', () => {
     expect(await room.list()).toEqual([]);
   });
 
+  it('moves the per-turn packs folder of a room to the trash function, none left', async () => {
+    const spy = trashSpy();
+    const { room, id } = await savedRoom({ trash: spy.trash });
+    const packs = path.join(roomsDir(), `${id}.packs`);
+    await mkdir(path.join(packs, 'web'), { recursive: true });
+    await writeFile(path.join(packs, 'web', '1.md'), 'history', 'utf8');
+    expect(await room.delete(id)).toBe(true);
+    expect(spy.moved).toContain(packs);
+    expect(await readdir(roomsDir())).toEqual([]);
+  });
+
   it('a running room cannot be deleted', async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
