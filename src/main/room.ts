@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { access, appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { roomPackPath, writeRecord } from './room-archive';
+import type { RoomCwd, RoomRunContext } from './room-context';
 import {
   buildParticipantPrompt,
   newNonce,
@@ -62,10 +63,9 @@ export class OwnerPause extends Error {
   }
 }
 
-export type DriverFactory = (participant: RoomParticipant, runId: string) => Promise<ParticipantDriver>;
+export type DriverFactory = (participant: RoomParticipant, runId: string, cwd: RoomCwd) => Promise<ParticipantDriver>;
 
 export interface RoomDeps {
-  roomsDir: string;
   driverFor: DriverFactory;
   emit?(event: RoomEvent): void;
   now?(): number;
@@ -170,7 +170,7 @@ class RunState {
   constructor(
     readonly id: string,
     readonly historyPath: string,
-    private readonly roomsDir: string,
+    readonly ctx: RoomRunContext,
     readonly config: RoomConfig,
     total: number,
     random: (() => string) | undefined,
@@ -196,7 +196,7 @@ class RunState {
   nextPackPath(participant: RoomParticipant): string {
     const count = (this.packCounts.get(participant.id) ?? 0) + 1;
     this.packCounts.set(participant.id, count);
-    return roomPackPath(this.roomsDir, this.id, participant.id, count);
+    return roomPackPath(this.ctx.roomsDir, this.id, participant.id, count);
   }
 
   isDone(participant: RoomParticipant, round: number): boolean {
@@ -215,7 +215,7 @@ class RunState {
       else await appendFile(this.historyPath, block, 'utf8');
     });
     const record = this.recordOf('running');
-    this.enqueue(() => writeRecord(this.roomsDir, record));
+    this.enqueue(() => writeRecord(this.ctx.roomsDir, record));
   }
 
   rewrite(): void {
@@ -223,7 +223,7 @@ class RunState {
     this.historyState = 'append';
     this.enqueue(() => writeAtomic(this.historyPath, whole));
     const record = this.recordOf('running');
-    this.enqueue(() => writeRecord(this.roomsDir, record));
+    this.enqueue(() => writeRecord(this.ctx.roomsDir, record));
   }
 
   render(entries: readonly RoomEntry[]): string {
@@ -236,7 +236,7 @@ class RunState {
 
   async finish(status: RoomRecordStatus): Promise<void> {
     await this.writing.catch(() => undefined);
-    await writeRecord(this.roomsDir, this.recordOf(status)).catch(() => undefined);
+    await writeRecord(this.ctx.roomsDir, this.recordOf(status)).catch(() => undefined);
   }
 
   private recordOf(status: RoomRecordStatus): RoomRecord {
@@ -269,14 +269,14 @@ export class Room {
     return this.current !== null;
   }
 
-  start(config: RoomConfig, from?: RoomContinuation): RoomRun {
+  start(config: RoomConfig, from: RoomContinuation | undefined, ctx: RoomRunContext): RoomRun {
     if (this.current !== null) throw new Error('a room run is already in progress');
     const now = this.now();
     const roomId = from?.roomId ?? this.deps.newId?.() ?? defaultRoomId(now);
-    const historyPath = path.join(this.deps.roomsDir, `${roomId}.md`);
+    const historyPath = path.join(ctx.roomsDir, `${roomId}.md`);
     const turns = config.mode === 'relay' ? relaySchedule(config.participants, config.rounds).length : config.participants.length * config.rounds;
     const total = turns + 1;
-    const run = new RunState(roomId, historyPath, this.deps.roomsDir, config, total, this.deps.newNonce, () => this.now(), from);
+    const run = new RunState(roomId, historyPath, ctx, config, total, this.deps.newNonce, () => this.now(), from);
     this.current = run;
     return { roomId, historyPath, done: this.execute(run) };
   }
@@ -410,7 +410,7 @@ export class Room {
   private driver(run: RunState, participant: RoomParticipant): Promise<ParticipantDriver> {
     let driver = run.drivers.get(participant.id);
     if (driver === undefined) {
-      driver = this.deps.driverFor(participant, run.id);
+      driver = this.deps.driverFor(participant, run.id, run.ctx.cwdFor(participant));
       run.drivers.set(participant.id, driver);
       driver.catch(() => run.drivers.delete(participant.id));
     }

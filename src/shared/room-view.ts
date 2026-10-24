@@ -40,6 +40,7 @@ export type ChipState = 'waiting' | 'running' | 'answered' | 'error' | 'timeout'
 
 export interface RoomSnapshot {
   phase: RoomPhase;
+  projectId: string | null;
   roomId: string | null;
   historyPath: string | null;
   entries: RoomEntry[];
@@ -96,8 +97,8 @@ export function participantAvailability(
   return { available: false, note: missingAdapterNote(participant.label) };
 }
 
-export function emptyRoomSnapshot(): RoomSnapshot {
-  return { phase: 'idle', roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0, plan: null, round: 0, chips: {} };
+export function emptyRoomSnapshot(projectId: string | null = null): RoomSnapshot {
+  return { phase: 'idle', projectId, roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0, plan: null, round: 0, chips: {} };
 }
 
 const CHIP_OF_STEP: Record<StepState, ChipState> = { running: 'running', replied: 'answered', failed: 'error', timeout: 'timeout' };
@@ -120,7 +121,7 @@ function stoppedChips(chips: Record<string, ChipState>): Record<string, ChipStat
 
 export function applyRoomEvent(snapshot: RoomSnapshot, event: RoomEvent): RoomSnapshot {
   if (event.type === 'started') {
-    return { phase: 'running', roomId: event.roomId, historyPath: event.historyPath, entries: event.previous ?? [], running: [], paused: [], completed: 0, total: event.total, plan: event.plan, round: 1, chips: waitingChips(event.plan) };
+    return { phase: 'running', projectId: snapshot.projectId, roomId: event.roomId, historyPath: event.historyPath, entries: event.previous ?? [], running: [], paused: [], completed: 0, total: event.total, plan: event.plan, round: 1, chips: waitingChips(event.plan) };
   }
   if (event.roomId !== snapshot.roomId) return snapshot;
   if (event.type === 'entry') return { ...snapshot, entries: [...snapshot.entries, event.entry] };
@@ -416,8 +417,8 @@ function recordEvents(record: RoomRecord, historyPath: string): RoomEvent[] {
   return events;
 }
 
-export function snapshotFromRecord(record: RoomRecord, historyPath: string): RoomSnapshot {
-  return recordEvents(record, historyPath).reduce(applyRoomEvent, emptyRoomSnapshot());
+export function snapshotFromRecord(record: RoomRecord, historyPath: string, projectId: string | null = null): RoomSnapshot {
+  return recordEvents(record, historyPath).reduce(applyRoomEvent, emptyRoomSnapshot(projectId));
 }
 
 export function formFromRecord(record: RoomRecord): RoomFormValues {
@@ -443,6 +444,7 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
 
 export interface RoomTreeRow {
   id: string;
+  projectId: string | null;
   label: string;
   unreadable: boolean;
   current: boolean;
@@ -451,16 +453,18 @@ export interface RoomTreeRow {
 export function roomTreeRows(items: readonly RoomListItem[], openedId: string | null): RoomTreeRow[] {
   return items.map((item) =>
     item.unreadable
-      ? { id: item.id, label: `${item.id} · unreadable`, unreadable: true, current: false }
-      : { id: item.id, label: item.title, unreadable: false, current: item.id === openedId },
+      ? { id: item.id, projectId: item.projectId, label: `${item.id} · unreadable`, unreadable: true, current: false }
+      : { id: item.id, projectId: item.projectId, label: item.title, unreadable: false, current: item.id === openedId },
   );
 }
 
 export function nextRoomAfterDelete(items: readonly RoomListItem[], deletedId: string): string | null {
-  const at = items.findIndex((item) => item.id === deletedId);
-  if (at < 0) return null;
-  const after = items.slice(at + 1).find((item) => !item.unreadable);
-  const before = items.slice(0, at).reverse().find((item) => !item.unreadable);
+  const deleted = items.find((item) => item.id === deletedId);
+  if (deleted === undefined) return null;
+  const sameProject = items.filter((item) => item.projectId === deleted.projectId);
+  const at = sameProject.indexOf(deleted);
+  const after = sameProject.slice(at + 1).find((item) => !item.unreadable);
+  const before = sameProject.slice(0, at).reverse().find((item) => !item.unreadable);
   return (after ?? before)?.id ?? null;
 }
 

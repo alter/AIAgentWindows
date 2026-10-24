@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { RoomListItem } from '../../src/shared/room-model';
 import { nextRoomAfterDelete, renameTitle, roomTreeRows } from '../../src/shared/room-view';
 
-const readable = (id: string, title: string): RoomListItem => ({
+const readable = (id: string, title: string, projectId: string | null = null): RoomListItem => ({
   id,
+  projectId,
   unreadable: false,
   createdAt: 1,
   updatedAt: 2,
@@ -29,10 +30,19 @@ describe('roomTreeRows', () => {
   });
 
   it('an unreadable record stays identifiable, cannot be opened or renamed', () => {
-    const [row] = roomTreeRows([{ id: 'broken-1', unreadable: true }], 'broken-1');
+    const [row] = roomTreeRows([{ id: 'broken-1', projectId: null, unreadable: true }], 'broken-1');
     expect(row?.label).toContain('broken-1');
     expect(row?.unreadable).toBe(true);
     expect(row?.current).toBe(false);
+  });
+
+  it('carries the project of every room, readable or not', () => {
+    const rows = roomTreeRows([readable('a', 'Alpha', 'p1'), readable('b', 'Beta'), { id: 'u', projectId: 'p2', unreadable: true }], null);
+    expect(rows.map((row) => [row.id, row.projectId])).toEqual([
+      ['a', 'p1'],
+      ['b', null],
+      ['u', 'p2'],
+    ]);
   });
 
   it('shows markup in a title as plain characters of the label', () => {
@@ -61,7 +71,7 @@ describe('renameTitle', () => {
 });
 
 describe('nextRoomAfterDelete', () => {
-  const unreadable: RoomListItem = { id: 'u', unreadable: true };
+  const unreadable: RoomListItem = { id: 'u', projectId: null, unreadable: true };
 
   it('picks the next readable room, else the previous one, else nothing', () => {
     const list = [readable('a', 'A'), readable('b', 'B'), unreadable, readable('c', 'C')];
@@ -71,5 +81,13 @@ describe('nextRoomAfterDelete', () => {
     expect(nextRoomAfterDelete([readable('a', 'A'), unreadable], 'a')).toBeNull();
     expect(nextRoomAfterDelete([readable('a', 'A')], 'a')).toBeNull();
     expect(nextRoomAfterDelete(list, 'missing')).toBeNull();
+  });
+
+  it('looks only among the rooms of the same project', () => {
+    const list = [readable('a', 'A', 'p1'), readable('b', 'B'), readable('c', 'C', 'p1'), readable('d', 'D', 'p2')];
+    expect(nextRoomAfterDelete(list, 'a')).toBe('c');
+    expect(nextRoomAfterDelete(list, 'c')).toBe('a');
+    expect(nextRoomAfterDelete(list, 'b')).toBeNull();
+    expect(nextRoomAfterDelete(list, 'd')).toBeNull();
   });
 });

@@ -112,6 +112,7 @@ function service(driverFor: DriverFactory, pasted: Array<[string, string]> = [],
   const seen: RoomEvent[] = [];
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
+    userData: dir,
     debugRoot,
     trash: async () => undefined,
     driverFor,
@@ -416,7 +417,7 @@ describe('room archive in the service', () => {
     const id = await savedRoom();
     const { room } = service(echoDriver());
     await room.open(id);
-    expect(room.newRoom()).toBe(true);
+    expect(room.newRoom(null)).toBe(true);
     expect(room.state().roomId).toBeNull();
     expect(room.state().entries).toEqual([]);
     expect((await room.start(config(), id)).ok).toBe(false);
@@ -431,7 +432,7 @@ describe('room archive in the service', () => {
     const { room, seen } = service(hang);
     await room.start(config({ participants: [CLAUDE] }));
     const before = room.state();
-    expect(room.newRoom()).toBe(false);
+    expect(room.newRoom(null)).toBe(false);
     expect(room.state()).toBe(before);
     room.stop();
     await finished(seen);

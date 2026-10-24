@@ -85,8 +85,8 @@ export interface RoomRecord {
   title?: string;
 }
 export type RoomListItem =
-  | { id: string; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string; title: string }
-  | { id: string; unreadable: true };
+  | { id: string; projectId: string | null; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string; title: string }
+  | { id: string; projectId: string | null; unreadable: true };
 
 export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
 

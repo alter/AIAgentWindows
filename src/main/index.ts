@@ -172,7 +172,6 @@ async function start(): Promise<void> {
   const roomsDir = path.join(sharedDir, 'rooms');
   const debugRoot = path.join(userData, 'debug', 'sites');
   const drivers = createRoomDrivers({
-    cwd: roomsDir,
     sharedDir,
     platform: process.platform,
     envFor: () => process.env,
@@ -192,6 +191,8 @@ async function start(): Promise<void> {
   roomDrivers = drivers;
   const roomService = new RoomService({
     roomsDir,
+    userData,
+    projects: projectService,
     debugRoot,
     trash: trashItem,
     driverFor: drivers.factory,
@@ -208,7 +209,7 @@ async function start(): Promise<void> {
   await roomService.init();
   projectService.register({
     canClose: () => (roomService.isRunning() ? 'A room run is in progress: stop it before deleting a project.' : null),
-    closeProject: () => undefined,
+    closeProject: (id) => roomService.closeProject(id),
   });
   registerIpc(active, roomService, openrouterService, openrouterChats, projectService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];

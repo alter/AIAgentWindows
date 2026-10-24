@@ -84,8 +84,8 @@ export class Content {
     void this.room.openFromTree(id);
   }
 
-  roomNew(): void {
-    void this.room.newFromTree();
+  roomNew(projectId: string | null): void {
+    void this.room.newFromTree(projectId);
   }
 
   roomRename(id: string, title: string): void {

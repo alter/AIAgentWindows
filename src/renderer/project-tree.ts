@@ -17,6 +17,9 @@ export interface ProjectTreeHandlers {
   onAddAgent(kind: AgentKind, projectId: string): void;
   onSelectAgent(id: string): void;
   onCloseAgent(id: string): void;
+  onOpenRoom(id: string): void;
+  onNewRoom(projectId: string): void;
+  onDeleteRoom(id: string): void;
 }
 
 interface Editing {
@@ -48,6 +51,10 @@ export class ProjectTree {
   private readonly agentConfirmText = el('span', 'projects-confirm-text');
   private readonly agentConfirmYes = el('button', 'projects-confirm-yes', 'Close agent');
   private readonly agentConfirmNo = el('button', 'projects-confirm-no', 'Cancel');
+  private readonly roomConfirm = el('div', 'projects-confirm');
+  private readonly roomConfirmText = el('span', 'projects-confirm-text');
+  private readonly roomConfirmYes = el('button', 'projects-confirm-yes', 'Delete');
+  private readonly roomConfirmNo = el('button', 'projects-confirm-no', 'Cancel');
   private readonly confirm = el('div', 'projects-confirm');
   private readonly confirmText = el('span', 'projects-confirm-text');
   private readonly confirmYes = el('button', 'projects-confirm-yes', 'Delete');
@@ -57,6 +64,7 @@ export class ProjectTree {
   private menuId: string | null = null;
   private pendingId: string | null = null;
   private pendingAgentId: string | null = null;
+  private pendingRoomId: string | null = null;
   private agentMenuProject: string | null = null;
   private editing: Editing | null = null;
   private rebuilding = false;
@@ -75,11 +83,12 @@ export class ProjectTree {
     this.setupConfirm();
     this.setupAgentMenu();
     this.setupAgentConfirm();
+    this.setupRoomConfirm();
     this.notice.hidden = true;
     this.notice.dataset['project'] = 'notice';
     this.notice.setAttribute('role', 'status');
     this.list.dataset['project'] = 'list';
-    this.element.append(header, this.addMenu, this.notice, this.form, this.list, this.confirm, this.agentConfirm, this.menu, this.agentMenu);
+    this.element.append(header, this.addMenu, this.notice, this.form, this.list, this.confirm, this.agentConfirm, this.roomConfirm, this.menu, this.agentMenu);
     document.addEventListener('click', () => {
       this.setAddMenu(false);
       this.hideMenu();
@@ -109,6 +118,7 @@ export class ProjectTree {
     if (this.pendingId !== null && !ids.has(this.pendingId)) this.setPending(null);
     if (this.agentMenuProject !== null && !ids.has(this.agentMenuProject)) this.hideAgentMenu();
     if (this.pendingAgentId !== null && this.agentLabel(this.pendingAgentId) === null) this.setPendingAgent(null);
+    if (this.pendingRoomId !== null && this.roomLabel(this.pendingRoomId) === null) this.setPendingRoom(null);
     if (this.editing !== null && !ids.has(this.editing.id)) this.editing = null;
     this.render();
   }
@@ -423,11 +433,12 @@ export class ProjectTree {
     const head = el('div', 'project-section-head');
     head.append(toggle, el('span', 'project-section-title', SECTION_TITLES[name] ?? name));
     if (name === 'agents') head.append(this.agentAddButton(node));
+    if (name === 'rooms') head.append(this.roomAddButton(node, section));
     box.append(head);
     if (section.expanded) {
       const items = el('ul', 'project-section-list');
-      for (const item of section.items) items.append(this.agentItem(item));
-      if (section.items.length === 0) items.append(el('li', 'project-section-empty', name === 'agents' ? 'No agents yet. Use + to add one.' : 'Nothing here yet.'));
+      for (const item of section.items) items.append(name === 'rooms' ? this.roomItem(item, section) : this.agentItem(item));
+      if (section.items.length === 0) items.append(el('li', 'project-section-empty', name === 'agents' ? 'No agents yet. Use + to add one.' : 'No rooms yet. Use + to add one.'));
       box.append(items);
     }
     return box;
@@ -471,6 +482,86 @@ export class ProjectTree {
     });
     row.append(select, close);
     return row;
+  }
+
+  private roomAddButton(node: TreeNode, section: TreeSection): HTMLButtonElement {
+    const id = node.projectId ?? '';
+    const button = el('button', 'project-agent-add', '+');
+    button.type = 'button';
+    button.dataset['project'] = 'add-room';
+    button.title = 'New room';
+    button.setAttribute('aria-label', `New room in ${node.label}`);
+    button.disabled = section.busy;
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.handlers.onNewRoom(id);
+    });
+    return button;
+  }
+
+  private roomItem(item: TreeItem, section: TreeSection): HTMLLIElement {
+    const row = el('li', 'project-agent');
+    const open = el('button', 'rooms-item');
+    open.type = 'button';
+    open.dataset['roomId'] = item.id;
+    open.title = item.label;
+    open.disabled = item.unreadable;
+    open.classList.toggle('selected', item.selected);
+    if (item.selected) open.setAttribute('aria-current', 'true');
+    if (section.busy) open.setAttribute('aria-disabled', 'true');
+    open.append(el('span', 'rooms-item-label', item.label));
+    open.addEventListener('click', () => {
+      if (!section.busy) this.handlers.onOpenRoom(item.id);
+    });
+    row.append(open);
+    if (item.unreadable || section.busy) return row;
+    const remove = el('button', 'agent-close', '×');
+    remove.type = 'button';
+    remove.dataset['project'] = 'delete-room';
+    remove.title = 'Delete room';
+    remove.setAttribute('aria-label', `Delete ${item.label}`);
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.setPendingRoom(item.id);
+    });
+    row.append(remove);
+    return row;
+  }
+
+  private roomLabel(id: string): string | null {
+    for (const node of this.nodes) {
+      for (const section of node.sections) {
+        if (!section.key.endsWith(':rooms') || section.busy) continue;
+        const found = section.items.find((item) => item.id === id && !item.unreadable);
+        if (found !== undefined) return found.label;
+      }
+    }
+    return null;
+  }
+
+  private setupRoomConfirm(): void {
+    this.roomConfirm.hidden = true;
+    this.roomConfirm.dataset['project'] = 'room-delete-confirm';
+    this.roomConfirm.setAttribute('role', 'alertdialog');
+    this.roomConfirmYes.type = 'button';
+    this.roomConfirmYes.dataset['project'] = 'room-delete-yes';
+    this.roomConfirmNo.type = 'button';
+    this.roomConfirmNo.dataset['project'] = 'room-delete-no';
+    this.roomConfirm.append(this.roomConfirmText, this.roomConfirmYes, this.roomConfirmNo);
+    this.roomConfirmYes.addEventListener('click', () => {
+      const id = this.pendingRoomId;
+      this.setPendingRoom(null);
+      if (id !== null) this.handlers.onDeleteRoom(id);
+    });
+    this.roomConfirmNo.addEventListener('click', () => this.setPendingRoom(null));
+  }
+
+  private setPendingRoom(id: string | null): void {
+    const label = id === null ? null : this.roomLabel(id);
+    this.pendingRoomId = label === null ? null : id;
+    this.roomConfirm.hidden = label === null;
+    this.roomConfirmText.textContent = label === null ? '' : `Delete ${label}? It moves to the Trash.`;
+    if (label !== null) this.roomConfirmNo.focus();
   }
 
   private agentLabel(id: string): string | null {

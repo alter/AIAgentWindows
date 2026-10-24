@@ -102,6 +102,10 @@ export class ProjectService {
     return this.deps.store.read().projects ?? [];
   }
 
+  ids(): string[] {
+    return this.projects().map((project) => project.id);
+  }
+
   async list(): Promise<ProjectView[]> {
     return Promise.all(this.projects().map(async (project) => viewOf(project, !(await isFolderHere(project.folder)))));
   }

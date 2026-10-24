@@ -32,7 +32,7 @@ function buildHandlers(controller: AgentController, room: RoomService, openroute
     [INVOKE_CHANNELS.roomOpen]: ({ id }) => room.open(id),
     [INVOKE_CHANNELS.roomRename]: ({ id, title }) => room.rename(id, title),
     [INVOKE_CHANNELS.roomDelete]: ({ id }) => room.delete(id),
-    [INVOKE_CHANNELS.roomNew]: () => room.newRoom(),
+    [INVOKE_CHANNELS.roomNew]: ({ projectId }) => room.newRoom(projectId),
     [INVOKE_CHANNELS.roomSelect]: () => controller.selectRoom(),
     [INVOKE_CHANNELS.roomStart]: ({ config, continueId, resume }) => room.start(config, continueId, resume),
     [INVOKE_CHANNELS.roomStop]: () => room.stop(),

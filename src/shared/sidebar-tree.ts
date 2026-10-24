@@ -109,6 +109,16 @@ function agentItems(state: SidebarTreeState, owned: (agent: Agent) => boolean): 
   }));
 }
 
+function roomItems(state: SidebarTreeState, owned: (row: RoomTreeRow) => boolean): TreeItem[] {
+  return state.rooms.filter(owned).map((row) => ({
+    id: row.id,
+    label: row.label,
+    kind: null,
+    unreadable: row.unreadable,
+    selected: row.current && state.roomOpen,
+  }));
+}
+
 export function sidebarSections(state: SidebarTreeState): TreeSection[] {
   return [
     {
@@ -116,13 +126,7 @@ export function sidebarSections(state: SidebarTreeState): TreeSection[] {
       collapsible: true,
       expanded: !state.collapsed.includes(ROOMS_SECTION),
       busy: state.busy,
-      items: state.rooms.map((row) => ({
-        id: row.id,
-        label: row.label,
-        kind: null,
-        unreadable: row.unreadable,
-        selected: row.current && state.roomOpen,
-      })),
+      items: roomItems(state, (row) => row.projectId === null),
     },
     {
       key: AGENTS_SECTION,
@@ -142,8 +146,8 @@ function projectNode(state: SidebarTreeState, project: ProjectView): TreeNode {
         key: projectSectionKey(project.id, name),
         collapsible: true,
         expanded: !state.collapsed.includes(projectSectionKey(project.id, name)),
-        busy: false,
-        items: name === AGENTS_SECTION ? agentItems(state, (agent) => agent.projectId === project.id) : [],
+        busy: name === ROOMS_SECTION && state.busy,
+        items: name === AGENTS_SECTION ? agentItems(state, (agent) => agent.projectId === project.id) : roomItems(state, (row) => row.projectId === project.id),
       }));
   return {
     key,

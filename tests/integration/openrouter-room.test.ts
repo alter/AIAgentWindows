@@ -10,7 +10,7 @@ import { openrouterProblem } from '../../src/main/openrouter/gate';
 import { OpenRouterService } from '../../src/main/openrouter/service';
 import { testSecretBox } from '../../src/main/openrouter/test-mode';
 import { readRecord } from '../../src/main/room-archive';
-import { Room } from '../../src/main/room';
+import { TestRoom } from './helpers/test-room';
 import { createRoomDrivers } from '../../src/main/room-drivers';
 import { openStore } from '../unit/helpers/app-state';
 import type { ModelItem, OpenRouterStatus } from '../../src/shared/openrouter';
@@ -30,7 +30,7 @@ let fake: FakeOpenRouter;
 let controller: AgentController;
 let statuses: OpenRouterStatus[];
 let service: OpenRouterService;
-const rooms: Room[] = [];
+const rooms: TestRoom[] = [];
 
 function config(participants: RoomParticipant[], overrides: Partial<RoomConfig> = {}): RoomConfig {
   return { prompt: 'Question one', mode: 'relay', rounds: 1, participants, turnTimeoutMs: 8000, finalizerId: 'claude', debugSites: false, ...overrides };
@@ -50,9 +50,8 @@ function build(base: string): OpenRouterService {
   });
 }
 
-function newRoom(): Room {
+function newRoom(): TestRoom {
   const drivers = createRoomDrivers({
-    cwd: roomsDir,
     sharedDir: dir,
     platform: 'win32',
     envFor: () => ({
@@ -69,7 +68,7 @@ function newRoom(): Room {
     openrouter: service,
     timing: { killGraceMs: 200 },
   });
-  const room = new Room({ roomsDir, driverFor: drivers.factory });
+  const room = new TestRoom({ roomsDir, driverFor: drivers.factory });
   rooms.push(room);
   return room;
 }

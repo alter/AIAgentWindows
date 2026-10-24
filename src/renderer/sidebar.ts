@@ -33,7 +33,7 @@ export interface SidebarHandlers {
   onSelect(id: string): void;
   onRoom(): void;
   onRoomOpen(id: string): void;
-  onRoomNew(): void;
+  onRoomNew(projectId: string | null): void;
   onRoomRename(id: string, title: string): void;
   onRoomDelete(id: string): void;
   onAdd(kind: AgentKind, projectId?: string): void;
@@ -84,7 +84,7 @@ export class Sidebar {
     this.rooms = new RoomTree({
       onPane: () => this.handlers.onRoom(),
       onOpen: (id) => this.handlers.onRoomOpen(id),
-      onNew: () => this.handlers.onRoomNew(),
+      onNew: () => this.handlers.onRoomNew(null),
       onRename: (id, title) => this.handlers.onRoomRename(id, title),
       onDelete: (id) => this.handlers.onRoomDelete(id),
       onToggle: () => this.dispatch({ type: 'toggle', key: ROOMS_SECTION }),
@@ -95,6 +95,9 @@ export class Sidebar {
       onAddAgent: (kind, projectId) => this.handlers.onAdd(kind, projectId),
       onSelectAgent: (id) => this.handlers.onSelect(id),
       onCloseAgent: (id) => this.handlers.onClose(id),
+      onOpenRoom: (id) => this.handlers.onRoomOpen(id),
+      onNewRoom: (projectId) => this.handlers.onRoomNew(projectId),
+      onDeleteRoom: (id) => this.handlers.onRoomDelete(id),
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     this.setupNoProject();

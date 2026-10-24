@@ -17,7 +17,7 @@ import {
 } from '../../src/shared/sidebar-tree';
 
 const agent = (id: string, title: string, kind: Agent['kind'] = 'claude'): Agent => ({ id, kind, title, createdAt: 1 });
-const row = (id: string, label: string, current = false, unreadable = false) => ({ id, label, current, unreadable });
+const row = (id: string, label: string, current = false, unreadable = false, projectId: string | null = null) => ({ id, projectId, label, current, unreadable });
 
 const withData = (): SidebarTreeState => {
   let state = initialSidebarTree();
@@ -195,6 +195,23 @@ describe('sidebar tree with projects', () => {
     expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Alpha')] })))).toBe(true);
     expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Renamed')] })))).toBe(false);
     expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Alpha', true)] })))).toBe(false);
+  });
+
+  it('lists the rooms of a project in its Rooms section and keeps them out of the No project node', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha'), view('p2', 'Beta')] });
+    state = reduceSidebarTree(state, {
+      type: 'rooms',
+      rows: [row('r1', 'Loose', false), row('q1', 'In Alpha', true, false, 'p1'), row('q2', 'In Beta', false, false, 'p2'), row('q3', 'Broken', false, true, 'p1')],
+      busy: true,
+    });
+    state = reduceSidebarTree(state, { type: 'agents', agents: [], selectedId: null, roomOpen: true });
+    const [alpha, beta, none] = sidebarNodes(state);
+    const roomsOf = (node: typeof alpha) => node?.sections.find((item) => item.key.endsWith(':rooms'));
+    expect(roomsOf(alpha)?.items.map((item) => `${item.id}:${item.label}:${item.selected}:${item.unreadable}:${item.kind}`)).toEqual(['q1:In Alpha:true:false:null', 'q3:Broken:false:true:null']);
+    expect(roomsOf(beta)?.items.map((item) => item.id)).toEqual(['q2']);
+    expect([roomsOf(alpha)?.busy, roomsOf(beta)?.busy]).toEqual([true, true]);
+    expect(none?.sections.find((item) => item.key === ROOMS_SECTION)?.items.map((item) => item.id)).toEqual(['r1']);
+    expect(section(state, ROOMS_SECTION).items.map((item) => item.id)).toEqual(['r1']);
   });
 
   it('lists the agents of a project in its Agents section and keeps them out of the No project node', () => {

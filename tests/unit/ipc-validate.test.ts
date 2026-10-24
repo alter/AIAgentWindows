@@ -194,10 +194,20 @@ describe('room channels', () => {
   });
 
   it('takes no payload for state, select and stop', () => {
-    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomNew, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
+    for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);
       expect(validateRequest(channel, { x: 1 }).ok).toBe(false);
     }
+  });
+
+  it('room new takes a project id or null and nothing else', () => {
+    expect(INVOKE_CHANNELS.roomNew).toBe('room:new');
+    expect(validateRequest(INVOKE_CHANNELS.roomNew, { projectId: null })).toEqual({ ok: true, value: { projectId: null } });
+    expect(validateRequest(INVOKE_CHANNELS.roomNew, { projectId: 'p-1_a' })).toEqual({ ok: true, value: { projectId: 'p-1_a' } });
+    for (const projectId of ['', '../x', 'a/b', 'a.b', 'x'.repeat(65), 7, undefined]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomNew, { projectId }).ok).toBe(false);
+    }
+    for (const payload of [undefined, null, {}, 'p-1', ['p-1']]) expect(validateRequest(INVOKE_CHANNELS.roomNew, payload).ok).toBe(false);
   });
 
   it('validates carry as an agent id and a known kind of text', () => {

@@ -1,0 +1,75 @@
+TASK: per-run room context, rooms per project
+
+GOAL
+  A room run takes its rooms folder, project and working folders from a
+  per-run context instead of the one folder fixed at app start, so rooms
+  live under their project (`<userData>/projects/<id>/rooms/`), a project
+  room runs its CLI participants in the project folder without writing into
+  it, a room of a missing project does not start and nothing is recreated,
+  and "No project" rooms behave as before (docs/plans/projects.md D19, D26,
+  T11). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/main/room.ts
+  src/main/room-drivers.ts
+  src/main/room-service.ts
+  src/main/room-archive.ts
+  src/main/index.ts
+  src/main/projects/service.ts
+  src/shared/ipc.ts
+  src/shared/room-view.ts
+  src/shared/sidebar-tree.ts
+  src/renderer/room-tree.ts
+  src/renderer/room-pane.ts
+  src/renderer/project-tree.ts
+  AGENTS.md
+  src/main/room-context.ts
+  src/main/room-folders.ts
+  src/main/ipc-handlers.ts
+  src/preload/index.ts
+  src/renderer/content.ts
+  src/renderer/index.ts
+  src/renderer/sidebar.ts
+  src/shared/room-model.ts
+  tests/full/projects-room.spec.ts
+  tests/integration/helpers/test-room.ts
+  tests/integration/openrouter-room.test.ts
+  tests/integration/room-archive.test.ts
+  tests/integration/room-projects.test.ts
+  tests/integration/room-wiring.test.ts
+  tests/integration/room.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/unit/room-archive.test.ts
+  tests/unit/room-tree.test.ts
+  tests/unit/room-view.test.ts
+  tests/unit/sidebar-tree.test.ts
+  tests/unit/site-recorder.test.ts
+
+SCOPE
+  + main/room-context.ts: `RoomRunContext { roomsDir, projectId, cwdFor }`, `FolderNames`, the "No project" and project contexts, `projectRoomsDir`
+  + main/room-folders.ts: room id -> rooms folder index over "No project" and every project folder, `stopInterrupted` per folder
+  + main/room.ts: `Room.start(config, from, ctx)`, the driver factory receives the participant's `{ path, create }`
+  + main/room-drivers.ts: a folder is created only when told (`create`), no `cwd` dependency, `FolderNames` moved out
+  + main/room-service.ts: `newRoom(projectId)`, snapshot project, list over every folder, start refuses a missing project via `folderOf`, open/rename/delete/continue by the index
+  + main/room-archive.ts: `listRecords` tags the project id
+  + main/projects/service.ts: `ids()`
+  + main/index.ts, ipc-handlers.ts, preload: wiring, `room:new { projectId }`
+  + shared: `isProjectId` parser for `room:new`, `RoomSnapshot.projectId`, `RoomListItem.projectId`, `RoomTreeRow.projectId`, rooms inside project nodes of the sidebar tree
+  + renderer: "New room", the room list and open/delete inside a project node (T08's Rooms stub removed)
+  + tests: room-projects.test.ts (new), ipc-validate, room-view, room-tree, sidebar-tree, shapes forced by the new ctx parameter in room.test.ts, room-wiring.test.ts, room-archive.test.ts, openrouter-room.test.ts, site-recorder.test.ts
+  − CLI profile and isolation flags (09-project-room-profile), seat lookup and the one-run refusal naming (10-room-seats), Save plan (11-save-plan), rename of a project's room from its node
+
+OUTCOME
+  tests/integration/room-projects.test.ts passes; each behaviour of it was red before the change.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/integration/room-projects.test.ts tests/integration/room.test.ts tests/integration/room-wiring.test.ts tests/integration/room-archive.test.ts exits 0
+  3. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

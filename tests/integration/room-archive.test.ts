@@ -30,6 +30,7 @@ function service(driverFor: DriverFactory, extra: { debugRoot?: string; trash?: 
   const seen: RoomEvent[] = [];
   const room = new RoomService({
     roomsDir: path.join(dir, 'rooms'),
+    userData: dir,
     debugRoot: extra.debugRoot,
     trash: extra.trash ?? (async () => undefined),
     driverFor,

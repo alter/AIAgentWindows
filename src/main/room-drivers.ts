@@ -1,7 +1,6 @@
 // room-drivers.ts
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-import path from 'node:path';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomTurnSpawn } from '../shared/cli-args';
 import { stripEntryMarkerLines } from '../shared/room-history';
@@ -11,6 +10,7 @@ import type { OutputSnapshot } from '../shared/output-buffer';
 import { runCliTurn } from './cli-turn';
 import type { ChatInput, ChatOptions } from './openrouter/chat';
 import type { DriverFactory, ParticipantDriver, TurnRequest } from './room';
+import type { RoomCwd } from './room-context';
 import type { SiteLogger } from './site-log-file';
 import { SiteAdapterError, type NetWatch, type PageRunner, type SiteAdapter } from './site-adapters/types';
 import { waitUntilReady } from './site-adapters/ready';
@@ -46,7 +46,6 @@ export interface OpenRouterTurns {
 }
 
 export interface RoomDriverDeps {
-  cwd: string;
   sharedDir: string;
   platform: string;
   loginShell?: boolean;
@@ -64,21 +63,6 @@ function withoutMarkers(reply: string | null): string | null {
   return shown === '' ? null : shown;
 }
 
-class FolderNames {
-  private readonly names = new Map<string, string>();
-  private readonly counts = new Map<string, number>();
-
-  of(participant: RoomParticipant): string {
-    const known = this.names.get(participant.id);
-    if (known !== undefined) return known;
-    const next = (this.counts.get(participant.kind) ?? 0) + 1;
-    this.counts.set(participant.kind, next);
-    const name = `${participant.kind}-${next}`;
-    this.names.set(participant.id, name);
-    return name;
-  }
-}
-
 interface CliSession {
   id: string | null;
   started: boolean;
@@ -93,12 +77,12 @@ class CliDriver implements ParticipantDriver {
     private readonly deps: RoomDriverDeps,
     private readonly timing: RoomTiming,
     private readonly running: Set<AbortController>,
-    private readonly folder: string,
+    private readonly cwd: RoomCwd,
   ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
-    const cwd = path.join(this.deps.cwd, this.folder);
-    await mkdir(cwd, { recursive: true });
+    const { path: cwd, create } = this.cwd;
+    if (create) await mkdir(cwd, { recursive: true });
     const session = this.session ?? { id: this.kind === 'claude' ? randomUUID() : null, started: false };
     const own = new AbortController();
     this.running.add(own);
@@ -338,13 +322,8 @@ export interface RoomDrivers {
 export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const timing: RoomTiming = { ...DEFAULT_ROOM_TIMING, ...deps.timing };
   const running = new Set<AbortController>();
-  let folders = { runId: '', names: new FolderNames() };
-  const foldersOf = (runId: string): FolderNames => {
-    if (folders.runId !== runId) folders = { runId, names: new FolderNames() };
-    return folders.names;
-  };
-  const factory: DriverFactory = async (participant, runId) => {
-    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, foldersOf(runId).of(participant));
+  const factory: DriverFactory = async (participant, _runId, cwd) => {
+    if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, cwd);
     if (participant.kind === 'openrouter') return new OpenRouterDriver(participant, deps.openrouter, running);
     const seat = deps.siteFor(participant);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);

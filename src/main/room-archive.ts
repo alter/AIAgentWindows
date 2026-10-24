@@ -56,16 +56,17 @@ function firstPromptLine(record: RoomRecord): string {
   return line.slice(0, FIRST_PROMPT_CHARS);
 }
 
-export async function listRecords(roomsDir: string): Promise<RoomListItem[]> {
+export async function listRecords(roomsDir: string, projectId: string | null = null): Promise<RoomListItem[]> {
   const readable: Extract<RoomListItem, { unreadable: false }>[] = [];
   const unreadable: RoomListItem[] = [];
   for (const id of await recordIds(roomsDir)) {
     const record = await readRecord(roomsDir, id);
     if (record === null) {
-      unreadable.push({ id, unreadable: true });
+      unreadable.push({ id, unreadable: true, projectId });
     } else {
       readable.push({
         id,
+        projectId,
         unreadable: false,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,

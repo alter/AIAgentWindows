@@ -116,6 +116,10 @@ export interface SiteStateEvent {
   canGoForward: boolean;
 }
 
+export interface RoomNewRequest {
+  projectId: string | null;
+}
+
 export interface RoomStartRequest {
   config: RoomConfig;
   continueId?: string;
@@ -143,7 +147,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomOpen]: { id: string };
   [INVOKE_CHANNELS.roomRename]: { id: string; title: string };
   [INVOKE_CHANNELS.roomDelete]: { id: string };
-  [INVOKE_CHANNELS.roomNew]: undefined;
+  [INVOKE_CHANNELS.roomNew]: RoomNewRequest;
   [INVOKE_CHANNELS.roomSelect]: undefined;
   [INVOKE_CHANNELS.roomStart]: RoomStartRequest;
   [INVOKE_CHANNELS.roomStop]: undefined;
@@ -201,7 +205,7 @@ export interface AppApi {
   roomOpen(id: string): Promise<RoomOpenResult>;
   roomRename(id: string, title: string): Promise<boolean>;
   roomDelete(id: string): Promise<boolean>;
-  roomNew(): Promise<boolean>;
+  roomNew(projectId: string | null): Promise<boolean>;
   roomSelect(): Promise<void>;
   roomStart(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult>;
   roomStop(): Promise<void>;
@@ -265,6 +269,12 @@ function withId<T extends object>(payload: unknown, build: (record: Record<strin
   if (!isRecord(payload)) return null;
   const id = parseId(payload['id']);
   return id === null ? null : build(payload, id);
+}
+
+function parseRoomNew(payload: unknown): RoomNewRequest | null {
+  if (!isRecord(payload)) return null;
+  const projectId = payload['projectId'];
+  return projectId === null || isProjectId(projectId) ? { projectId } : null;
 }
 
 function parseRoomStart(payload: unknown): RoomStartRequest | null {
@@ -345,7 +355,7 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   },
   [INVOKE_CHANNELS.roomDelete]: (payload) =>
     isRecord(payload) && isRoomId(payload['id']) ? { id: payload['id'] } : null,
-  [INVOKE_CHANNELS.roomNew]: noPayload,
+  [INVOKE_CHANNELS.roomNew]: parseRoomNew,
   [INVOKE_CHANNELS.roomSelect]: noPayload,
   [INVOKE_CHANNELS.roomStart]: parseRoomStart,
   [INVOKE_CHANNELS.roomStop]: noPayload,

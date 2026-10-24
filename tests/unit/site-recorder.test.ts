@@ -85,7 +85,6 @@ function request(debugSites: boolean, overrides: Partial<TurnRequest> = {}): Tur
 
 async function driverFor(adapter: SiteAdapter, runner: PageRunner, debugRoot: string | undefined, extra: { prepare?: () => Promise<void> } = {}) {
   const drivers = createRoomDrivers({
-    cwd: root,
     sharedDir: root,
     platform: 'darwin',
     envFor: () => ({}),
@@ -94,7 +93,7 @@ async function driverFor(adapter: SiteAdapter, runner: PageRunner, debugRoot: st
     siteLog: (site, event, fields) => lines.push([site, event, fields]),
     debugRoot,
   });
-  return drivers.factory(PARTICIPANT, 'run-1');
+  return drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false });
 }
 
 const quiet: PageRunner = { run: () => Promise.resolve('') };
@@ -175,7 +174,6 @@ describe('site debug recording of a turn', () => {
     const adapter = scripted();
     adapter.composerReady = () => Promise.resolve(false);
     const drivers = createRoomDrivers({
-      cwd: root,
       sharedDir: root,
       platform: 'darwin',
       envFor: () => ({}),
@@ -183,7 +181,7 @@ describe('site debug recording of a turn', () => {
       timing: { readyMs: 30, readyPollMs: 5 },
       debugRoot,
     });
-    const driver = await drivers.factory(PARTICIPANT, 'run-1');
+    const driver = await drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false });
     await expect(driver.turn(request(true))).rejects.toMatchObject({ code: 'not-ready' });
     const meta = JSON.parse(await readFile(path.join(await turnDir(debugRoot), 'meta.json'), 'utf8'));
     expect(meta).toMatchObject({ outcome: 'failed', code: 'not-ready' });

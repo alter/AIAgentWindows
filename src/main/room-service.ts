@@ -1,13 +1,16 @@
 // room-service.ts
 import path from 'node:path';
 import { Room, type DriverFactory, type RoomContinuation } from './room';
+import { noProjectContext, projectContext, type RoomRunContext } from './room-context';
+import { RoomFolders } from './room-folders';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
-import { listRecords, readRecord, stopInterrupted, trashRoom, writeRecord, type TrashItem } from './room-archive';
+import { readRecord, trashRoom, writeRecord, type TrashItem } from './room-archive';
 import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { OpenRouterModels } from '../shared/ipc';
 import { OPENROUTER_KIND } from '../shared/room-model';
 import type { OpenRouterStatus } from '../shared/openrouter';
+import type { FolderLookup } from '../shared/projects';
 import { openrouterProblem } from './openrouter/gate';
 import type { RoomTerminals } from './room-drivers';
 import {
@@ -28,8 +31,15 @@ export interface OpenRouterGate {
   models(refresh: boolean): Promise<OpenRouterModels>;
 }
 
+export interface RoomProjects {
+  ids(): readonly string[];
+  folderOf(id: string): Promise<FolderLookup>;
+}
+
 export interface RoomServiceDeps {
   roomsDir: string;
+  userData: string;
+  projects?: RoomProjects;
   debugRoot?: string;
   trash: TrashItem;
   driverFor: DriverFactory;
@@ -46,10 +56,11 @@ export interface RoomServiceDeps {
 export class RoomService {
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
   private readonly room: Room;
+  private readonly folders: RoomFolders;
 
   constructor(private readonly deps: RoomServiceDeps) {
+    this.folders = new RoomFolders(deps.roomsDir, deps.userData, () => deps.projects?.ids() ?? []);
     this.room = new Room({
-      roomsDir: deps.roomsDir,
       driverFor: deps.driverFor,
       now: deps.now,
       newId: deps.newId,
@@ -69,7 +80,7 @@ export class RoomService {
   }
 
   async init(): Promise<void> {
-    await stopInterrupted(this.deps.roomsDir).catch(() => []);
+    await this.folders.stopInterrupted();
     const listed = await this.list();
     const latest = listed.find((item) => !item.unreadable);
     if (latest !== undefined) await this.open(latest.id).catch(() => undefined);
@@ -77,7 +88,7 @@ export class RoomService {
 
   async list(): Promise<RoomListItem[]> {
     try {
-      return await listRecords(this.deps.roomsDir);
+      return await this.folders.scan();
     } catch {
       return [];
     }
@@ -86,17 +97,30 @@ export class RoomService {
   async open(id: string): Promise<RoomOpenResult> {
     if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
     if (!isRoomId(id)) return { ok: false, error: 'invalid room id' };
-    const record = await readRecord(this.deps.roomsDir, id);
+    if (!this.folders.has(id)) await this.list();
+    const projectId = this.folders.projectOf(id);
+    const record = await readRecord(this.folders.dirOf(projectId), id);
     if (record === null) return { ok: false, error: 'the room cannot be read' };
     if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
-    this.snapshot = snapshotFromRecord(record, this.historyPath(id));
+    this.snapshot = snapshotFromRecord(record, this.historyPath(id, projectId), projectId);
     return { ok: true, snapshot: this.snapshot, form: formFromRecord(record) };
   }
 
-  newRoom(): boolean {
-    if (this.room.isRunning()) return false;
-    this.snapshot = emptyRoomSnapshot();
+  newRoom(projectId: string | null): boolean {
+    if (this.room.isRunning() || (projectId !== null && !this.folders.knows(projectId))) return false;
+    this.snapshot = emptyRoomSnapshot(projectId);
     return true;
+  }
+
+  closeProject(projectId: string): void {
+    this.folders.forgetProject(projectId);
+    if (this.snapshot.projectId === projectId) this.snapshot = emptyRoomSnapshot();
+  }
+
+  private async context(projectId: string | null): Promise<{ ok: true; ctx: RoomRunContext } | { ok: false; error: string }> {
+    if (projectId === null) return { ok: true, ctx: noProjectContext(this.deps.roomsDir) };
+    const found = (await this.deps.projects?.folderOf(projectId)) ?? { ok: false as const, error: 'The project no longer exists.' };
+    return found.ok ? { ok: true, ctx: projectContext(this.folders.dirOf(projectId), projectId, found.folder) } : found;
   }
 
   private async openrouterProblem(config: RoomConfig): Promise<string | null> {
@@ -109,8 +133,12 @@ export class RoomService {
     try {
       const problem = await this.openrouterProblem(config);
       if (problem !== null) return { ok: false, error: problem };
+      const projectId = continueId === undefined ? this.snapshot.projectId : this.folders.projectOf(continueId);
+      const made = await this.context(projectId);
+      if (!made.ok) return made;
       const from = continueId === undefined ? undefined : await this.continuation(continueId, resume === true ? config : undefined);
-      const run = this.room.start(config, from);
+      const run = this.room.start(config, from, made.ctx);
+      this.folders.remember(run.roomId, projectId);
       void run.done.catch(() => undefined);
       const debugDir = config.debugSites && this.deps.debugRoot !== undefined ? path.join(this.deps.debugRoot, run.roomId) : null;
       return { ok: true, roomId: run.roomId, historyPath: run.historyPath, debugDir };
@@ -119,13 +147,13 @@ export class RoomService {
     }
   }
 
-  private historyPath(id: string): string {
-    return path.join(this.deps.roomsDir, `${id}.md`);
+  private historyPath(id: string, projectId: string | null): string {
+    return path.join(this.folders.dirOf(projectId), `${id}.md`);
   }
 
   private async continuation(id: string, resumeWith?: RoomConfig): Promise<RoomContinuation> {
     if (this.snapshot.roomId !== id) throw new Error('only the opened room can be continued');
-    const record = await readRecord(this.deps.roomsDir, id);
+    const record = await readRecord(this.folders.dirOfRoom(id), id);
     if (record === null) throw new Error('the room cannot be read');
     const base = { roomId: id, entries: record.entries, nonce: record.nonce, createdAt: record.createdAt, ...(record.title === undefined ? {} : { title: record.title }) };
     if (resumeWith === undefined) return base;
@@ -139,11 +167,12 @@ export class RoomService {
     const clean = parseRoomTitle(title);
     if (!isRoomId(id) || clean === null) return false;
     if (this.room.retitle(id, clean)) return true;
-    const record = await readRecord(this.deps.roomsDir, id);
+    const dir = this.folders.dirOfRoom(id);
+    const record = await readRecord(dir, id);
     if (record === null) return false;
     if (this.room.retitle(id, clean)) return true;
     try {
-      await writeRecord(this.deps.roomsDir, { ...record, title: clean });
+      await writeRecord(dir, { ...record, title: clean });
       return true;
     } catch {
       return false;
@@ -153,11 +182,12 @@ export class RoomService {
   async delete(id: string): Promise<boolean> {
     if (!isRoomId(id) || this.room.isRunning()) return false;
     try {
-      await trashRoom(this.deps.roomsDir, id, this.deps.trash, this.deps.debugRoot);
+      await trashRoom(this.folders.dirOfRoom(id), id, this.deps.trash, this.deps.debugRoot);
     } catch {
       return false;
     }
-    if (this.snapshot.roomId === id) this.snapshot = emptyRoomSnapshot();
+    this.folders.forget(id);
+    if (this.snapshot.roomId === id) this.snapshot = emptyRoomSnapshot(this.snapshot.projectId);
     return true;
   }
 

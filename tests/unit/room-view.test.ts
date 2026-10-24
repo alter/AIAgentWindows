@@ -89,6 +89,7 @@ describe('applyRoomEvent', () => {
   it('starts idle and empty', () => {
     expect(emptyRoomSnapshot()).toEqual({
       phase: 'idle',
+      projectId: null,
       roomId: null,
       historyPath: null,
       entries: [],
@@ -100,6 +101,13 @@ describe('applyRoomEvent', () => {
       round: 0,
       chips: {},
     });
+  });
+
+  it('carries the project of the snapshot through a started run and the events after it', () => {
+    expect(emptyRoomSnapshot('p1').projectId).toBe('p1');
+    expect(run([STARTED]).projectId).toBeNull();
+    const events: RoomEvent[] = [STARTED, { type: 'entry', roomId: 'r1', entry: entry('prompt', 'x') }];
+    expect(events.reduce(applyRoomEvent, emptyRoomSnapshot('p1'))).toMatchObject({ projectId: 'p1', roomId: 'r1', phase: 'running' });
   });
 
   it('started resets the feed and marks the run running', () => {
@@ -737,6 +745,8 @@ describe('snapshot from a record', () => {
   it('carries the id, history path, status as phase, entries and plan of the record', () => {
     const entries = [prompt(), reply('a', 'one', 1), reply('b', 'two', 1), final('a', 'end')];
     const snapshot = snapshotFromRecord(record(entries, 'done'), '/h/r1.md');
+    expect(snapshot.projectId).toBeNull();
+    expect(snapshotFromRecord(record(entries, 'done'), '/h/r1.md', 'p1')).toEqual({ ...snapshot, projectId: 'p1' });
     expect(snapshot).toMatchObject({ phase: 'done', roomId: 'r1', historyPath: '/h/r1.md', entries, plan: roomPlan({ ...CONFIG, prompt: '' }), paused: [], running: [] });
   });
 

@@ -265,7 +265,7 @@ describe('listRecords', () => {
     await writeRecord(dir, record({ id: 'mid', updatedAt: 200, entries: [entry({ kind: 'reply', text: 'r' }), entry({ text: 'later prompt' })] }));
     const list = await listRecords(dir);
     expect(list.map((item) => item.id)).toEqual(['new', 'mid', 'old']);
-    expect(list[0]).toEqual({ id: 'new', unreadable: false, createdAt: 1000, updatedAt: 300, status: 'stopped', firstPrompt: 'newer', title: 'newer' });
+    expect(list[0]).toEqual({ id: 'new', projectId: null, unreadable: false, createdAt: 1000, updatedAt: 300, status: 'stopped', firstPrompt: 'newer', title: 'newer' });
     expect(list[1]).toMatchObject({ firstPrompt: 'later prompt' });
     expect(list[2]).toMatchObject({ firstPrompt: 'older' });
   });
@@ -298,8 +298,18 @@ describe('listRecords', () => {
     await writeFile(file, '', 'utf8');
     await truncate(file, MAX_RECORD_BYTES + 1);
     const list = await listRecords(dir);
-    expect(list).toEqual([{ id: 'huge', unreadable: true }]);
+    expect(list).toEqual([{ id: 'huge', projectId: null, unreadable: true }]);
     expect(await readRecord(dir, 'huge')).toBeNull();
+  });
+
+  it('tags every item, readable or not, with the project it is listed for', async () => {
+    await writeFile(path.join(dir, 'broken.json'), '{', 'utf8');
+    await writeRecord(dir, record({ id: 'ok', updatedAt: 100 }));
+    const list = await listRecords(dir, 'p-1');
+    expect(list.map((item) => [item.id, item.projectId])).toEqual([
+      ['ok', 'p-1'],
+      ['broken', 'p-1'],
+    ]);
   });
 
   it('ignores temp files, history files, directories and names that are not room ids', async () => {

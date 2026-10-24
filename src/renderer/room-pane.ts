@@ -164,9 +164,9 @@ export class RoomPane {
     await this.openRoom(id);
   }
 
-  async newFromTree(): Promise<void> {
+  async newFromTree(projectId: string | null): Promise<void> {
     await api.roomSelect();
-    await this.onNewRoom();
+    await this.onNewRoom(projectId);
   }
 
   async renameFromTree(id: string, title: string): Promise<void> {
@@ -177,6 +177,7 @@ export class RoomPane {
 
   async deleteFromTree(id: string): Promise<void> {
     const next = nextRoomAfterDelete(this.listed, id);
+    const projectId = this.listed.find((item) => item.id === id)?.projectId ?? null;
     const wasOpen = this.openedId === id;
     const deleted = await api.roomDelete(id).catch(() => false);
     if (!deleted) {
@@ -187,7 +188,7 @@ export class RoomPane {
     if (wasOpen) this.openedId = null;
     await this.refreshList();
     if (!wasOpen) return;
-    if (next === null) await this.onNewRoom();
+    if (next === null) await this.onNewRoom(projectId);
     else await this.openRoom(next);
   }
 
@@ -220,8 +221,8 @@ export class RoomPane {
     this.publishRooms();
   }
 
-  private async onNewRoom(): Promise<void> {
-    if (!(await api.roomNew())) {
+  private async onNewRoom(projectId: string | null): Promise<void> {
+    if (!(await api.roomNew(projectId))) {
       this.message.textContent = 'A run is in progress: stop it first.';
       return;
     }
