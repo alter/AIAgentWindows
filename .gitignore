@@ -7,3 +7,7 @@ reports/
 coverage/
 __pycache__/
 test-results/
+tasks/**/flaky/
+**/FASTRUN-*
+**/FULLRUN-*
+**/junit*.xml
