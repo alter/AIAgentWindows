@@ -68,6 +68,7 @@ export class ProjectTree {
   private agentMenuProject: string | null = null;
   private editing: Editing | null = null;
   private rebuilding = false;
+  private revealedId: string | null = null;
   private addMenuOpen = false;
 
   constructor(
@@ -353,6 +354,14 @@ export class ProjectTree {
     this.list.replaceChildren(...this.nodes.map((node) => this.item(node)));
     this.rebuilding = false;
     if (this.editing !== null) this.focusInput();
+    this.revealSelected();
+  }
+
+  private revealSelected(): void {
+    const selected = this.list.querySelector<HTMLElement>('.agent-item.selected');
+    const id = selected?.dataset['agentId'] ?? null;
+    if (id !== null && id !== this.revealedId) selected?.scrollIntoView({ block: 'nearest' });
+    this.revealedId = id;
   }
 
   private item(node: TreeNode): HTMLLIElement {

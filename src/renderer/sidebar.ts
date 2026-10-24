@@ -79,6 +79,7 @@ export class Sidebar {
   private menuOpen = false;
   private editing: Editing | null = null;
   private rebuilding = false;
+  private revealedId: string | null = null;
 
   constructor(private readonly handlers: SidebarHandlers) {
     this.rooms = new RoomTree({
@@ -252,6 +253,14 @@ export class Sidebar {
     }
     this.rebuilding = false;
     if (this.editing !== null) this.focusInput(false);
+    this.revealSelected();
+  }
+
+  private revealSelected(): void {
+    const selected = this.list.querySelector<HTMLElement>('.agent-item.selected');
+    const id = selected?.dataset['agentId'] ?? null;
+    if (id !== null && id !== this.revealedId) selected?.scrollIntoView({ block: 'nearest' });
+    this.revealedId = id;
   }
 
   private input(editing: Editing): HTMLInputElement {

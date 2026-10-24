@@ -29,3 +29,25 @@ Received:    376.234375
 ```
 
 Fix: `popup.ts` `viewportWidth(popup)` is the right edge of the popup's enclosing `.sidebar` when it has one, else `window.innerWidth`; `placePopup` already clamps left to `viewport.width - margin - size.width`, so no helper in `src/shared` changed. The spec asserts geometry only (menu right edge <= sidebar right edge) for the Agents "+" menu and the project "..." menu; it passes after the fix together with `popup-placement.spec.ts`. The sidebar's own `.add-menu` (sidebar.ts, `showPopup` with a width, inside `.sidebar`) is covered by `popup-placement.spec.ts` and stays inside the window and the sidebar.
+
+## Post-close fix: several OpenRouter agents
+
+Owner's report: "only 1 OpenRouter agent can be added; several must be addable". Authorization recorded in the OpenRouter row of `docs/PROJECT.md`.
+
+Checked first, no one-per-kind rule exists: `AgentController.add` (src/main/agent-controller.ts) creates `createOpenRouterAgent()` with a fresh `randomUUID()` and pushes it; `parseAgent` (src/shared/agents.ts) has no per-kind check; `content.ts renderChats` keys panes by agent id; conversations are `<agentId>.json` (shared or per project); Room rows use `nextParticipantId` (`openrouter`, `openrouter-2`) and `parseParticipants` limits only the site kinds. The owner's `state.json` (read-only look) held two OpenRouter agents of project `algo-trade` created 12 s apart, so both adds had worked. A scripted run (two and three agents in "No project", two in a project, restart, click between them) behaved correctly: separate model, separate conversation, persisted.
+
+Root cause: `.projects` in `src/renderer/styles.css` has `max-height: 40vh; overflow-y: auto`, and `ProjectTree.render` never scrolled to the new selected agent, so with a project holding Claude, Codex, ChatGPT, Grok, DeepSeek the added OpenRouter rows lay below the visible part with no visible scrollbar. Evidence, the owner's state copied to a scratch profile at 1200x768: `.projects` visible 38..345 px, scrollHeight 421 vs clientHeight 307, agent rows DeepSeek 341..379, OpenRouter 379..417 and 417..455 (all below 345); the screenshot shows the list ending at Grok. The added agent was selected and its pane shown, but its sidebar row was out of sight, which reads as "only one can be added".
+
+Red on HEAD eef4e28 (`tests/full/openrouter-many.spec.ts`, project test, selected row must lie inside `.projects`):
+
+```
+Error: expect(received).toBe(expected) // Object.is equality
+Expected: true
+Received: false
+Call Log:
+- Timeout 15000ms exceeded while waiting on the predicate
+> await expect.poll(() => selectedRowIsVisible(page, '.projects')).toBe(true);
+1 failed
+```
+
+Fix: `ProjectTree.revealSelected()` and `Sidebar.revealSelected()` call `scrollIntoView({ block: 'nearest' })` on the selected agent row when the selected id changed since the last render (renames and other re-renders do not move the scroll). The first spec (three OpenRouter agents in "No project", each with its own model and question, restart, own log per agent) was green on HEAD: it documents the requirement, it caught nothing.
