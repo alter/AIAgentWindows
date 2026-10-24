@@ -71,3 +71,22 @@ Root cause: a project node builds its sections in `ProjectTree.section` (`div.pr
 Fix: reuse the project section CSS rather than a second copy. `RoomTree` and the Agents header in `Sidebar` carry the same classes and `data-project-section` attribute as a project section (`project-section`, `-head`, `-toggle`, `-title`, `-list`, `project-agent-add`), `.no-project-body` gets the 8 px inset of `.projects`, the duplicated `.rooms-*` header, toggle, add and `.sidebar-header` rules were deleted, `.agent-list` and `.rooms-list` keep only scrolling. The class names the other specs select (`.add-button`, `.rooms-list`, `[data-room=...]`) stay. The loose Agents section got its own chevron and collapse (`collapsibleKey` accepts `agents`, `sidebarSections` marks it collapsible) so the chevron column matches; collapse state stays in renderer memory as before. The disabled "+" keeps the dashed outline (`.project-agent-add:disabled`).
 
 Existing unit assertions encoded the old rule and were adapted explicitly in `tests/unit/sidebar-tree.test.ts`: `sections[1]?.collapsible` is now `true`, and `refuses to collapse the agents list or an unknown key` became `refuses to collapse an unknown key`; a new test covers collapsing the loose Agents section. The spec asserts relative geometry only (section toggle and title offsets from the node's own chevron equal a project's, sections are descendants of the node) and that collapsing a section or the node hides the children.
+
+## Post-close fix: sidebar list height
+
+Owner's report (two screenshots): with a project expanded, the rest of the list (the next project, "No project") is not reachable, there is no scroll indicator, and below "No project" a large part of the sidebar is empty.
+
+Root cause: `.projects` in `src/renderer/styles.css` was `flex: none; max-height: 40vh; overflow-y: auto`, so the list never took more than 40 % of the window whatever space was free, and `.no-project` (`flex: 1 1 auto`) took the remainder; the list scrolled, but with the overlay scrollbars of macOS nothing showed that it did. Evidence on c6f681a, two projects, six agents in the first, window content 1100x900: `.projects` 38..398 (height 360 = 0.4 x 900), scrollHeight 567 vs clientHeight 360, `offsetWidth - clientWidth` = 0 (no scrollbar drawn), `.no-project` 398..732 with 335 px of height for its own content, bottom block (OpenRouter account, Theme) 732..900. At 500 px: `.projects` 200 px of 567, `.no-project` 94.5 px with scrollHeight 113.
+
+Red on HEAD c6f681a (`tests/full/sidebar-fill.spec.ts`, list height must exceed 40 % of the window when its content overflows):
+
+```
+Expected: > 361
+Received:   360
+> expect(tall.projectsHeight).toBeGreaterThan(tall.windowHeight * 0.4 + 1);
+1 failed
+```
+
+Fix (`src/renderer/styles.css`, `src/renderer/contrast-pairs.json`): `.projects` is `flex: 1 1 0; min-height: 0; overflow-y: auto` with no cap, so it takes exactly the height left between the header and the pinned bottom block, whatever its content; `.no-project` is `flex: 0 1 auto; min-height: 36px; max-height: 50%`, content height pinned above the bottom block, never more than half the sidebar, so the list always keeps a share. The scrollbar is drawn through `::-webkit-scrollbar` (track `--sidebar-bg`, thumb `--border`), which makes it permanent, not an overlay; the pair `--sidebar-bg` on `--border` was added to the contrast manifest (contrast_check 0 findings, both palettes). Decision: basis `0` instead of the requested `auto` for the list: with `auto` both areas shrank proportionally to their content, the list height moved with every added row by fractions of a pixel, and `openrouter-many.spec.ts` (selected row inside `.projects`) failed by 0.06 px (row bottom 440.5, list bottom 440.4375); with basis `0` the list height does not depend on its content. `revealSelected` is unchanged.
+
+Spec `tests/full/sidebar-fill.spec.ts` (two projects, six agents, window content resized to 900 and 500 px): at 900 the list is taller than 40 % of the window, scrolls and has a visible scrollbar; at 500 the list ends above the "No project" node, the node ends at the bottom block, the Theme block stays inside the window, the scrollbar is visible, the end of the list (last project node) and the last agent row are reachable by scrolling. Geometry only, no wording or exact pixels. `popup-sidebar.spec.ts`, `openrouter-many.spec.ts`, `no-project-tree.spec.ts`, `sidebar-resize.spec.ts`, `popup-placement.spec.ts` stay green.
