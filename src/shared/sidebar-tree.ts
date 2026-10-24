@@ -21,7 +21,7 @@ export function projectSectionKey(id: string, section: ProjectSectionName): stri
 }
 
 function collapsibleKey(state: SidebarTreeState, key: string): boolean {
-  if (key === ROOMS_SECTION || key === NO_PROJECT_NODE) return true;
+  if (key === ROOMS_SECTION || key === AGENTS_SECTION || key === NO_PROJECT_NODE) return true;
   const [prefix, id, section, extra] = key.split(':');
   if (prefix !== 'project' || id === undefined || extra !== undefined) return false;
   if (!state.projects.some((project) => project.id === id)) return false;
@@ -133,8 +133,8 @@ export function sidebarSections(state: SidebarTreeState): TreeSection[] {
     },
     {
       key: AGENTS_SECTION,
-      collapsible: false,
-      expanded: true,
+      collapsible: true,
+      expanded: !state.collapsed.includes(AGENTS_SECTION),
       busy: false,
       items: agentItems(state, (agent) => agent.projectId === undefined),
     },

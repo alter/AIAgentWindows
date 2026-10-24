@@ -59,11 +59,14 @@ export class Sidebar {
   private readonly noProjectBody = el('div', 'no-project-body');
   private readonly theme: ThemeSwitch;
   private readonly account = new OpenRouterAccount();
-  private readonly list = el('ul', 'agent-list');
+  private readonly list = el('ul', 'agent-list project-section-list');
   private readonly notice = el('p', 'sidebar-notice');
-  private readonly header = el('div', 'sidebar-header');
+  private readonly agentsSection = el('div', 'project-section');
+  private readonly agentsBody = el('div', 'project-section-body');
+  private readonly agentsToggle = el('button', 'project-section-toggle');
+  private readonly header = el('div', 'project-section-head');
   private readonly menu = el('div', 'add-menu');
-  private readonly addButton = el('button', 'add-button', '+');
+  private readonly addButton = el('button', 'add-button project-agent-add', '+');
   private readonly contextMenu = el('div', 'context-menu');
   private readonly renameItem = el('button', 'context-item', 'Rename');
   private readonly contextItem = el('button', 'context-item', 'Close agent');
@@ -102,7 +105,12 @@ export class Sidebar {
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     this.setupNoProject();
-    this.header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
+    this.agentsSection.dataset['projectSection'] = 'agents';
+    this.agentsToggle.type = 'button';
+    this.agentsToggle.setAttribute('aria-label', 'Agents');
+    this.agentsToggle.setAttribute('aria-expanded', 'true');
+    this.agentsToggle.addEventListener('click', () => this.dispatch({ type: 'toggle', key: AGENTS_SECTION }));
+    this.header.append(this.agentsToggle, el('span', 'project-section-title', 'Agents'), this.addButton);
     this.addButton.type = 'button';
     this.addButton.title = 'Add agent';
     this.addButton.setAttribute('aria-haspopup', 'menu');
@@ -114,7 +122,9 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.noProjectBody.append(this.rooms.element, this.header, this.notice, this.menu, this.list, this.confirm);
+    this.agentsBody.append(this.notice, this.menu, this.list, this.confirm);
+    this.agentsSection.append(this.header, this.agentsBody);
+    this.noProjectBody.append(this.rooms.element, this.agentsSection);
     this.element.append(this.projects.element, this.noProject, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -176,6 +186,9 @@ export class Sidebar {
     const expanded = nodes.find((node) => node.key === NO_PROJECT_NODE)?.expanded ?? true;
     this.noProjectBody.hidden = !expanded;
     this.noProjectToggle.setAttribute('aria-expanded', String(expanded));
+    const agentsExpanded = this.section(AGENTS_SECTION).expanded;
+    this.agentsBody.hidden = !agentsExpanded;
+    this.agentsToggle.setAttribute('aria-expanded', String(agentsExpanded));
     const rooms = this.section(ROOMS_SECTION);
     if (sameSection(rooms, this.roomsView)) return;
     this.roomsView = rooms;

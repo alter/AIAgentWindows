@@ -27,11 +27,11 @@ interface Editing {
 const MAX_TITLE_LENGTH = 80;
 
 export class RoomTree {
-  readonly element = el('section', 'rooms');
-  private readonly toggle = el('button', 'rooms-toggle');
-  private readonly title = el('button', 'rooms-title', '# Rooms');
-  private readonly add = el('button', 'rooms-add', '+');
-  private readonly list = el('ul', 'rooms-list');
+  readonly element = el('section', 'rooms project-section');
+  private readonly toggle = el('button', 'rooms-toggle project-section-toggle');
+  private readonly title = el('button', 'rooms-title project-section-title', '# Rooms');
+  private readonly add = el('button', 'rooms-add project-agent-add', '+');
+  private readonly list = el('ul', 'rooms-list project-section-list');
   private readonly menu = el('div', 'rooms-menu');
   private readonly renameItem = el('button', 'rooms-menu-item', 'Rename');
   private readonly deleteItem = el('button', 'rooms-menu-item', 'Delete');
@@ -47,6 +47,7 @@ export class RoomTree {
 
   constructor(private readonly handlers: RoomTreeHandlers) {
     this.element.dataset['room'] = 'tree';
+    this.element.dataset['projectSection'] = 'rooms';
     this.toggle.type = 'button';
     this.toggle.dataset['room'] = 'tree-toggle';
     this.toggle.setAttribute('aria-label', 'Rooms');
@@ -64,7 +65,7 @@ export class RoomTree {
     this.add.setAttribute('aria-label', 'New room');
     this.add.addEventListener('click', () => this.handlers.onNew());
     this.list.id = 'rooms-list';
-    const header = el('div', 'rooms-header');
+    const header = el('div', 'rooms-header project-section-head');
     header.append(this.toggle, this.title, this.add);
     this.menu.hidden = true;
     this.menu.setAttribute('role', 'menu');

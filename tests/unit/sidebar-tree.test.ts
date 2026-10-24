@@ -38,7 +38,7 @@ describe('sidebar tree', () => {
     expect(sections.every((item) => item.items.length === 0)).toBe(true);
     expect(sections[0]?.expanded).toBe(true);
     expect(sections[0]?.collapsible).toBe(true);
-    expect(sections[1]?.collapsible).toBe(false);
+    expect(sections[1]?.collapsible).toBe(true);
     expect(sections[1]?.expanded).toBe(true);
   });
 
@@ -81,6 +81,15 @@ describe('sidebar tree', () => {
     expect(section(idle, ROOMS_SECTION).items.map((item) => item.blocked)).toEqual([false, false]);
   });
 
+  it('collapses and expands the loose agents section and keeps the items', () => {
+    const state = withData();
+    const collapsed = reduceSidebarTree(state, { type: 'toggle', key: AGENTS_SECTION });
+    expect(section(collapsed, AGENTS_SECTION).expanded).toBe(false);
+    expect(section(collapsed, AGENTS_SECTION).items).toHaveLength(2);
+    expect(section(collapsed, ROOMS_SECTION).expanded).toBe(true);
+    expect(section(reduceSidebarTree(collapsed, { type: 'toggle', key: AGENTS_SECTION }), AGENTS_SECTION).expanded).toBe(true);
+  });
+
   it('collapses and expands the rooms section and keeps the items', () => {
     const state = withData();
     const collapsed = reduceSidebarTree(state, { type: 'toggle', key: ROOMS_SECTION });
@@ -90,9 +99,8 @@ describe('sidebar tree', () => {
     expect(section(expanded, ROOMS_SECTION).expanded).toBe(true);
   });
 
-  it('refuses to collapse the agents list or an unknown key', () => {
+  it('refuses to collapse an unknown key', () => {
     const state = withData();
-    expect(reduceSidebarTree(state, { type: 'toggle', key: AGENTS_SECTION })).toBe(state);
     expect(reduceSidebarTree(state, { type: 'toggle', key: 'missing' })).toBe(state);
   });
 

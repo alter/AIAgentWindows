@@ -241,51 +241,20 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .projects-menu-item { display: flex; align-items: center; gap: 10px; }
 .no-project { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .no-project > .project-row { padding: 2px var(--sidebar-inset-end) 2px 8px; }
-.no-project-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.no-project-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--sidebar-inset-end) 0 8px; }
+.no-project-body > .project-section[data-project-section="agents"] { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.project-section-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.project-section-body[hidden] { display: none; }
 .no-project-body[hidden] { display: none; }
 
 .room-section { padding: 4px 8px 0; }
-.rooms { display: flex; flex-direction: column; padding: 4px var(--sidebar-inset-end) 0 8px; }
-.rooms-header { display: flex; align-items: center; gap: 2px; padding: 4px 0; color: var(--text); }
-.rooms-toggle, .rooms-title {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-}
-.rooms-toggle { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; padding: 0; }
-.rooms-toggle::before {
-  content: "";
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid var(--text);
-  border-bottom: 2px solid var(--text);
-  transform: rotate(-45deg);
-}
-.rooms-toggle[aria-expanded="true"]::before { transform: rotate(45deg); }
-.rooms-title { flex: 1; padding: 4px 6px; font-weight: 700; text-align: left; }
-.rooms-toggle:hover, .rooms-title:hover { background: var(--sidebar-hover); }
-.rooms-add, .add-button {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--button-bg);
-  color: var(--on-fill);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-.rooms-add:hover, .add-button:hover { background: var(--sidebar-hover); color: var(--text); }
-.rooms-add:disabled { background: transparent; border: 1px dashed var(--text); color: var(--text); cursor: default; }
-.rooms-list { list-style: none; margin: 0; padding: 0 0 4px; max-height: 30vh; overflow-y: auto; }
+.rooms { display: flex; flex-direction: column; }
+.rooms-title { border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; cursor: pointer; }
+.rooms-title:hover { background: var(--sidebar-hover); }
+.project-agent-add:disabled { border: 1px dashed var(--text); cursor: default; }
+.rooms-list { max-height: 30vh; overflow-y: auto; }
 .rooms-list[hidden] { display: none; }
-.rooms-empty { padding: 6px 8px 6px 24px; font-style: italic; }
+.rooms-empty { padding: 2px 6px; font-style: italic; }
 .rooms-item {
   display: flex;
   align-items: center;
@@ -305,15 +274,6 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .rooms-item[aria-disabled="true"] { cursor: default; }
 .rooms-item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rooms-rename, .agent-rename { width: 100%; margin: 1px 0; padding: 4px 6px; }
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px var(--sidebar-inset-end) 8px 16px;
-  font-weight: 700;
-  color: var(--text);
-}
 
 .add-menu {
   z-index: 10;
@@ -341,8 +301,8 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 .menu-item:hover { background: var(--sidebar-hover); }
 
-.agent-list { list-style: none; margin: 0; padding: 4px 8px; overflow-y: auto; flex: 1; }
-.agent-empty { padding: 10px 8px; font-style: italic; }
+.agent-list { overflow-y: auto; flex: 1; }
+.agent-empty { padding: 2px 6px; font-style: italic; }
 .or-account { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--text); }
 .or-title { margin: 0 0 4px; font-size: inherit; font-weight: 700; }
 .or-state, .or-free, .or-notice { margin: 0 0 6px; overflow-wrap: anywhere; }
