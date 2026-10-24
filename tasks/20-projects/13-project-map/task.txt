@@ -1,0 +1,46 @@
+TASK: project map builder and its file sources
+
+GOAL
+  A project's map text can be built, once and bounded, from what `git ls-files`
+  or a directory walk lists: no denied name, no path that resolves outside the
+  project, no file over the size cap, no more paths than the cap (folded into
+  directories), and a hostile `.git/config` cannot run a command through the
+  runner's `ls-files` (docs/plans/projects.md D5, D11, D14, T16). No provider wiring
+  here. Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  AGENTS.md
+  docs/tech/git@2.50.1.md
+  src/shared/deny-list.ts
+  src/shared/project-map.ts
+  src/shared/simple-ignore.ts
+  src/main/projects/git.ts
+  src/main/projects/map-files.ts
+  tests/unit/project-map.test.ts
+  tests/unit/simple-ignore.test.ts
+  tests/integration/git-runner.test.ts
+  tests/integration/project-map-files.test.ts
+
+SCOPE
+  + shared/project-map.ts: `buildProjectMap` (pure: relative paths and file contents in, map text out; deny list, byte and path-count caps, directory folding, README / CLAUDE.md / AGENTS.md sections) and `isListablePath`
+  + shared/simple-ignore.ts: the top-level `.gitignore` reader for the walk (plain names, `dir/`, anchored, `*`, `?`; no negation, no engine)
+  + main/projects/git.ts: `GitRunner.listFiles` (`ls-files -z --cached --others --exclude-standard -- .` in the hardened runner)
+  + main/projects/map-files.ts: `collectProjectMap` (realpath of the project, ls-files or the directory walk, realpath containment and denied-target checks per path, bounded read of the documents)
+  + tests: project-map, simple-ignore, git-runner (ls-files argv, hostile `.git/config` seen red without `-c core.fsmonitor=false`), project-map-files (temp repository: `.env`, symlinks outside, oversized document, path count, folder inside a larger repository, no git)
+  − the project-map ContextProvider, the budget share, the recipients line, "Context sent" and the OpenRouter budget (14-room-map), any change to a room prompt, file or record
+
+OUTCOME
+  tests/unit/project-map.test.ts, tests/unit/simple-ignore.test.ts, tests/integration/git-runner.test.ts and tests/integration/project-map-files.test.ts pass; scripts/neutrality_check.py against the list of the previous commit reports 0 problems.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/project-map.test.ts tests/unit/simple-ignore.test.ts tests/integration/git-runner.test.ts tests/integration/project-map-files.test.ts exits 0
+  3. [fast] python3 scripts/neutrality_check.py 808c482 tasks/20-projects/13-project-map/vitest-list.json-before exits 0
+  4. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

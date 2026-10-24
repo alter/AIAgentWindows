@@ -1,4 +1,5 @@
 // git-runner.test.ts
+import { execFileSync } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -193,5 +194,90 @@ describe('with stub binaries', () => {
   it('does not run init when git is unavailable', async () => {
     const outcome = await new GitRunner(config({ gitBinary: path.join(dir, 'absent') })).init(dir);
     expect(outcome.ok).toBe(false);
+  });
+});
+
+describe('listing files', () => {
+  const recorded: { args: string[]; cwd?: string; maxBuffer?: number; env: NodeJS.ProcessEnv }[] = [];
+  const answer = (stdout: string): ExecFn => (file, args, options) => {
+    recorded.push({ args, cwd: options.cwd, maxBuffer: options.maxBuffer, env: options.env });
+    return Promise.resolve({ stdout: file.endsWith('xcode-select') ? `${dir}\n` : stdout, stderr: '' });
+  };
+
+  beforeEach(() => {
+    recorded.length = 0;
+  });
+
+  it('asks for tracked and untracked unignored files below the folder, NUL separated, through the hardened runner', async () => {
+    const hooksDir = path.join(dir, 'empty-hooks');
+    const runner = new GitRunner(config({ exec: answer('a.ts\0'), hooksDir }));
+    expect(await runner.listFiles('/proj')).toEqual({ ok: true, paths: ['a.ts'] });
+    const call = recorded.find((entry) => entry.args.includes('ls-files'));
+    expect(call?.args).toEqual([
+      '-c',
+      `core.hooksPath=${hooksDir}`,
+      '-c',
+      'core.fsmonitor=false',
+      'ls-files',
+      '-z',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '--',
+      '.',
+    ]);
+    expect(call?.cwd).toBe('/proj');
+    expect(call?.maxBuffer).toBeGreaterThan(1024 * 1024);
+    expect(call?.env['GIT_OPTIONAL_LOCKS']).toBe('0');
+    expect(call?.env['GIT_TERMINAL_PROMPT']).toBe('0');
+  });
+
+  it('keeps names as they are, drops empty entries and repeats', async () => {
+    const runner = new GitRunner(config({ exec: answer(' lead\0b c\0\0b c\0trail \n\0') }));
+    expect(await runner.listFiles('/proj')).toEqual({ ok: true, paths: [' lead', 'b c', 'trail \n'] });
+  });
+
+  it('reports an empty listing as no paths', async () => {
+    expect(await new GitRunner(config({ exec: answer('') })).listFiles('/proj')).toEqual({ ok: true, paths: [] });
+  });
+
+  it('passes on the refusal of a missing git and of a failed listing', async () => {
+    const missing = await new GitRunner(config({ gitBinary: path.join(dir, 'absent') })).listFiles(dir);
+    expect(missing.ok).toBe(false);
+    await stub('git', `case "$*" in *--version) echo "git version 2";; *) echo "fatal: not a git repository" >&2; exit 128;; esac`);
+    const failed = await new GitRunner(config({})).listFiles(dir);
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error).toContain('not a git repository');
+  });
+});
+
+describe('a repository whose .git/config is hostile', () => {
+  const git = defaultGitPaths(process.platform);
+  const realGit = (cwd: string, args: string[]): string =>
+    execFileSync(git.gitBinary, ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], { cwd, encoding: 'utf8', env: { PATH: process.env['PATH'], HOME: dir } });
+
+  it('never runs the core.fsmonitor command of the repository while listing files', async () => {
+    const repo = path.join(dir, 'hostile');
+    await mkdir(repo);
+    realGit(repo, ['init', '-q']);
+    await writeFile(path.join(repo, 'tracked.txt'), 'one\n', 'utf8');
+    realGit(repo, ['add', 'tracked.txt']);
+    await writeFile(path.join(repo, 'untracked.txt'), 'two\n', 'utf8');
+    const marker = path.join(dir, 'fsmonitor-ran');
+    const hook = path.join(dir, 'fsmonitor-hook.sh');
+    await writeFile(hook, `#!/bin/sh\necho "$@" >> ${marker}\n`, 'utf8');
+    await chmod(hook, 0o755);
+    const config = path.join(repo, '.git', 'config');
+    await writeFile(config, `${await readFile(config, 'utf8')}[core]\n\tfsmonitor = ${hook}\n`, 'utf8');
+
+    const control = realGit(repo, ['ls-files', '--cached', '--others', '--exclude-standard']);
+    expect(control.split('\n').filter((line) => line !== '').sort()).toEqual(['tracked.txt', 'untracked.txt']);
+    expect(await lines(marker)).not.toEqual([]);
+    await rm(marker, { force: true });
+
+    const runner = new GitRunner({ platform: process.platform, ...git, hooksDir: path.join(dir, 'empty-hooks'), env: { PATH: process.env['PATH'], HOME: dir } });
+    const listed = await runner.listFiles(repo);
+    expect(listed).toEqual({ ok: true, paths: expect.arrayContaining(['tracked.txt', 'untracked.txt']) });
+    expect(await lines(marker)).toEqual([]);
   });
 });
