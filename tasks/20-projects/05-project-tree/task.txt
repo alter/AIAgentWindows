@@ -1,0 +1,49 @@
+TASK: project nodes in the sidebar tree
+
+GOAL
+  The sidebar shows projects as nodes (project -> Rooms / Agents -> items,
+  collapsible) beside a "No project" node that holds today's rooms and agents
+  with every `data-room` / `data-agent` attribute kept. A project is created
+  from an existing folder (picker) or as a new folder (parent through the
+  picker, name typed in the sidebar), renamed, and deleted after a confirmation
+  inside the sidebar; a project whose folder is gone shows as missing
+  (docs/plans/projects.md D1, D9, D14, D21, AC2 tree and smoke parts, T08).
+  Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/shared/sidebar-tree.ts
+  src/shared/room-test-mode.ts
+  src/shared/projects.ts
+  src/renderer/project-tree.ts
+  src/renderer/sidebar.ts
+  src/renderer/index.ts
+  src/renderer/styles.css
+  src/main/index.ts
+  tests/unit/sidebar-tree.test.ts
+  tests/unit/room-test-mode.test.ts
+  tests/full/projects.spec.ts
+  AGENTS.md
+
+SCOPE
+  + shared/sidebar-tree.ts: project nodes, project sections, collapse keys, `sidebarNodes`, `sameNodes`
+  + renderer/project-tree.ts: Projects block (add menu, new-folder form, rename, delete confirmation, missing note), sidebar.ts wraps today's rooms and Agents in the "No project" node
+  + shared/room-test-mode.ts: `AIAW_TEST_FOLDER` accepts a JSON list of answers (in order, the last repeats, null cancels); main/index.ts picks through it
+  + tests/full/projects.spec.ts: the AC2 tree smoke
+  + AGENTS.md Map: the renderer row names project-tree.ts
+  − agents and rooms inside a project (the add flows are not offered in a project node) — 06-project-agents, 08-room-run-context
+  − any change of the main-process project service or its IPC — 04-projects-main
+
+OUTCOME
+  src/renderer/project-tree.ts exists and tests/full/projects.spec.ts passes.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/sidebar-tree.test.ts tests/unit/room-test-mode.test.ts exits 0
+  3. [full] electron-smoke exit 0, 71/71 or more (73 with tests/full/projects.spec.ts)
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

@@ -28,7 +28,9 @@ const sidebar = new Sidebar({
   onClose: (id) => void api.closeAgent(id),
   onRename: (id, title) => void api.renameAgent(id, title),
   onTheme: (choice) => void api.themeSet(choice),
+  projects: api,
 });
+sidebar.refreshProjects();
 content.watchRooms((state) => sidebar.setRooms(state));
 void api.layoutGet().then((stored) => {
   const resizer = new SidebarResizer(stored, (width) => void api.layoutSidebar(width));

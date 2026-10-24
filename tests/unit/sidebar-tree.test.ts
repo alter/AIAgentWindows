@@ -6,8 +6,13 @@ import {
   ROOMS_SECTION,
   initialSidebarTree,
   reduceSidebarTree,
+  sameNodes,
   sameSection,
+  sidebarNodes,
   sidebarSections,
+  NO_PROJECT_NODE,
+  projectNodeKey,
+  projectSectionKey,
   type SidebarTreeState,
 } from '../../src/shared/sidebar-tree';
 
@@ -102,5 +107,93 @@ describe('sidebar tree', () => {
     const agentsOnly = reduceSidebarTree(state, { type: 'agents', agents: [agent('z', 'Z')], selectedId: 'z', roomOpen: false });
     expect(sameSection(rooms, section(agentsOnly, ROOMS_SECTION))).toBe(true);
     expect(sameSection(section(state, AGENTS_SECTION), section(agentsOnly, AGENTS_SECTION))).toBe(false);
+  });
+});
+
+const view = (id: string, name: string, missing = false) => ({ id, name, folder: `/work/${name}`, missing });
+
+describe('sidebar tree with projects', () => {
+  it('has only the No project node before any project exists, holding the rooms and agents sections', () => {
+    const state = withData();
+    const nodes = sidebarNodes(state);
+    expect(nodes.map((node) => [node.key, node.projectId, node.label])).toEqual([[NO_PROJECT_NODE, null, 'No project']]);
+    expect(nodes[0]?.sections).toEqual(sidebarSections(state));
+    expect(nodes[0]?.expanded).toBe(true);
+  });
+
+  it('lists the projects in index order and the No project node last', () => {
+    const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p2', 'Beta'), view('p1', 'Alpha')] });
+    expect(sidebarNodes(state).map((node) => [node.key, node.projectId, node.label])).toEqual([
+      [projectNodeKey('p2'), 'p2', 'Beta'],
+      [projectNodeKey('p1'), 'p1', 'Alpha'],
+      [NO_PROJECT_NODE, null, 'No project'],
+    ]);
+  });
+
+  it('gives a project a Rooms and an Agents section, empty and expanded', () => {
+    const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    const node = sidebarNodes(state)[0];
+    expect(node?.sections.map((item) => [item.key, item.items.length, item.expanded, item.collapsible])).toEqual([
+      [projectSectionKey('p1', 'rooms'), 0, true, true],
+      [projectSectionKey('p1', 'agents'), 0, true, true],
+    ]);
+  });
+
+  it('shows a missing project as missing, with its folder and no sections', () => {
+    const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha', true), view('p2', 'Beta')] });
+    const [gone, here] = sidebarNodes(state);
+    expect([gone?.missing, gone?.folder, gone?.sections.length]).toEqual([true, '/work/Alpha', 0]);
+    expect([here?.missing, here?.sections.length]).toEqual([false, 2]);
+  });
+
+  it('keeps the rooms and agents of today in the No project node, unchanged by projects', () => {
+    const plain = withData();
+    const withProjects = reduceSidebarTree(plain, { type: 'projects', projects: [view('p1', 'Alpha')] });
+    expect(sidebarNodes(withProjects).at(-1)?.sections).toEqual(sidebarSections(plain));
+    expect(sidebarSections(withProjects)).toEqual(sidebarSections(plain));
+  });
+
+  it('collapses a project, one of its sections, and the No project node, each on its own', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
+    expect(sidebarNodes(state)[0]?.expanded).toBe(false);
+    expect(sidebarNodes(state).at(-1)?.expanded).toBe(true);
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectSectionKey('p1', 'agents') });
+    expect(sidebarNodes(state)[0]?.sections.map((item) => item.expanded)).toEqual([true, false]);
+    state = reduceSidebarTree(state, { type: 'toggle', key: NO_PROJECT_NODE });
+    expect(sidebarNodes(state).at(-1)?.expanded).toBe(false);
+    expect(sidebarNodes(state).at(-1)?.sections).toEqual(sidebarSections(state));
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
+    expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+  });
+
+  it('ignores a toggle for a project that is not in the tree or a section that does not exist', () => {
+    const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    expect(reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p9') })).toBe(state);
+    expect(reduceSidebarTree(state, { type: 'toggle', key: 'project:p1:other' })).toBe(state);
+    expect(reduceSidebarTree(state, { type: 'toggle', key: projectSectionKey('p9', 'rooms') })).toBe(state);
+  });
+
+  it('forgets the collapse of a project that left the tree', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
+    state = reduceSidebarTree(state, { type: 'projects', projects: [] });
+    expect(state.collapsed).toEqual([]);
+    state = reduceSidebarTree(state, { type: 'projects', projects: [view('p1', 'Alpha')] });
+    expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+  });
+
+  it('keeps the collapse of a project that stays', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha'), view('p2', 'Beta')] });
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p2') });
+    state = reduceSidebarTree(state, { type: 'projects', projects: [view('p2', 'Beta')] });
+    expect(sidebarNodes(state)[0]?.expanded).toBe(false);
+  });
+
+  it('tells changed nodes from unchanged ones', () => {
+    const base = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Alpha')] })))).toBe(true);
+    expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Renamed')] })))).toBe(false);
+    expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Alpha', true)] })))).toBe(false);
   });
 });

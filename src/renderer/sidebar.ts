@@ -2,14 +2,20 @@
 import { parseAgentTitle, MAX_AGENT_TITLE_CHARS, type AgentKind } from '../shared/agents';
 import type { AgentsSnapshot } from '../shared/ipc';
 import { pointAnchor, type PopupAnchor } from '../shared/popup-place';
+import type { ProjectView } from '../shared/projects';
 import {
   AGENTS_SECTION,
+  NO_PROJECT_LABEL,
+  NO_PROJECT_NODE,
   ROOMS_SECTION,
   initialSidebarTree,
   reduceSidebarTree,
+  sameNodes,
   sameSection,
+  sidebarNodes,
   sidebarSections,
   type SidebarTreeAction,
+  type TreeNode,
   type TreeItem,
   type TreeSection,
 } from '../shared/sidebar-tree';
@@ -18,6 +24,7 @@ import { el } from './dom';
 import { kindIcon } from './icons';
 import { hidePopup, showPopup } from './popup';
 import { OpenRouterAccount } from './openrouter-account';
+import { ProjectTree, type ProjectsApi } from './project-tree';
 import { RoomTree, type RoomTreeState } from './room-tree';
 import { ThemeSwitch } from './theme-switch';
 
@@ -32,6 +39,7 @@ export interface SidebarHandlers {
   onClose(id: string): void;
   onRename(id: string, title: string): void;
   onTheme(choice: ThemeChoice): void;
+  projects: ProjectsApi;
 }
 
 const MENU_INSET = 12;
@@ -53,6 +61,10 @@ interface Editing {
 export class Sidebar {
   readonly element = el('nav', 'sidebar');
   private readonly rooms: RoomTree;
+  private readonly projects: ProjectTree;
+  private readonly noProject = el('section', 'no-project');
+  private readonly noProjectToggle = el('button', 'project-toggle');
+  private readonly noProjectBody = el('div', 'no-project-body');
   private readonly theme: ThemeSwitch;
   private readonly account = new OpenRouterAccount();
   private readonly list = el('ul', 'agent-list');
@@ -69,6 +81,7 @@ export class Sidebar {
   private readonly confirmNo = el('button', 'confirm-no', 'Cancel');
   private tree = initialSidebarTree();
   private roomsView: TreeSection = this.section(ROOMS_SECTION);
+  private projectNodes: readonly TreeNode[] = [];
   private pendingId: string | null = null;
   private contextId: string | null = null;
   private menuOpen = false;
@@ -84,7 +97,12 @@ export class Sidebar {
       onDelete: (id) => this.handlers.onRoomDelete(id),
       onToggle: () => this.dispatch({ type: 'toggle', key: ROOMS_SECTION }),
     });
+    this.projects = new ProjectTree(this.handlers.projects, {
+      onList: (projects) => this.setProjects(projects),
+      onToggle: (key) => this.dispatch({ type: 'toggle', key }),
+    });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
+    this.setupNoProject();
     this.header.append(el('span', 'sidebar-title', 'Agents'), this.addButton);
     this.addButton.type = 'button';
     this.addButton.title = 'Add agent';
@@ -97,7 +115,8 @@ export class Sidebar {
     this.menu.setAttribute('role', 'menu');
     for (const option of ADD_OPTIONS) this.menu.append(this.menuItem(option.kind, option.label));
     this.setupClose();
-    this.element.append(this.rooms.element, this.header, this.notice, this.menu, this.list, this.confirm, this.contextMenu, this.account.element, this.theme.element);
+    this.noProjectBody.append(this.rooms.element, this.header, this.notice, this.menu, this.list, this.confirm);
+    this.element.append(this.projects.element, this.noProject, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);
@@ -123,6 +142,14 @@ export class Sidebar {
     this.theme.setChoice(choice);
   }
 
+  refreshProjects(): void {
+    this.projects.refresh();
+  }
+
+  setProjects(projects: readonly ProjectView[]): void {
+    this.dispatch({ type: 'projects', projects });
+  }
+
   setRooms(state: RoomTreeState): void {
     this.dispatch({ type: 'rooms', rows: state.rows, busy: state.busy });
   }
@@ -137,10 +164,34 @@ export class Sidebar {
 
   private dispatch(action: SidebarTreeAction): void {
     this.tree = reduceSidebarTree(this.tree, action);
+    const nodes = sidebarNodes(this.tree);
+    const projects = nodes.filter((node) => node.projectId !== null);
+    if (!sameNodes(projects, this.projectNodes)) {
+      this.projectNodes = projects;
+      this.projects.setNodes(projects);
+    }
+    const expanded = nodes.find((node) => node.key === NO_PROJECT_NODE)?.expanded ?? true;
+    this.noProjectBody.hidden = !expanded;
+    this.noProjectToggle.setAttribute('aria-expanded', String(expanded));
     const rooms = this.section(ROOMS_SECTION);
     if (sameSection(rooms, this.roomsView)) return;
     this.roomsView = rooms;
     this.rooms.setSection(rooms);
+  }
+
+  private setupNoProject(): void {
+    this.noProject.dataset['project'] = 'no-project';
+    this.noProjectToggle.type = 'button';
+    this.noProjectToggle.dataset['project'] = 'no-project-toggle';
+    this.noProjectToggle.setAttribute('aria-label', `Collapse ${NO_PROJECT_LABEL}`);
+    this.noProjectToggle.setAttribute('aria-expanded', 'true');
+    this.noProjectToggle.addEventListener('click', () => this.dispatch({ type: 'toggle', key: NO_PROJECT_NODE }));
+    const name = el('button', 'project-name', NO_PROJECT_LABEL);
+    name.type = 'button';
+    name.addEventListener('click', () => this.dispatch({ type: 'toggle', key: NO_PROJECT_NODE }));
+    const row = el('div', 'project-row');
+    row.append(this.noProjectToggle, name);
+    this.noProject.append(row, this.noProjectBody);
   }
 
   private section(key: string): TreeSection {

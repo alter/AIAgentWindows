@@ -7,7 +7,7 @@ import { partitionFor } from '../shared/agents';
 import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice } from '../shared/theme';
 import { applyRenderSwitches } from '../shared/render-switches';
-import { roomLoginShell, roomSiteOptions, roomTimingOverride } from '../shared/room-test-mode';
+import { roomLoginShell, roomSiteOptions, roomTimingOverride, testFolderPicker } from '../shared/room-test-mode';
 import { dockHidden, windowsVisible } from '../shared/window-visibility';
 import { EVENT_CHANNELS } from '../shared/ipc';
 import { openrouterBase, openrouterTestMode } from '../shared/openrouter';
@@ -53,9 +53,10 @@ let roomDrivers: RoomDrivers | null = null;
 let openrouter: OpenRouterService | null = null;
 let chats: OpenRouterChats | null = null;
 
+const testFolder = testFolderPicker(process.env);
+
 async function pickFolder(): Promise<string | null> {
-  const preset = process.env['AIAW_TEST_FOLDER'];
-  if (preset) return preset;
+  if (testFolder !== null) return testFolder();
   const options = { properties: ['openDirectory' as const] };
   const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
   return result.canceled ? null : (result.filePaths[0] ?? null);
