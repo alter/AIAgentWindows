@@ -342,4 +342,38 @@ describe('theme channels', () => {
       expect(isEventChannel(EVENT_CHANNELS.openrouterChatDelta)).toBe(true);
     });
   });
+
+  describe('projects channels', () => {
+    const PICK = '0b9a5d6e-3f43-4c1b-9d57-1f6b7a2c8e10';
+    const PROJECT = '3f2c9a1e-aaaa-4bbb-8ccc-1234567890ab';
+
+    it('list, pick-parent and add-existing take no payload', () => {
+      for (const channel of [INVOKE_CHANNELS.projectsList, INVOKE_CHANNELS.projectsPickParent, INVOKE_CHANNELS.projectsAddExisting]) {
+        expect(validateRequest(channel, undefined).ok).toBe(true);
+        expect(validateRequest(channel, { path: '/etc' }).ok).toBe(false);
+      }
+    });
+
+    it('create takes a token and a name, never a path', () => {
+      expect(validateRequest(INVOKE_CHANNELS.projectsCreate, { token: PICK, name: 'app' })).toEqual({ ok: true, value: { token: PICK, name: 'app' } });
+      expect(validateRequest(INVOKE_CHANNELS.projectsCreate, { token: PICK, name: '../x', parent: '/tmp' })).toEqual({ ok: true, value: { token: PICK, name: '../x' } });
+      for (const payload of [undefined, null, {}, { name: 'a' }, { token: PICK }, { token: 'x', name: 'a' }, { token: '../x', name: 'a' }, { token: PICK, name: 5 }, { token: PICK, name: 'a'.repeat(1001) }]) {
+        expect(validateRequest(INVOKE_CHANNELS.projectsCreate, payload).ok).toBe(false);
+      }
+    });
+
+    it('rename takes a project id and a valid name', () => {
+      expect(validateRequest(INVOKE_CHANNELS.projectsRename, { id: PROJECT, name: ' New ' })).toEqual({ ok: true, value: { id: PROJECT, name: 'New' } });
+      for (const payload of [undefined, {}, { id: PROJECT }, { id: PROJECT, name: '' }, { id: PROJECT, name: 'a\nb' }, { id: '../x', name: 'a' }, { id: 'a/b', name: 'a' }, { id: 5, name: 'a' }]) {
+        expect(validateRequest(INVOKE_CHANNELS.projectsRename, payload).ok).toBe(false);
+      }
+    });
+
+    it('delete takes a project id only', () => {
+      expect(validateRequest(INVOKE_CHANNELS.projectsDelete, { id: PROJECT })).toEqual({ ok: true, value: { id: PROJECT } });
+      for (const payload of [undefined, null, {}, { id: '../x' }, { id: 'a/b' }, { id: '' }, { id: 5 }, 'x']) {
+        expect(validateRequest(INVOKE_CHANNELS.projectsDelete, payload).ok).toBe(false);
+      }
+    });
+  });
 });

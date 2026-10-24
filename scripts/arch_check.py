@@ -23,6 +23,8 @@ PRELOAD = re.compile(r"\bpreload\b")
 SITE_MARK = re.compile(r"\bpartition\b|persist:")
 DELETE_CALL = re.compile(r"\b(?:rm|rmdir|unlink|rmSync|rmdirSync|unlinkSync|clearStorageData|clearCache)\s*\(")
 DELETE_HOME = "src/main/store/atomic-file.ts"
+SERVICE_FILE = "src/main/projects/service.ts"
+SERVICE_HOMES = ("projects", "store")
 IPC_TABLE = re.compile(r"\b(?:INVOKE_CHANNELS|EVENT_CHANNELS|validateRequest)\b")
 COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
@@ -101,6 +103,18 @@ def store_problems(rel: str, text: str) -> list[str]:
     return out
 
 
+def projects_problems(rel: str, text: str) -> list[str]:
+    out = []
+    for line, spec in specifiers(text):
+        if is_package(spec, "electron"):
+            out.append(f"{rel}:{line} [projects-electron] projects imports {spec}")
+        elif rel == SERVICE_FILE and resolves_into(rel, spec, "src/main") and not any(
+            resolves_into(rel, spec, f"src/main/{home}") for home in SERVICE_HOMES
+        ):
+            out.append(f"{rel}:{line} [projects-service-layer] project service imports {spec}")
+    return out
+
+
 def delete_problems(rel: str, text: str) -> list[str]:
     return [
         f"{rel}:{line_of(text, m.start())} [no-delete] {m.group(0).strip('( ')} outside {DELETE_HOME}"
@@ -128,6 +142,8 @@ def check_file(rel: str, text: str) -> list[str]:
         out.extend(shared_problems(rel, text))
     if rel.startswith("src/main/store/"):
         out.extend(store_problems(rel, text))
+    if rel.startswith("src/main/projects/"):
+        out.extend(projects_problems(rel, text))
     if rel.startswith("src/main/") and rel != DELETE_HOME:
         out.extend(delete_problems(rel, text))
     if rel.startswith("src/"):

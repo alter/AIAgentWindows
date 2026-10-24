@@ -1,0 +1,56 @@
+TASK: projects in the main process — git runner, project service, IPC
+
+GOAL
+  The main process can create a project (from an existing folder, or a new
+  folder plus `git init` under a parent chosen through the picker), rename it,
+  delete it without touching its code folder, and tell when its folder is gone.
+  `git` runs only through one hardened runner. Main process only: the sidebar
+  nodes are 05-project-tree (docs/plans/projects.md D4, D9, D14, D19-D21, D23,
+  AC2, T07). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  docs/tech/git@2.50.1.md
+  src/main/projects/git.ts
+  src/main/projects/service.ts
+  src/shared/projects.ts
+  src/shared/title.ts
+  src/shared/agents.ts
+  src/shared/ipc.ts
+  src/main/ipc-handlers.ts
+  src/main/index.ts
+  src/main/room-service.ts
+  src/preload/index.ts
+  scripts/arch_check.py
+  tests/scripts/test_arch_check.py
+  tests/unit/projects.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/integration/git-runner.test.ts
+  tests/integration/project-service.test.ts
+  tests/integration/room-wiring.test.ts
+  vitest.config.ts
+  AGENTS.md
+
+SCOPE
+  + projects/git.ts: platform and binary paths as parameters, lazy version check, `xcode-select -p` gate on darwin, hardened `execFile`, `init`
+  + projects/service.ts on the `projects` slice of state.json: create, add existing, rename, delete, missing-folder check, canClose/closeProject registry
+  + shared/projects.ts and shared/title.ts, the optional `projects` slice in the state document
+  + the `projects:*` channels in the IPC table, validators, preload, handlers, room veto in index.ts
+  + arch_check rules projects-electron and projects-service-layer with red fixture tests, coverage include, AGENTS.md Map row
+  − project nodes, dialogs and smoke of the sidebar tree — 05-project-tree
+  − `projectId` on agents, agents inside a project, closing a project's agents and site views — 06-project-agents
+  − room start and agent start re-check of the project folder — the tasks that start them
+
+OUTCOME
+  src/main/projects/service.ts exists and tests/integration/project-service.test.ts passes.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/integration/project-service.test.ts tests/integration/git-runner.test.ts tests/unit/projects.test.ts exits 0
+  3. [full] electron-smoke exit 0, 71/71 or more
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

@@ -212,10 +212,13 @@ describe('room service', () => {
       dispose: () => undefined,
     });
     const { room, seen } = service(hang);
+    expect(room.isRunning()).toBe(false);
     expect((await room.start(config())).ok).toBe(true);
+    expect(room.isRunning()).toBe(true);
     expect(await room.start(config())).toEqual({ ok: false, error: 'a room run is already in progress' });
     room.stop();
     await finished(seen);
+    expect(room.isRunning()).toBe(false);
     expect(room.state().phase).toBe('stopped');
   });
 

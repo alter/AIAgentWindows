@@ -60,6 +60,10 @@ export class RoomService {
     });
   }
 
+  isRunning(): boolean {
+    return this.room.isRunning();
+  }
+
   state(): RoomSnapshot {
     return this.snapshot;
   }

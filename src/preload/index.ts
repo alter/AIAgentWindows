@@ -17,6 +17,7 @@ import type { ChatDelta, ChatLoad, ChatSend } from '../shared/openrouter-chat';
 import type { ThemeChoice } from '../shared/theme';
 import type { RoomModels } from '../shared/cli-models';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
+import type { PickParentResult, ProjectActionResult, ProjectResult, ProjectView } from '../shared/projects';
 import type { RoomOpenResult, RoomSnapshot, RoomStartResult } from '../shared/room-view';
 
 function subscribe<T>(channel: string, listener: (event: T) => void): () => void {
@@ -77,6 +78,12 @@ const api: AppApi = {
   openrouterChatRetry: (id, index) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatRetry, { id, index }) as Promise<ChatSend>,
   openrouterChatCopy: (id, index) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterChatCopy, { id, index }) as Promise<boolean>,
   openrouterSettings: (id, settings: OpenRouterSettings) => ipcRenderer.invoke(INVOKE_CHANNELS.openrouterSettings, { id, settings }) as Promise<boolean>,
+  projectsList: () => ipcRenderer.invoke(INVOKE_CHANNELS.projectsList) as Promise<ProjectView[]>,
+  projectsPickParent: () => ipcRenderer.invoke(INVOKE_CHANNELS.projectsPickParent) as Promise<PickParentResult>,
+  projectsCreate: (token, name) => ipcRenderer.invoke(INVOKE_CHANNELS.projectsCreate, { token, name }) as Promise<ProjectResult>,
+  projectsAddExisting: () => ipcRenderer.invoke(INVOKE_CHANNELS.projectsAddExisting) as Promise<ProjectResult>,
+  projectsRename: (id, name) => ipcRenderer.invoke(INVOKE_CHANNELS.projectsRename, { id, name }) as Promise<ProjectActionResult>,
+  projectsDelete: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.projectsDelete, { id }) as Promise<ProjectActionResult>,
   onAgentsChanged: (listener) => subscribe<AgentsSnapshot>(EVENT_CHANNELS.agentsChanged, listener),
   onPtyData: (listener) => subscribe<PtyDataEvent>(EVENT_CHANNELS.ptyData, listener),
   onPtyExit: (listener) => subscribe<PtyExitEvent>(EVENT_CHANNELS.ptyExit, listener),

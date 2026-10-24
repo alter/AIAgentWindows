@@ -5,6 +5,14 @@ import type { OutputSnapshot } from './output-buffer';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
 import { MAX_PASTE_CHARS, parseOpenRouterSettings, type ModelItem, type OpenRouterMode, type OpenRouterSettings, type OpenRouterStatus } from './openrouter';
 import { MAX_ENTRIES, MAX_MESSAGE_CHARS, type ChatDelta, type ChatLoad, type ChatSend } from './openrouter-chat';
+import {
+  isProjectId,
+  parseProjectName,
+  type PickParentResult,
+  type ProjectActionResult,
+  type ProjectResult,
+  type ProjectView,
+} from './projects';
 import { isSidebarWidth } from './site-layout';
 import { isThemeChoice, type ThemeChoice } from './theme';
 import { CARRY_KINDS, type CarryWhat, type RoomOpenResult, type RoomSnapshot, type RoomStartResult } from './room-view';
@@ -53,6 +61,12 @@ export const INVOKE_CHANNELS = {
   openrouterChatStop: 'openrouter:chat-stop',
   openrouterChatCopy: 'openrouter:chat-copy',
   openrouterSettings: 'openrouter:settings',
+  projectsList: 'projects:list',
+  projectsPickParent: 'projects:pick-parent',
+  projectsCreate: 'projects:create',
+  projectsAddExisting: 'projects:add-existing',
+  projectsRename: 'projects:rename',
+  projectsDelete: 'projects:delete',
 } as const;
 
 export const EVENT_CHANNELS = {
@@ -69,6 +83,7 @@ export const EVENT_CHANNELS = {
 export const MAX_PTY_WRITE_BYTES = 1024 * 1024;
 export const MAX_ID_LENGTH = 200;
 export const MAX_DIMENSION = 1000;
+export const MAX_NAME_INPUT_CHARS = 1000;
 export const SITE_ACTIONS = ['back', 'forward', 'home', 'reload'] as const;
 
 export type SiteAction = (typeof SITE_ACTIONS)[number];
@@ -156,6 +171,12 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.openrouterChatStop]: { id: string };
   [INVOKE_CHANNELS.openrouterChatCopy]: { id: string; index: number };
   [INVOKE_CHANNELS.openrouterSettings]: { id: string; settings: OpenRouterSettings };
+  [INVOKE_CHANNELS.projectsList]: undefined;
+  [INVOKE_CHANNELS.projectsPickParent]: undefined;
+  [INVOKE_CHANNELS.projectsCreate]: { token: string; name: string };
+  [INVOKE_CHANNELS.projectsAddExisting]: undefined;
+  [INVOKE_CHANNELS.projectsRename]: { id: string; name: string };
+  [INVOKE_CHANNELS.projectsDelete]: { id: string };
 }
 
 export type InvokeChannel = keyof InvokeRequests;
@@ -208,6 +229,12 @@ export interface AppApi {
   openrouterChatStop(id: string): Promise<void>;
   openrouterChatCopy(id: string, index: number): Promise<boolean>;
   openrouterSettings(id: string, settings: OpenRouterSettings): Promise<boolean>;
+  projectsList(): Promise<ProjectView[]>;
+  projectsPickParent(): Promise<PickParentResult>;
+  projectsCreate(token: string, name: string): Promise<ProjectResult>;
+  projectsAddExisting(): Promise<ProjectResult>;
+  projectsRename(id: string, name: string): Promise<ProjectActionResult>;
+  projectsDelete(id: string): Promise<ProjectActionResult>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
   onPtyData(listener: (event: PtyDataEvent) => void): () => void;
   onPtyExit(listener: (event: PtyExitEvent) => void): () => void;
@@ -375,6 +402,21 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
       const settings = parseOpenRouterSettings(record['settings']);
       return settings === null ? null : { id, settings };
     }),
+  [INVOKE_CHANNELS.projectsList]: noPayload,
+  [INVOKE_CHANNELS.projectsPickParent]: noPayload,
+  [INVOKE_CHANNELS.projectsCreate]: (payload) => {
+    if (!isRecord(payload) || !isUuid(payload['token'])) return null;
+    const name = payload['name'];
+    return typeof name === 'string' && name.length <= MAX_NAME_INPUT_CHARS ? { token: payload['token'], name } : null;
+  },
+  [INVOKE_CHANNELS.projectsAddExisting]: noPayload,
+  [INVOKE_CHANNELS.projectsRename]: (payload) => {
+    if (!isRecord(payload) || !isProjectId(payload['id'])) return null;
+    const name = parseProjectName(payload['name']);
+    return name === null ? null : { id: payload['id'], name };
+  },
+  [INVOKE_CHANNELS.projectsDelete]: (payload) =>
+    isRecord(payload) && isProjectId(payload['id']) ? { id: payload['id'] } : null,
 };
 
 export function validateRequest(channel: string, payload: unknown): Validation<unknown> {

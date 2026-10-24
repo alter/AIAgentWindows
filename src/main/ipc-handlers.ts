@@ -3,6 +3,7 @@ import { ipcMain, nativeTheme, type IpcMainInvokeEvent, type WebContents } from 
 import type { AgentController } from './agent-controller';
 import type { OpenRouterChats } from './openrouter/chats';
 import type { OpenRouterService } from './openrouter/service';
+import type { ProjectService } from './projects/service';
 import type { RoomService } from './room-service';
 import {
   INVOKE_CHANNELS,
@@ -14,7 +15,7 @@ import {
 
 type Handlers = { [C in InvokeChannel]: (payload: InvokeRequests[C]) => Promise<unknown> | unknown };
 
-function buildHandlers(controller: AgentController, room: RoomService, openrouter: OpenRouterService, chats: OpenRouterChats): Handlers {
+function buildHandlers(controller: AgentController, room: RoomService, openrouter: OpenRouterService, chats: OpenRouterChats, projects: ProjectService): Handlers {
   return {
     [INVOKE_CHANNELS.listAgents]: (): AgentsSnapshot => controller.snapshot(),
     [INVOKE_CHANNELS.addAgent]: ({ kind }) => controller.add(kind),
@@ -66,6 +67,12 @@ function buildHandlers(controller: AgentController, room: RoomService, openroute
       if (saved) await chats.dismiss(id);
       return saved;
     },
+    [INVOKE_CHANNELS.projectsList]: () => projects.list(),
+    [INVOKE_CHANNELS.projectsPickParent]: () => projects.pickParent(),
+    [INVOKE_CHANNELS.projectsCreate]: ({ token, name }) => projects.create(token, name),
+    [INVOKE_CHANNELS.projectsAddExisting]: () => projects.addExisting(),
+    [INVOKE_CHANNELS.projectsRename]: ({ id, name }) => projects.rename(id, name),
+    [INVOKE_CHANNELS.projectsDelete]: ({ id }) => projects.delete(id),
   };
 }
 
@@ -74,9 +81,10 @@ export function registerIpc(
   room: RoomService,
   openrouter: OpenRouterService,
   chats: OpenRouterChats,
+  projects: ProjectService,
   appContents: () => WebContents | null,
 ): () => void {
-  const handlers = buildHandlers(controller, room, openrouter, chats);
+  const handlers = buildHandlers(controller, room, openrouter, chats, projects);
   const channels = Object.keys(handlers) as InvokeChannel[];
   for (const channel of channels) {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, payload: unknown) => {

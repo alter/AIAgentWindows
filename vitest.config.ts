@@ -11,7 +11,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reportsDirectory: 'coverage',
-      include: ['src/shared/**', 'src/main/pty-manager.ts', 'src/main/state-file.ts', 'src/main/store/**'],
+      include: ['src/shared/**', 'src/main/pty-manager.ts', 'src/main/state-file.ts', 'src/main/store/**', 'src/main/projects/**'],
     },
   },
 });

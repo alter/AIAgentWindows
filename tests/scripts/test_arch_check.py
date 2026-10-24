@@ -151,6 +151,28 @@ class ArchCheckTest(unittest.TestCase):
         self.put("src/main/store/atomic-file.ts", "await rm(temp, { force: true });\n")
         self.put("tests/unit/a.test.ts", "await rm(dir);\n")
         self.assertEqual(arch_check.check(self.root), [])
+    def test_projects_import_electron(self) -> None:
+        self.put("src/main/projects/git.ts", "import { app } from 'electron';\n")
+        self.assertEqual(self.codes(), {"projects-electron"})
+
+    def test_projects_may_import_node_and_store(self) -> None:
+        self.put("src/main/projects/git.ts", "import { execFile } from 'node:child_process';\nimport { a } from '../store/app-state';\nimport { b } from './service';\nimport { c } from '../../shared/projects';\n")
+        self.put("src/main/projects/service.ts", "import { a } from '../store/app-state';\nimport { g } from './git';\nimport { p } from '../../shared/projects';\nimport { fs } from 'node:fs';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
+    def test_project_service_imports_main_outside_projects_and_store(self) -> None:
+        self.put("src/main/projects/service.ts", "import { r } from '../room-archive';\nimport { c } from '../agent-controller';\nimport { s } from '../projects-extra/x';\n")
+        self.assertEqual(self.codes(), {"projects-service-layer"})
+        self.assertEqual(len(arch_check.check(self.root)), 3)
+
+    def test_other_project_files_may_import_main(self) -> None:
+        self.put("src/main/projects/git.ts", "import { r } from '../room-archive';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
+    def test_project_service_layer_names_the_file_and_line(self) -> None:
+        self.put("src/main/projects/service.ts", "\nimport { r } from '../room-archive';\n")
+        self.assertTrue(arch_check.check(self.root)[0].startswith("src/main/projects/service.ts:2 [projects-service-layer]"))
+
 
 if __name__ == "__main__":
     unittest.main()

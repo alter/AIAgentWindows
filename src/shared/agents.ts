@@ -1,7 +1,9 @@
 // agents.ts
 import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from './openrouter';
 import { parseSidebarWidth } from './site-layout';
+import { parseProjects, type Project } from './projects';
 import { parseThemeChoice, type ThemeChoice } from './theme';
+import { parseTitle } from './title';
 export const ROOM_AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
 export const OPENROUTER_KIND = 'openrouter';
 export const AGENT_KINDS = [...ROOM_AGENT_KINDS, OPENROUTER_KIND] as const;
@@ -46,6 +48,7 @@ export interface AppState {
   sidebarWidth?: number;
   openrouterKey?: string;
   partitions?: SitePartitions;
+  projects?: Project[];
 }
 
 export const MAX_AGENT_TITLE_CHARS = 80;
@@ -58,15 +61,8 @@ const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isControlCode(code: number): boolean {
-  return code <= 0x1f || (code >= 0x7f && code <= 0x9f) || code === 0x2028 || code === 0x2029;
-}
-
 export function parseAgentTitle(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  for (let index = 0; index < value.length; index += 1) if (isControlCode(value.charCodeAt(index))) return null;
-  const title = value.trim();
-  return title.length >= 1 && title.length <= MAX_AGENT_TITLE_CHARS ? title : null;
+  return parseTitle(value, MAX_AGENT_TITLE_CHARS);
 }
 
 export function isCliKind(kind: string): kind is CliKind {
@@ -190,6 +186,7 @@ export function parseStateDocument(raw: unknown): AppState {
   }
   const state: AppState = { version: STATE_VERSION, agents, ...parseSettings(raw) };
   if (raw['partitions'] !== undefined) state.partitions = parsePartitions(raw['partitions']);
+  if (raw['projects'] !== undefined) state.projects = parseProjects(raw['projects']);
   return state;
 }
 

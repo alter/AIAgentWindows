@@ -26,6 +26,8 @@ import { KeyStore } from './openrouter/key-store';
 import { electronSecretBox } from './openrouter/secret-box';
 import { OpenRouterService } from './openrouter/service';
 import { fetchOpener, testSecretBox } from './openrouter/test-mode';
+import { defaultGitPaths, GitRunner } from './projects/git';
+import { ProjectService } from './projects/service';
 import { RoomService } from './room-service';
 import { createModelCatalog } from './cli-models';
 import { createSiteSeats } from './site-seats';
@@ -171,10 +173,11 @@ async function start(): Promise<void> {
     }),
   });
   roomDrivers = drivers;
+  const trashItem = (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file: string) => shell.trashItem(file);
   const roomService = new RoomService({
     roomsDir,
     debugRoot,
-    trash: (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file) => shell.trashItem(file),
+    trash: trashItem,
     driverFor: drivers.factory,
     terminal: drivers.terminal,
     emit: (event) => {
@@ -187,7 +190,18 @@ async function start(): Promise<void> {
   });
   room = roomService;
   await roomService.init();
-  registerIpc(active, roomService, openrouterService, openrouterChats, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
+  const projectService = new ProjectService({
+    store,
+    userData,
+    git: new GitRunner({ platform: process.platform, ...defaultGitPaths(process.platform), hooksDir: path.join(userData, 'git-empty-hooks'), env: process.env }),
+    pickFolder,
+    trash: trashItem,
+  });
+  projectService.register({
+    canClose: () => (roomService.isRunning() ? 'A room run is in progress: stop it before deleting a project.' : null),
+    closeProject: () => undefined,
+  });
+  registerIpc(active, roomService, openrouterService, openrouterChats, projectService, () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : null));
   const captureDir = process.env[CAPTURE_ENV];
   installMenu(
     process.platform === 'darwin',
