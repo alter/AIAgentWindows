@@ -10,6 +10,9 @@ if (printKind !== null) process.exit(await runPrint(printKind, process.argv.slic
 const info = infoOf(process.argv.slice(2));
 if (info !== null) process.exit(await runInfo(info, process.argv.slice(2)));
 
+const ARGV_LOG = process.env.AIAW_STUB_ARGV_LOG;
+if (ARGV_LOG) appendFileSync(ARGV_LOG, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), pty: true, pid: process.pid }) + '\n');
+
 const PASTE_START = '\x1b[200~';
 const PASTE_END = '\x1b[201~';
 const STDIN_LOG = process.env.AIAW_STUB_STDIN_LOG;
@@ -78,7 +81,7 @@ function codexFile_() {
   const pad = (value) => String(value).padStart(2, '0');
   const dir = path.join(process.env.CODEX_HOME ?? '.', 'sessions', String(now.getFullYear()), pad(now.getMonth() + 1), pad(now.getDate()));
   codexFile = path.join(dir, `rollout-${now.toISOString().replace(/[:.]/g, '-')}-${codexSessionId}.jsonl`);
-  appendRecords(codexFile, [{ timestamp: stamp(), type: 'session_meta', payload: { id: codexSessionId, cwd: process.cwd() } }]);
+  appendRecords(codexFile, [{ timestamp: stamp(), type: 'session_meta', payload: { id: codexSessionId, cwd: process.cwd(), originator: 'codex-tui', source: 'cli' } }]);
   return codexFile;
 }
 

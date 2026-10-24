@@ -1,9 +1,12 @@
 // project-tree.ts
+import type { AgentKind } from '../shared/agents';
 import type { AppApi } from '../shared/ipc';
 import { pointAnchor } from '../shared/popup-place';
 import { MAX_PROJECT_NAME_CHARS, MAX_FOLDER_NAME_BYTES, parseProjectName, type ProjectView } from '../shared/projects';
-import type { TreeNode, TreeSection } from '../shared/sidebar-tree';
+import type { TreeItem, TreeNode, TreeSection } from '../shared/sidebar-tree';
+import { ADD_OPTIONS } from './agent-options';
 import { el } from './dom';
+import { kindIcon } from './icons';
 import { hidePopup, showPopup } from './popup';
 
 export type ProjectsApi = Pick<AppApi, 'projectsList' | 'projectsPickParent' | 'projectsCreate' | 'projectsAddExisting' | 'projectsRename' | 'projectsDelete'>;
@@ -11,6 +14,9 @@ export type ProjectsApi = Pick<AppApi, 'projectsList' | 'projectsPickParent' | '
 export interface ProjectTreeHandlers {
   onList(projects: readonly ProjectView[]): void;
   onToggle(key: string): void;
+  onAddAgent(kind: AgentKind, projectId: string): void;
+  onSelectAgent(id: string): void;
+  onCloseAgent(id: string): void;
 }
 
 interface Editing {
@@ -37,6 +43,11 @@ export class ProjectTree {
   private readonly cancel = el('button', 'projects-form-button', 'Cancel');
   private readonly list = el('ul', 'projects-list');
   private readonly menu = el('div', 'projects-menu');
+  private readonly agentMenu = el('div', 'projects-menu');
+  private readonly agentConfirm = el('div', 'projects-confirm');
+  private readonly agentConfirmText = el('span', 'projects-confirm-text');
+  private readonly agentConfirmYes = el('button', 'projects-confirm-yes', 'Close agent');
+  private readonly agentConfirmNo = el('button', 'projects-confirm-no', 'Cancel');
   private readonly confirm = el('div', 'projects-confirm');
   private readonly confirmText = el('span', 'projects-confirm-text');
   private readonly confirmYes = el('button', 'projects-confirm-yes', 'Delete');
@@ -45,6 +56,8 @@ export class ProjectTree {
   private newFolder: NewFolder | null = null;
   private menuId: string | null = null;
   private pendingId: string | null = null;
+  private pendingAgentId: string | null = null;
+  private agentMenuProject: string | null = null;
   private editing: Editing | null = null;
   private rebuilding = false;
   private addMenuOpen = false;
@@ -60,20 +73,25 @@ export class ProjectTree {
     this.setupForm();
     this.setupMenu();
     this.setupConfirm();
+    this.setupAgentMenu();
+    this.setupAgentConfirm();
     this.notice.hidden = true;
     this.notice.dataset['project'] = 'notice';
     this.notice.setAttribute('role', 'status');
     this.list.dataset['project'] = 'list';
-    this.element.append(header, this.addMenu, this.notice, this.form, this.list, this.confirm, this.menu);
+    this.element.append(header, this.addMenu, this.notice, this.form, this.list, this.confirm, this.agentConfirm, this.menu, this.agentMenu);
     document.addEventListener('click', () => {
       this.setAddMenu(false);
       this.hideMenu();
+      this.hideAgentMenu();
     });
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       this.setAddMenu(false);
       this.hideMenu();
+      this.hideAgentMenu();
       this.setPending(null);
+      this.setPendingAgent(null);
       this.closeForm();
     });
   }
@@ -89,8 +107,14 @@ export class ProjectTree {
     this.nodes = nodes.filter((node) => node.projectId !== null);
     const ids = new Set(this.nodes.map((node) => node.projectId));
     if (this.pendingId !== null && !ids.has(this.pendingId)) this.setPending(null);
+    if (this.agentMenuProject !== null && !ids.has(this.agentMenuProject)) this.hideAgentMenu();
+    if (this.pendingAgentId !== null && this.agentLabel(this.pendingAgentId) === null) this.setPendingAgent(null);
     if (this.editing !== null && !ids.has(this.editing.id)) this.editing = null;
     this.render();
+  }
+
+  notify(text: string): void {
+    this.showNotice(text);
   }
 
   private showNotice(text: string): void {
@@ -308,6 +332,7 @@ export class ProjectTree {
 
   private showMenu(id: string, x: number, y: number): void {
     this.setAddMenu(false);
+    this.hideAgentMenu();
     this.menuId = id;
     showPopup(this.menu, () => pointAnchor(x, y));
     this.menu.querySelector<HTMLButtonElement>('button')?.focus();
@@ -397,13 +422,122 @@ export class ProjectTree {
     toggle.addEventListener('click', () => this.handlers.onToggle(section.key));
     const head = el('div', 'project-section-head');
     head.append(toggle, el('span', 'project-section-title', SECTION_TITLES[name] ?? name));
+    if (name === 'agents') head.append(this.agentAddButton(node));
     box.append(head);
     if (section.expanded) {
       const items = el('ul', 'project-section-list');
-      if (section.items.length === 0) items.append(el('li', 'project-section-empty', 'Nothing here yet.'));
+      for (const item of section.items) items.append(this.agentItem(item));
+      if (section.items.length === 0) items.append(el('li', 'project-section-empty', name === 'agents' ? 'No agents yet. Use + to add one.' : 'Nothing here yet.'));
       box.append(items);
     }
     return box;
+  }
+
+  private agentAddButton(node: TreeNode): HTMLButtonElement {
+    const id = node.projectId ?? '';
+    const button = el('button', 'project-agent-add', '+');
+    button.type = 'button';
+    button.dataset['project'] = 'add-agent';
+    button.title = 'Add agent';
+    button.setAttribute('aria-label', `Add agent to ${node.label}`);
+    button.setAttribute('aria-haspopup', 'menu');
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const box = button.getBoundingClientRect();
+      this.showAgentMenu(id, box.left, box.bottom);
+    });
+    return button;
+  }
+
+  private agentItem(item: TreeItem): HTMLLIElement {
+    const row = el('li', 'project-agent');
+    const kind = item.kind;
+    if (kind === null) return row;
+    const select = el('button', 'agent-item');
+    select.type = 'button';
+    select.dataset['agentId'] = item.id;
+    select.title = item.label;
+    if (item.selected) select.classList.add('selected');
+    select.append(kindIcon(kind), el('span', 'agent-title', item.label));
+    select.addEventListener('click', () => this.handlers.onSelectAgent(item.id));
+    const close = el('button', 'agent-close', '×');
+    close.type = 'button';
+    close.dataset['project'] = 'close-agent';
+    close.title = 'Close agent';
+    close.setAttribute('aria-label', `Close ${item.label}`);
+    close.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.setPendingAgent(item.id);
+    });
+    row.append(select, close);
+    return row;
+  }
+
+  private agentLabel(id: string): string | null {
+    for (const node of this.nodes) {
+      for (const section of node.sections) {
+        const found = section.items.find((item) => item.id === id);
+        if (found !== undefined) return found.label;
+      }
+    }
+    return null;
+  }
+
+  private setupAgentMenu(): void {
+    this.agentMenu.hidden = true;
+    this.agentMenu.setAttribute('role', 'menu');
+    this.agentMenu.dataset['project'] = 'agent-menu';
+    for (const option of ADD_OPTIONS) {
+      const button = el('button', 'projects-menu-item');
+      button.type = 'button';
+      button.dataset['kind'] = option.kind;
+      button.setAttribute('role', 'menuitem');
+      button.append(kindIcon(option.kind), el('span', undefined, option.label));
+      button.addEventListener('click', () => {
+        const id = this.agentMenuProject;
+        this.hideAgentMenu();
+        if (id !== null) this.handlers.onAddAgent(option.kind, id);
+      });
+      this.agentMenu.append(button);
+    }
+  }
+
+  private showAgentMenu(id: string, x: number, y: number): void {
+    this.setAddMenu(false);
+    this.hideMenu();
+    this.agentMenuProject = id;
+    showPopup(this.agentMenu, () => pointAnchor(x, y));
+    this.agentMenu.querySelector<HTMLButtonElement>('button')?.focus();
+  }
+
+  private hideAgentMenu(): void {
+    this.agentMenuProject = null;
+    hidePopup(this.agentMenu);
+  }
+
+  private setupAgentConfirm(): void {
+    this.agentConfirm.hidden = true;
+    this.agentConfirm.dataset['project'] = 'agent-close-confirm';
+    this.agentConfirm.setAttribute('role', 'alertdialog');
+    this.agentConfirmYes.type = 'button';
+    this.agentConfirmYes.dataset['project'] = 'agent-close-yes';
+    this.agentConfirmNo.type = 'button';
+    this.agentConfirmNo.dataset['project'] = 'agent-close-no';
+    this.agentConfirm.append(this.agentConfirmText, this.agentConfirmYes, this.agentConfirmNo);
+    this.agentConfirmYes.addEventListener('click', () => {
+      const id = this.pendingAgentId;
+      this.setPendingAgent(null);
+      if (id !== null) this.handlers.onCloseAgent(id);
+    });
+    this.agentConfirmNo.addEventListener('click', () => this.setPendingAgent(null));
+  }
+
+  private setPendingAgent(id: string | null): void {
+    const label = id === null ? null : this.agentLabel(id);
+    this.pendingAgentId = label === null ? null : id;
+    this.agentConfirm.hidden = label === null;
+    this.agentConfirmText.textContent = label === null ? '' : `Close ${label}? Its session files stay on disk.`;
+    if (label !== null) this.agentConfirmNo.focus();
   }
 
   private input(editing: Editing): HTMLInputElement {

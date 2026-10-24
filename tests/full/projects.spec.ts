@@ -1,10 +1,11 @@
 // projects.spec.ts
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const root = path.resolve(__dirname, '..', '..');
+const stubCli = path.join(root, 'tests', 'fixtures', 'stub-cli.mjs');
 
 interface Session {
   app: ElectronApplication;
@@ -29,10 +30,10 @@ function newWorld(): World {
   return { base, userData: path.join(base, 'profile'), existing, parent };
 }
 
-async function launch(world: World, answers: readonly (string | null)[]): Promise<Session> {
+async function launch(world: World, answers: readonly (string | null)[], extraEnv: Record<string, string> = {}): Promise<Session> {
   const app = await electron.launch({
     args: [root],
-    env: { ...process.env, AIAW_USER_DATA: world.userData, AIAW_TEST_FOLDER: JSON.stringify(answers) },
+    env: { ...process.env, AIAW_USER_DATA: world.userData, AIAW_TEST_FOLDER: JSON.stringify(answers), ...extraEnv },
   });
   const page = await app.firstWindow();
   return { app, page };
@@ -174,6 +175,102 @@ test('renames a project and shows one whose folder is gone as missing without re
     await expect(node(page, 'Renamed app').locator('[data-project="missing"]')).toBeVisible();
     expect(existsSync(path.join(world.parent, 'doomed-app'))).toBe(false);
     await expect(page.locator('[data-project="no-project"] [data-room="tree"]')).toBeVisible();
+  } finally {
+    await closeSession(session).catch(() => undefined);
+  }
+});
+
+function stubEnv(world: World): Record<string, string> {
+  return { AIAW_CLAUDE_BIN: stubCli, AIAW_CODEX_BIN: stubCli, AIAW_STUB_ARGV_LOG: path.join(world.base, 'argv.log') };
+}
+
+function launches(world: World): { argv: string[]; cwd: string }[] {
+  const file = path.join(world.base, 'argv.log');
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as { argv: string[]; cwd: string; pty?: true })
+    .filter((line) => line.pty === true);
+}
+
+async function addProjectAgent(page: Page, name: string, kind: string): Promise<void> {
+  await node(page, name).locator('[data-project="add-agent"]').click();
+  await page.locator(`[data-project="agent-menu"] button[data-kind="${kind}"]`).click();
+}
+
+test('adds agents inside a project without a folder picker, runs them in the project folder, restores them under the project and closes them with it', async () => {
+  test.setTimeout(180_000);
+  const world = newWorld();
+  const real = realpathSync(world.existing);
+  let session = await launch(world, [world.existing, null], stubEnv(world));
+  try {
+    let page = session.page;
+    await addExisting(page);
+    await expect(node(page, 'existing-app')).toBeVisible();
+    await addProjectAgent(page, 'existing-app', 'claude');
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(1);
+    await expect(page.locator('.xterm-rows')).toContainText('STUB-CLI BANNER');
+    await addProjectAgent(page, 'existing-app', 'codex');
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(2);
+    await expect(page.locator('[data-project="no-project"] .agent-item')).toHaveCount(0);
+    await expect(notice(page)).toBeHidden();
+    await expect.poll(() => launches(world).map((line) => line.cwd)).toEqual([real, real]);
+
+    await closeSession(session);
+    session = await launch(world, [null], stubEnv(world));
+    page = session.page;
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(2);
+    await expect(page.locator('[data-project="no-project"] .agent-item')).toHaveCount(0);
+    await expect.poll(() => launches(world).map((line) => line.cwd)).toEqual([real, real, real, real]);
+    const saved = JSON.parse(readFileSync(path.join(world.userData, 'state.json'), 'utf8')) as { agents: { kind: string; cwd?: string; projectId?: string }[]; projects: { id: string }[] };
+    expect(saved.agents.map((agent) => [agent.kind, agent.cwd, agent.projectId])).toEqual([
+      ['claude', real, saved.projects[0]?.id],
+      ['codex', real, saved.projects[0]?.id],
+    ]);
+
+    await node(page, 'existing-app').locator('[data-project="close-agent"]').first().click({ force: true });
+    await expect(page.locator('[data-project="agent-close-confirm"]')).toBeVisible();
+    await page.locator('[data-project="agent-close-no"]').click();
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(2);
+    await node(page, 'existing-app').locator('[data-project="close-agent"]').first().click({ force: true });
+    await page.locator('[data-project="agent-close-yes"]').click();
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(1);
+
+    await node(page, 'existing-app').locator('[data-project="menu"]').click();
+    await page.locator('[data-project="delete"]').click();
+    await page.locator('[data-project="delete-yes"]').click();
+    await expect(nodes(page)).toHaveCount(0);
+    const after = JSON.parse(readFileSync(path.join(world.userData, 'state.json'), 'utf8')) as { agents: unknown[]; projects: unknown[] };
+    expect(after.agents).toEqual([]);
+    expect(after.projects).toEqual([]);
+    expect(existsSync(path.join(real, 'README.md'))).toBe(true);
+  } finally {
+    await closeSession(session).catch(() => undefined);
+  }
+});
+
+test('starts no agent of a project whose folder is gone, keeps the agent on file and does not recreate the folder', async () => {
+  test.setTimeout(120_000);
+  const world = newWorld();
+  let session = await launch(world, [world.existing, null], stubEnv(world));
+  try {
+    let page = session.page;
+    await addExisting(page);
+    await addProjectAgent(page, 'existing-app', 'claude');
+    await expect(page.locator('.xterm-rows')).toContainText('STUB-CLI BANNER');
+    await expect.poll(() => launches(world).length).toBe(1);
+    await closeSession(session);
+    rmSync(world.existing, { recursive: true, force: true });
+    session = await launch(world, [null], stubEnv(world));
+    page = session.page;
+    await expect(node(page, 'existing-app')).toHaveAttribute('data-project-missing', 'true');
+    await expect(node(page, 'existing-app').locator('.agent-item')).toHaveCount(0);
+    await expect(page.locator('.xterm-rows')).not.toContainText('STUB-CLI BANNER');
+    expect(launches(world)).toHaveLength(1);
+    expect(existsSync(world.existing)).toBe(false);
+    const saved = JSON.parse(readFileSync(path.join(world.userData, 'state.json'), 'utf8')) as { agents: unknown[] };
+    expect(saved.agents).toHaveLength(1);
   } finally {
     await closeSession(session).catch(() => undefined);
   }

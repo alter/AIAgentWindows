@@ -28,6 +28,13 @@ describe('validateRequest', () => {
     }
   });
 
+  it('takes an optional project id on add, and refuses one that is not an id', () => {
+    expect(validateRequest(INVOKE_CHANNELS.addAgent, { kind: 'claude', projectId: 'proj-1' })).toEqual({ ok: true, value: { kind: 'claude', projectId: 'proj-1' } });
+    for (const projectId of ['', '../x', 'a/b', 5, null, 'x'.repeat(65)]) {
+      expect(validateRequest(INVOKE_CHANNELS.addAgent, { kind: 'claude', projectId }).ok).toBe(false);
+    }
+  });
+
   it('accepts list with no payload only', () => {
     expect(validateRequest(INVOKE_CHANNELS.listAgents, undefined).ok).toBe(true);
     expect(validateRequest(INVOKE_CHANNELS.listAgents, { x: 1 }).ok).toBe(false);

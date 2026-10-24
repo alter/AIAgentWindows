@@ -99,6 +99,16 @@ export function reduceSidebarTree(state: SidebarTreeState, action: SidebarTreeAc
   }
 }
 
+function agentItems(state: SidebarTreeState, owned: (agent: Agent) => boolean): TreeItem[] {
+  return state.agents.filter(owned).map((agent) => ({
+    id: agent.id,
+    label: agent.title,
+    kind: agent.kind,
+    unreadable: false,
+    selected: !state.roomOpen && agent.id === state.selectedId,
+  }));
+}
+
 export function sidebarSections(state: SidebarTreeState): TreeSection[] {
   return [
     {
@@ -119,13 +129,7 @@ export function sidebarSections(state: SidebarTreeState): TreeSection[] {
       collapsible: false,
       expanded: true,
       busy: false,
-      items: state.agents.map((agent) => ({
-        id: agent.id,
-        label: agent.title,
-        kind: agent.kind,
-        unreadable: false,
-        selected: !state.roomOpen && agent.id === state.selectedId,
-      })),
+      items: agentItems(state, (agent) => agent.projectId === undefined),
     },
   ];
 }
@@ -139,7 +143,7 @@ function projectNode(state: SidebarTreeState, project: ProjectView): TreeNode {
         collapsible: true,
         expanded: !state.collapsed.includes(projectSectionKey(project.id, name)),
         busy: false,
-        items: [],
+        items: name === AGENTS_SECTION ? agentItems(state, (agent) => agent.projectId === project.id) : [],
       }));
   return {
     key,

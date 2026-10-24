@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   isProjectId,
   nameFromFolder,
+  type FolderLookup,
   parseFolderName,
   parseProjectName,
   type PickParentResult,
@@ -38,8 +39,6 @@ export interface ProjectsDeps {
   newId?(): string;
   newToken?(): string;
 }
-
-export type FolderLookup = { ok: true; folder: string } | { ok: false; error: string };
 
 const INSIDE_USER_DATA = 'A project folder cannot live inside the application data folder.';
 

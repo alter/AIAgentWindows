@@ -18,7 +18,7 @@ type Handlers = { [C in InvokeChannel]: (payload: InvokeRequests[C]) => Promise<
 function buildHandlers(controller: AgentController, room: RoomService, openrouter: OpenRouterService, chats: OpenRouterChats, projects: ProjectService): Handlers {
   return {
     [INVOKE_CHANNELS.listAgents]: (): AgentsSnapshot => controller.snapshot(),
-    [INVOKE_CHANNELS.addAgent]: ({ kind }) => controller.add(kind),
+    [INVOKE_CHANNELS.addAgent]: ({ kind, projectId }) => controller.add(kind, projectId),
     [INVOKE_CHANNELS.selectAgent]: ({ id }) => controller.select(id),
     [INVOKE_CHANNELS.closeAgent]: ({ id }) => controller.close(id),
     [INVOKE_CHANNELS.restartAgent]: ({ id }) => controller.restart(id),

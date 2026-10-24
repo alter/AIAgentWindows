@@ -1,7 +1,10 @@
 // pty-stub.test.ts
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildSpawn } from '../../src/shared/cli-args';
+import { claimRollout } from '../../src/shared/codex-claim';
 import { sanitizePaste } from '../../src/shared/terminal-input';
 import { PtyManager } from '../../src/main/pty-manager';
 
@@ -65,6 +68,40 @@ afterEach(async () => {
 });
 
 describe('stub CLI in a node-pty terminal', () => {
+  it('logs its argv and its working directory when asked to', async () => {
+    const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'aiaw-stub-argv-')));
+    const log = path.join(dir, 'argv.log');
+    const id = nextId();
+    manager.spawn(id, { ...stubSpec({ AIAW_STUB_ARGV_LOG: log }), cwd: dir }, { cols: 100, rows: 30 });
+    await started(id);
+    const lines = readFileSync(log, 'utf8').split('\n').filter((line) => line.length > 0);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] ?? '')).toMatchObject({ argv: ['--session-id', SESSION, '--add-dir', '/tmp/shared'], cwd: dir, pty: true });
+  });
+
+  it('writes a codex rollout whose session_meta names an interactive origin, so a claim that skips exec takes it', async () => {
+    const dir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'aiaw-stub-codex-')));
+    const id = nextId();
+    const spec = buildSpawn('codex', {
+      cwd: dir,
+      sharedDir: '/tmp/shared',
+      resume: false,
+      platform: 'win32',
+      env: { PATH: process.env.PATH, AIAW_CODEX_BIN: STUB, CODEX_HOME: dir, AIAW_STUB_TRANSCRIPT: 'codex' },
+    });
+    manager.spawn(id, spec, { cols: 100, rows: 30 });
+    await started(id);
+    manager.write(id, 'hello\r');
+    const rollouts = path.join(dir, 'sessions');
+    await waitFor(() => existsSync(rollouts) && readdirSync(rollouts, { recursive: true }).some((name) => String(name).endsWith('.jsonl')), 'the rollout');
+    const name = readdirSync(rollouts, { recursive: true }).map(String).find((entry) => entry.endsWith('.jsonl')) ?? '';
+    const first = readFileSync(path.join(rollouts, name), 'utf8').split('\n')[0] ?? '';
+    const payload = (JSON.parse(first) as { payload: Record<string, unknown> }).payload;
+    expect(payload).toMatchObject({ cwd: dir, source: 'cli' });
+    const claimed = claimRollout({ spawnedAtMs: 0, cwd: dir, claimed: new Set(), skipExec: true, rollouts: [{ fileName: path.basename(name), firstLine: first, createdAtMs: Date.now() }] });
+    expect(claimed).not.toBeNull();
+  });
+
   it('shows the banner with the argv it was started with', async () => {
     const id = startStub();
     await started(id);

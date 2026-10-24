@@ -1,7 +1,7 @@
 // agents.ts
 import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from './openrouter';
 import { parseSidebarWidth } from './site-layout';
-import { parseProjects, type Project } from './projects';
+import { isProjectId, parseProjects, type Project } from './projects';
 import { parseThemeChoice, type ThemeChoice } from './theme';
 import { parseTitle } from './title';
 export const ROOM_AGENT_KINDS = ['claude', 'codex', 'chatgpt', 'grok', 'deepseek'] as const;
@@ -36,6 +36,7 @@ export interface Agent {
   cwd?: string;
   sessionId?: string;
   openrouter?: OpenRouterSettings;
+  projectId?: string;
   createdAt: number;
 }
 
@@ -111,12 +112,16 @@ function validCwd(value: unknown): value is string {
 
 export function parseAgent(raw: unknown): Agent | null {
   if (!isRecord(raw)) return null;
-  const { id, kind, title, cwd, sessionId, openrouter, createdAt } = raw;
+  const { id, kind, title, cwd, sessionId, openrouter, projectId, createdAt } = raw;
   if (typeof id !== 'string' || id.length === 0) return null;
   if (!isAgentKind(kind)) return null;
   if (typeof title !== 'string') return null;
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null;
   const agent: Agent = { id, kind, title, createdAt };
+  if (projectId !== undefined) {
+    if (!isProjectId(projectId)) return null;
+    agent.projectId = projectId;
+  }
   if (cwd !== undefined) {
     if (!isCliKind(kind) || !validCwd(cwd)) return null;
     agent.cwd = cwd;

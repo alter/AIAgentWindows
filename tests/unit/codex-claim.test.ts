@@ -17,6 +17,10 @@ function rollout(id: string, cwd: string | null, createdAtMs: number, extra: Par
   };
 }
 
+function meta(id: string, cwd: string, extra: Record<string, unknown>): string {
+  return JSON.stringify({ type: 'session_meta', payload: { id, cwd, ...extra } });
+}
+
 describe('rolloutId', () => {
   it('reads the uuid at the end of the file name', () => {
     expect(rolloutId(`rollout-2026-10-21T10-00-00-${ID_A}.jsonl`)).toBe(ID_A);
@@ -131,5 +135,25 @@ describe('claimRollout', () => {
       rollouts: [rollout(ID_A, hostile, SPAWN + 1)],
     });
     expect(claim).toBe(ID_A);
+  });
+
+  it('claims an exec rollout by default, because a room finds its own turn that way', () => {
+    const exec = rollout(ID_A, '/work/p', SPAWN + 20, { firstLine: meta(ID_A, '/work/p', { source: 'exec', originator: 'codex_exec' }) });
+    expect(claimRollout({ spawnedAtMs: SPAWN, cwd: '/work/p', claimed: new Set(), rollouts: [exec] })).toBe(ID_A);
+  });
+
+  it('skips a rollout of codex exec by its source or by its originator when asked to', () => {
+    const rollouts = [
+      rollout(ID_A, '/work/p', SPAWN + 10, { firstLine: meta(ID_A, '/work/p', { source: 'exec' }) }),
+      rollout(ID_B, '/work/p', SPAWN + 20, { firstLine: meta(ID_B, '/work/p', { originator: 'codex_exec' }) }),
+    ];
+    expect(claimRollout({ spawnedAtMs: SPAWN, cwd: '/work/p', claimed: new Set(), rollouts, skipExec: true })).toBeNull();
+  });
+
+  it('still claims the interactive origins of the owner rollouts when skipping exec', () => {
+    for (const origin of [{ source: 'cli', originator: 'codex-tui' }, { source: 'vscode', originator: 'codex-tui' }, { source: 'vscode', originator: 'Codex Desktop' }, {}]) {
+      const rollouts = [rollout(ID_C, '/work/p', SPAWN + 10, { firstLine: meta(ID_C, '/work/p', origin) })];
+      expect(claimRollout({ spawnedAtMs: SPAWN, cwd: '/work/p', claimed: new Set(), rollouts, skipExec: true })).toBe(ID_C);
+    }
   });
 });

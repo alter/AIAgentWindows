@@ -21,7 +21,7 @@ import { createRoomDrivers, type RoomDrivers } from './room-drivers';
 import { moveToFolder } from './room-archive';
 import { OpenRouterChats } from './openrouter/chats';
 import { OpenRouterClient } from './openrouter/client';
-import { ConversationStore } from './openrouter/conversation-store';
+import { ConversationStore, projectChatsDir } from './openrouter/conversation-store';
 import { KeyStore } from './openrouter/key-store';
 import { electronSecretBox } from './openrouter/secret-box';
 import { OpenRouterService } from './openrouter/service';
@@ -107,6 +107,14 @@ async function start(): Promise<void> {
   }, (kind) => partitionFor(store.read().partitions, kind), process.env, siteLog);
   sites = siteViews;
   siteViews.setSidebarWidth(parseSidebarWidth(state.sidebarWidth));
+  const trashItem = (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file: string) => shell.trashItem(file);
+  const projectService = new ProjectService({
+    store,
+    userData,
+    git: new GitRunner({ platform: process.platform, ...defaultGitPaths(process.platform), hooksDir: path.join(userData, 'git-empty-hooks'), env: process.env }),
+    pickFolder,
+    trash: trashItem,
+  });
   controller = new AgentController(
     {
       store,
@@ -123,9 +131,14 @@ async function start(): Promise<void> {
       closeSite: (id) => siteViews.close(id),
       closeChat: (id) => chats?.stop(id),
       listRollouts: (sinceMs) => listRollouts(codexHome(process.env), sinceMs),
+      folderOf: (projectId) => projectService.folderOf(projectId),
     },
   );
   const active = controller;
+  projectService.register({
+    canClose: () => active.canClose(),
+    closeProject: (projectId) => active.closeProject(projectId),
+  });
   await active.restore();
   const testMode = openrouterTestMode(process.env);
   const base = openrouterBase(process.env);
@@ -144,7 +157,10 @@ async function start(): Promise<void> {
   openrouter = openrouterService;
   const openrouterChats = new OpenRouterChats({
     service: openrouterService,
-    store: new ConversationStore(path.join(sharedDir, 'openrouter')),
+    store: new ConversationStore((agentId) => {
+      const projectId = active.agentById(agentId)?.projectId;
+      return projectId === undefined ? path.join(sharedDir, 'openrouter') : projectChatsDir(userData, projectId);
+    }),
     settingsOf: (id) => active.openrouterSettings(id),
     emit: (delta) => {
       if (!window.isDestroyed()) window.webContents.send(EVENT_CHANNELS.openrouterChatDelta, delta);
@@ -174,7 +190,6 @@ async function start(): Promise<void> {
     }),
   });
   roomDrivers = drivers;
-  const trashItem = (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file: string) => shell.trashItem(file);
   const roomService = new RoomService({
     roomsDir,
     debugRoot,
@@ -191,13 +206,6 @@ async function start(): Promise<void> {
   });
   room = roomService;
   await roomService.init();
-  const projectService = new ProjectService({
-    store,
-    userData,
-    git: new GitRunner({ platform: process.platform, ...defaultGitPaths(process.platform), hooksDir: path.join(userData, 'git-empty-hooks'), env: process.env }),
-    pickFolder,
-    trash: trashItem,
-  });
   projectService.register({
     canClose: () => (roomService.isRunning() ? 'A room run is in progress: stop it before deleting a project.' : null),
     closeProject: () => undefined,

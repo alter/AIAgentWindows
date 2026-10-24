@@ -30,7 +30,8 @@ function subscribe<T>(channel: string, listener: (event: T) => void): () => void
 
 const api: AppApi = {
   listAgents: () => ipcRenderer.invoke(INVOKE_CHANNELS.listAgents) as Promise<AgentsSnapshot>,
-  addAgent: (kind) => ipcRenderer.invoke(INVOKE_CHANNELS.addAgent, { kind }) as Promise<AddAgentResult>,
+  addAgent: (kind, projectId) =>
+    ipcRenderer.invoke(INVOKE_CHANNELS.addAgent, projectId === undefined ? { kind } : { kind, projectId }) as Promise<AddAgentResult>,
   selectAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.selectAgent, { id }) as Promise<void>,
   closeAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.closeAgent, { id }) as Promise<void>,
   restartAgent: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.restartAgent, { id }) as Promise<boolean>,

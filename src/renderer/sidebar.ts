@@ -20,6 +20,7 @@ import {
   type TreeSection,
 } from '../shared/sidebar-tree';
 import type { ThemeChoice } from '../shared/theme';
+import { ADD_OPTIONS } from './agent-options';
 import { el } from './dom';
 import { kindIcon } from './icons';
 import { hidePopup, showPopup } from './popup';
@@ -35,7 +36,7 @@ export interface SidebarHandlers {
   onRoomNew(): void;
   onRoomRename(id: string, title: string): void;
   onRoomDelete(id: string): void;
-  onAdd(kind: AgentKind): void;
+  onAdd(kind: AgentKind, projectId?: string): void;
   onClose(id: string): void;
   onRename(id: string, title: string): void;
   onTheme(choice: ThemeChoice): void;
@@ -43,15 +44,6 @@ export interface SidebarHandlers {
 }
 
 const MENU_INSET = 12;
-
-const ADD_OPTIONS: readonly { kind: AgentKind; label: string }[] = [
-  { kind: 'claude', label: 'Claude Code' },
-  { kind: 'codex', label: 'Codex' },
-  { kind: 'chatgpt', label: 'ChatGPT' },
-  { kind: 'grok', label: 'Grok' },
-  { kind: 'deepseek', label: 'DeepSeek' },
-  { kind: 'openrouter', label: 'OpenRouter' },
-];
 
 interface Editing {
   id: string;
@@ -100,6 +92,9 @@ export class Sidebar {
     this.projects = new ProjectTree(this.handlers.projects, {
       onList: (projects) => this.setProjects(projects),
       onToggle: (key) => this.dispatch({ type: 'toggle', key }),
+      onAddAgent: (kind, projectId) => this.handlers.onAdd(kind, projectId),
+      onSelectAgent: (id) => this.handlers.onSelect(id),
+      onCloseAgent: (id) => this.handlers.onClose(id),
     });
     this.theme = new ThemeSwitch((choice) => this.handlers.onTheme(choice));
     this.setupNoProject();
@@ -133,7 +128,11 @@ export class Sidebar {
     });
   }
 
-  showNotice(text: string): void {
+  showNotice(text: string, projectId?: string): void {
+    if (projectId !== undefined) {
+      this.projects.notify(text);
+      return;
+    }
     this.notice.textContent = text;
     this.notice.hidden = text === '';
   }

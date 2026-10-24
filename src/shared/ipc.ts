@@ -129,7 +129,7 @@ export interface OpenRouterModels {
 
 export interface InvokeRequests {
   [INVOKE_CHANNELS.listAgents]: undefined;
-  [INVOKE_CHANNELS.addAgent]: { kind: AgentKind };
+  [INVOKE_CHANNELS.addAgent]: { kind: AgentKind; projectId?: string };
   [INVOKE_CHANNELS.selectAgent]: { id: string };
   [INVOKE_CHANNELS.closeAgent]: { id: string };
   [INVOKE_CHANNELS.restartAgent]: { id: string };
@@ -186,7 +186,7 @@ export type Validation<T> = { ok: true; value: T } | { ok: false; error: string 
 
 export interface AppApi {
   listAgents(): Promise<AgentsSnapshot>;
-  addAgent(kind: AgentKind): Promise<AddAgentResult>;
+  addAgent(kind: AgentKind, projectId?: string): Promise<AddAgentResult>;
   selectAgent(id: string): Promise<void>;
   closeAgent(id: string): Promise<void>;
   restartAgent(id: string): Promise<boolean>;
@@ -313,7 +313,10 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.addAgent]: (payload) => {
     if (!isRecord(payload)) return null;
     const kind = payload['kind'];
-    return (AGENT_KINDS as readonly unknown[]).includes(kind) ? { kind: kind as AgentKind } : null;
+    if (!(AGENT_KINDS as readonly unknown[]).includes(kind)) return null;
+    const projectId = payload['projectId'];
+    if (projectId === undefined) return { kind: kind as AgentKind };
+    return isProjectId(projectId) ? { kind: kind as AgentKind, projectId } : null;
   },
   [INVOKE_CHANNELS.selectAgent]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.closeAgent]: (payload) => withId(payload, (_record, id) => ({ id })),

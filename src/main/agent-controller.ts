@@ -6,6 +6,7 @@ import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
 import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from '../shared/openrouter';
 import { openrouterTitle } from '../shared/openrouter-chat';
+import type { FolderLookup } from '../shared/projects';
 import { EVENT_CHANNELS, type AddAgentResult, type AgentsSnapshot, type EventChannel, type PtyBacklog, type SiteAction } from '../shared/ipc';
 import { parseSidebarWidth } from '../shared/site-layout';
 import { parseThemeChoice, type ThemeChoice } from '../shared/theme';
@@ -29,7 +30,10 @@ export interface ControllerDeps {
   closeSite?(id: string): void;
   closeChat?(id: string): void;
   listRollouts?(sinceMs: number): Promise<Rollout[]>;
+  folderOf?(projectId: string): Promise<FolderLookup>;
 }
+
+const NO_PROJECTS: FolderLookup = { ok: false, error: 'Projects are not available.' };
 
 type ControllerSlice = 'agents' | 'theme' | 'sidebarWidth' | 'openrouterKey';
 
@@ -103,11 +107,15 @@ export class AgentController {
     return this.selectedId === null ? undefined : this.agentById(this.selectedId);
   }
 
-  async add(kind: AgentKind): Promise<AddAgentResult> {
+  async add(kind: AgentKind, projectId?: string): Promise<AddAgentResult> {
     const refused = this.deps.store.failure();
     if (refused !== null) return { ok: false, error: refused };
-    const agent = isCliKind(kind) ? await this.createCliAgent(kind) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent() : this.createSiteAgent(kind);
-    if (agent === null) return { ok: true };
+    const found = projectId === undefined ? undefined : await this.projectFolder(projectId);
+    if (found !== undefined && !found.ok) return { ok: false, error: found.error };
+    const folder = found?.folder;
+    const created = isCliKind(kind) ? await this.createCliAgent(kind, folder) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent() : this.createSiteAgent(kind);
+    if (created === null) return { ok: true };
+    const agent = projectId === undefined ? created : { ...created, projectId };
     this.agents.push(agent);
     this.selectedId = agent.id;
     this.roomOpen = false;
@@ -150,6 +158,14 @@ export class AgentController {
     this.emitChanged();
   }
 
+  canClose(): string | null {
+    return null;
+  }
+
+  async closeProject(projectId: string): Promise<void> {
+    for (const agent of this.agents.filter((item) => item.projectId === projectId)) await this.close(agent.id);
+  }
+
   async rename(id: string, title: string): Promise<boolean> {
     const clean = parseAgentTitle(title);
     if (clean === null || this.agentById(id) === undefined) return false;
@@ -183,7 +199,7 @@ export class AgentController {
     if (await this.claimSessions()) await this.persist('agents');
     const agent = this.agentById(id);
     if (agent === undefined || this.pty.has(id)) return false;
-    this.respawn(agent);
+    await this.respawn(agent);
     return this.pty.has(id);
   }
 
@@ -209,7 +225,7 @@ export class AgentController {
 
   async restore(): Promise<void> {
     const claimed = await this.claimSessions();
-    for (const agent of this.agents) this.respawn(agent);
+    await Promise.all(this.agents.map((agent) => this.respawn(agent)));
     if (claimed) await this.persist('agents');
   }
 
@@ -221,8 +237,8 @@ export class AgentController {
     this.pty.killAll();
   }
 
-  private async createCliAgent(kind: 'claude' | 'codex'): Promise<Agent | null> {
-    const cwd = await this.deps.pickFolder();
+  private async createCliAgent(kind: 'claude' | 'codex', folder: string | undefined): Promise<Agent | null> {
+    const cwd = folder ?? (await this.deps.pickFolder());
     if (cwd === null) return null;
     const id = randomUUID();
     const sessionId = kind === 'claude' ? randomUUID() : undefined;
@@ -260,13 +276,20 @@ export class AgentController {
     return buffer;
   }
 
-  private respawn(agent: Agent): void {
+  private async projectFolder(projectId: string): Promise<FolderLookup> {
+    return this.deps.folderOf === undefined ? NO_PROJECTS : this.deps.folderOf(projectId);
+  }
+
+  private async respawn(agent: Agent): Promise<void> {
+    const project = agent.projectId !== undefined && isCliKind(agent.kind) ? await this.projectFolder(agent.projectId) : undefined;
+    if (this.pty.has(agent.id) || this.agentById(agent.id) === undefined) return;
     this.startPty(agent.id, () =>
       restoreSpawn(agent, {
         sharedDir: this.deps.sharedDir,
         platform: this.deps.platform,
         env: this.deps.env,
         claudeTranscriptExists: (sessionId) => claudeTranscriptExists(this.deps.env, sessionId),
+        ...(project === undefined ? {} : { project }),
       }),
     );
   }

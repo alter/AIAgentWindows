@@ -128,4 +128,16 @@ describe('state store', () => {
     expect(removeAgent([agents[0] as Agent], 'a1', 'a1')).toEqual({ agents: [], selectedId: null });
     expect(removeAgent(agents, 'a1', 'missing')).toEqual({ agents, selectedId: 'a1' });
   });
+
+  it('keeps an optional project id on an agent of any kind and refuses one that is not an id', () => {
+    for (const kind of AGENT_KINDS) {
+      const base = isCliKind(kind) ? { cwd: '/w' } : {};
+      const text = JSON.stringify({ version: 2, agents: [{ id: 'a1', kind, title: 'T', createdAt: 1, projectId: 'proj-1', ...base }] });
+      expect(parseState(text).agents[0]?.projectId).toBe('proj-1');
+    }
+    expect(parseState(withAgent({})).agents[0]?.projectId).toBeUndefined();
+    for (const bad of ['', '../x', 'a/b', 'a b', 5, null, 'x'.repeat(65)]) {
+      expect(parseState(withAgent({ projectId: bad }))).toEqual(emptyState());
+    }
+  });
 });

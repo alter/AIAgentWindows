@@ -19,10 +19,10 @@ function agent(partial: Partial<Agent> & Pick<Agent, 'id' | 'kind'>): Agent {
   return { title: partial.id, createdAt: 1000, ...partial };
 }
 
-function rollout(id: string, cwd: string, createdAtMs: number): Rollout {
+function rollout(id: string, cwd: string, createdAtMs: number, origin: Record<string, unknown> = {}): Rollout {
   return {
     fileName: `rollout-2026-10-21T10-00-00-${id}.jsonl`,
-    firstLine: JSON.stringify({ type: 'session_meta', payload: { id, cwd } }),
+    firstLine: JSON.stringify({ type: 'session_meta', payload: { id, cwd, ...origin } }),
     createdAtMs,
   };
 }
@@ -74,6 +74,32 @@ describe('restoreSpawn', () => {
   });
 });
 
+describe('restoreSpawn for an agent of a project', () => {
+  const project = { ok: true as const, folder: '/work/project' };
+
+  it('runs a CLI agent in the folder the project index gives, whatever its stored cwd says', () => {
+    const spec = restoreSpawn(agent({ id: 'a', kind: 'claude', cwd: '/old/place', sessionId: SESSION, projectId: 'p1' }), { ...CTX, project });
+    expect(spec?.cwd).toBe('/work/project');
+    const codex = restoreSpawn(agent({ id: 'b', kind: 'codex', cwd: '/old/place', projectId: 'p1' }), { ...CTX, project });
+    expect(codex?.cwd).toBe('/work/project');
+  });
+
+  it('refuses with the readable reason when the project folder is missing or moved, and starts nothing', () => {
+    const lost = { ok: false as const, error: 'Project missing: the folder of "App" is gone or moved (/work/project).' };
+    expect(() => restoreSpawn(agent({ id: 'a', kind: 'claude', cwd: '/work/project', sessionId: SESSION, projectId: 'p1' }), { ...CTX, project: lost })).toThrow(lost.error);
+    expect(() => restoreSpawn(agent({ id: 'b', kind: 'codex', cwd: '/work/project', projectId: 'p1' }), { ...CTX, project: lost })).toThrow('Project missing');
+  });
+
+  it('refuses a project agent when no project answer is given at all', () => {
+    expect(() => restoreSpawn(agent({ id: 'a', kind: 'claude', cwd: '/work/project', sessionId: SESSION, projectId: 'p1' }), CTX)).toThrow('project');
+  });
+
+  it('spawns nothing for a site agent of a project, found or not', () => {
+    expect(restoreSpawn(agent({ id: 'a', kind: 'grok', projectId: 'p1' }), CTX)).toBeNull();
+    expect(restoreSpawn(agent({ id: 'a', kind: 'grok', projectId: 'p1' }), { ...CTX, project })).toBeNull();
+  });
+});
+
 describe('claimForAgents', () => {
   const bound = (item: Agent): number => item.createdAt;
 
@@ -110,5 +136,24 @@ describe('claimForAgents', () => {
     const agents = [agent({ id: 'late', kind: 'codex', cwd: '/work/p', createdAt: 1000 })];
     const claims = claimForAgents(agents, [rollout(ID_A, '/work/p', 1500)], () => 2000);
     expect(claims.size).toBe(0);
+  });
+
+  it('gives two agents of one project folder a rollout each and never the rollout of a room codex exec turn', () => {
+    const agents = [
+      agent({ id: 'first', kind: 'codex', cwd: '/work/p', createdAt: 1000, projectId: 'p1' }),
+      agent({ id: 'second', kind: 'codex', cwd: '/work/p', createdAt: 2000, projectId: 'p1' }),
+    ];
+    const exec = rollout(ID_C, '/work/p', 1200, { source: 'exec', originator: 'codex_exec' });
+    const rollouts = [rollout(ID_B, '/work/p', 2500, { source: 'cli', originator: 'codex-tui' }), exec, rollout(ID_A, '/work/p', 1500, { source: 'cli', originator: 'codex-tui' })];
+    const claims = claimForAgents(agents, rollouts, bound);
+    expect(claims.get('first')).toBe(ID_A);
+    expect(claims.get('second')).toBe(ID_B);
+    expect([...claims.values()]).not.toContain(ID_C);
+  });
+
+  it('leaves an agent without a rollout when the only rollout in its folder is an exec one', () => {
+    const agents = [agent({ id: 'only', kind: 'codex', cwd: '/work/p', createdAt: 1000 })];
+    expect(claimForAgents(agents, [rollout(ID_A, '/work/p', 1500, { source: 'exec' })], bound).size).toBe(0);
+    expect(claimForAgents(agents, [rollout(ID_A, '/work/p', 1500, { originator: 'codex_exec' })], bound).size).toBe(0);
   });
 });

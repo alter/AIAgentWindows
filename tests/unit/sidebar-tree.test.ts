@@ -196,4 +196,30 @@ describe('sidebar tree with projects', () => {
     expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Renamed')] })))).toBe(false);
     expect(sameNodes(sidebarNodes(base), sidebarNodes(reduceSidebarTree(base, { type: 'projects', projects: [view('p1', 'Alpha', true)] })))).toBe(false);
   });
+
+  it('lists the agents of a project in its Agents section and keeps them out of the No project node', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha'), view('p2', 'Beta')] });
+    const owned = (id: string, title: string, projectId: string, kind: Agent['kind'] = 'claude'): Agent => ({ ...agent(id, title, kind), projectId });
+    state = reduceSidebarTree(state, {
+      type: 'agents',
+      agents: [agent('a1', 'One'), owned('b1', 'In Alpha', 'p1'), owned('b2', 'Site in Beta', 'p2', 'grok'), owned('b3', 'Second in Alpha', 'p1', 'codex')],
+      selectedId: 'b3',
+      roomOpen: false,
+    });
+    const [alpha, beta, none] = sidebarNodes(state);
+    const agentsOf = (node: typeof alpha): string[] => node?.sections.find((item) => item.key.endsWith(':agents'))?.items.map((item) => `${item.id}:${item.kind}:${item.selected}`) ?? [];
+    expect(agentsOf(alpha)).toEqual(['b1:claude:false', 'b3:codex:true']);
+    expect(agentsOf(beta)).toEqual(['b2:grok:false']);
+    expect(none?.sections.find((item) => item.key === AGENTS_SECTION)?.items.map((item) => item.id)).toEqual(['a1']);
+    expect(section(state, AGENTS_SECTION).items.map((item) => item.id)).toEqual(['a1']);
+  });
+
+  it('selects a project agent only while the room pane is closed, and shows an agent of an unknown project nowhere', () => {
+    let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    const agents: Agent[] = [{ ...agent('b1', 'In Alpha'), projectId: 'p1' }, { ...agent('c1', 'Orphan'), projectId: 'gone' }];
+    state = reduceSidebarTree(state, { type: 'agents', agents, selectedId: 'b1', roomOpen: true });
+    const [alpha, none] = sidebarNodes(state);
+    expect(alpha?.sections[1]?.items.map((item) => item.selected)).toEqual([false]);
+    expect(none?.sections[1]?.items).toEqual([]);
+  });
 });

@@ -1,0 +1,78 @@
+TASK: agents inside a project, Codex claim in a shared folder
+
+GOAL
+  An agent added inside a project carries its `projectId` and works in the
+  project: a CLI agent runs in the project's realpath with no folder picker (a
+  missing or moved folder refuses the start with a readable reason), a site
+  agent keeps the kind's partition, an OpenRouter chat is stored under the
+  project's storage folder. The project node lists its agents with a "+" and
+  closing a project closes them. Codex claims skip a room `codex exec` rollout
+  and stay unique per agent. Projects are usable after this task
+  (docs/plans/projects.md D1, D3, D9, D20, D27, AC2 agent and claim parts, T09).
+  Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/shared/agents.ts
+  src/shared/restore.ts
+  src/shared/codex-claim.ts
+  src/shared/sidebar-tree.ts
+  src/shared/ipc.ts
+  src/shared/projects.ts
+  src/preload/index.ts
+  src/main/agent-controller.ts
+  src/main/ipc-handlers.ts
+  src/main/index.ts
+  src/main/openrouter/conversation-store.ts
+  src/main/projects/service.ts
+  src/renderer/project-tree.ts
+  src/renderer/sidebar.ts
+  src/renderer/index.ts
+  src/renderer/agent-options.ts
+  src/renderer/styles.css
+  tests/fixtures/stub-cli.mjs
+  tests/integration/project-agents.test.ts
+  tests/integration/pty-stub.test.ts
+  tests/unit/restore.test.ts
+  tests/unit/codex-claim.test.ts
+  tests/unit/sidebar-tree.test.ts
+  tests/unit/state-store.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/unit/conversation-store-project.test.ts
+  tests/full/projects.spec.ts
+  tests/full/projects-chat.spec.ts
+  docs/tech/codex@0.164.0.md
+  AGENTS.md
+
+SCOPE
+  + shared/agents.ts: optional `projectId` on an agent, validated as a project id
+  + shared/restore.ts: `restoreSpawn` takes the folder of a project agent from the project lookup and throws the readable refusal; `claimForAgents` skips exec rollouts
+  + shared/codex-claim.ts: `skipExec` (source `exec` or originator `codex_exec`)
+  + shared/sidebar-tree.ts: a project's Agents section lists its agents, the No project node only the others
+  + shared/ipc.ts, preload, ipc-handlers.ts: `agents:add { kind, projectId? }`
+  + shared/projects.ts: `FolderLookup`, imported by main/projects/service.ts
+  + main/agent-controller.ts: `add(kind, projectId?)`, async respawn with the re-check, `canClose`, `closeProject`
+  + main/index.ts: project service built before the controller, `folderOf`, closables, chats under the project folder
+  + main/openrouter/conversation-store.ts: per-agent folder, `projectChatsDir`
+  + renderer/project-tree.ts, sidebar.ts, index.ts, agent-options.ts, styles.css: add-agent menu in a project node, project agent items, close with confirmation
+  + tests: unit and integration specs beside each change (restore, codex-claim, sidebar-tree, state-store, ipc-validate, conversation-store-project, project-agents, pty-stub)
+  + tests/fixtures/stub-cli.mjs: `AIAW_STUB_ARGV_LOG` line with cwd, `source`/`originator` in `session_meta`
+  + tests/full/projects.spec.ts, tests/full/projects-chat.spec.ts: the AC2 agent smoke
+  + AGENTS.md Map: the renderer row names agent-options.ts
+  − rooms inside a project, the site seat by project — 08-room-run-context, 10-room-seats
+  − renaming a project agent from the project node
+  − any change of room.ts, room-drivers.ts or cli-args.ts
+
+OUTCOME
+  tests/integration/project-agents.test.ts and tests/full/projects.spec.ts pass; a Claude Code agent added in a project runs with cwd = the project folder.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/integration/project-agents.test.ts tests/unit/restore.test.ts tests/unit/codex-claim.test.ts tests/unit/sidebar-tree.test.ts tests/unit/conversation-store-project.test.ts exits 0
+  3. [full] electron-smoke exit 0, 73/73 or more (76 with tests/full/projects.spec.ts and tests/full/projects-chat.spec.ts)
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

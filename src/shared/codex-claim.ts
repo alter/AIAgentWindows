@@ -13,6 +13,7 @@ export interface ClaimRequest {
   cwd: string;
   claimed: ReadonlySet<string>;
   rollouts: readonly Rollout[];
+  skipExec?: boolean;
 }
 
 const ROLLOUT_NAME = /^rollout-.+-([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\.jsonl$/;
@@ -37,6 +38,10 @@ function metaPayload(firstLine: string): Record<string, unknown> | null {
   return parsed.payload;
 }
 
+function fromExec(payload: Record<string, unknown>): boolean {
+  return payload.source === 'exec' || payload.originator === 'codex_exec';
+}
+
 function claimableId(rollout: Rollout, request: ClaimRequest): string | null {
   if (rollout.createdAtMs < request.spawnedAtMs) return null;
   const id = rolloutId(rollout.fileName);
@@ -44,6 +49,7 @@ function claimableId(rollout: Rollout, request: ClaimRequest): string | null {
   const payload = metaPayload(rollout.firstLine);
   if (payload === null || payload.cwd !== request.cwd) return null;
   if (payload.id !== undefined && payload.id !== id) return null;
+  if (request.skipExec === true && fromExec(payload)) return null;
   return id;
 }
 

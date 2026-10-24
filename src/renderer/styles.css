@@ -235,6 +235,10 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .project-section-head { display: flex; align-items: center; gap: 2px; }
 .project-section-list { list-style: none; margin: 0; padding: 0 0 2px 24px; }
 .project-section-empty { padding: 2px 6px; font-style: italic; }
+.project-section-title { flex: 1; }
+.project-agent-add { flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.project-agent-add:hover { background: var(--sidebar-hover); }
+.projects-menu-item { display: flex; align-items: center; gap: 10px; }
 .no-project { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .no-project > .project-row { padding: 2px var(--sidebar-inset-end) 2px 8px; }
 .no-project-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
@@ -447,7 +451,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .terminal-host .xterm { height: 100%; }
 .terminal-host .xterm-viewport { background-color: var(--content-bg); }
 
-.agent-list li { position: relative; }
+.agent-list li, .project-agent { position: relative; }
 .agent-item { padding-right: 30px; }
 .agent-close {
   position: absolute;
@@ -465,7 +469,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
   visibility: hidden;
   cursor: pointer;
 }
-.agent-list li:hover .agent-close, .agent-list li:focus-within .agent-close { visibility: visible; }
+.agent-list li:hover .agent-close, .agent-list li:focus-within .agent-close, .project-agent:hover .agent-close, .project-agent:focus-within .agent-close { visibility: visible; }
 .agent-close:hover { background: var(--sidebar-hover); }
 
 .context-menu, .rooms-menu {
