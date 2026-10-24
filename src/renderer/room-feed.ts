@@ -3,7 +3,7 @@ import type { RoomEntry } from '../shared/room-model';
 import { COPY_REST_MS, entryState, feedSections, type FeedSection, type RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
 
-function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement): HTMLDetailsElement {
+function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement, saveButton: (() => HTMLButtonElement) | null): HTMLDetailsElement {
   const node = el('details', `room-entry kind-${entry.kind}`);
   node.dataset['author'] = entry.authorId;
   node.dataset['kind'] = entry.kind;
@@ -19,7 +19,7 @@ function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement): HTMLD
     el('span', 'room-entry-time', new Date(entry.time).toLocaleTimeString()),
   );
   const text = el('pre', 'room-entry-text', entry.text);
-  if (entry.kind === 'final') node.append(summary, copyButton(), text, copyButton());
+  if (entry.kind === 'final') node.append(summary, copyButton(), ...(saveButton === null ? [] : [saveButton()]), text, copyButton());
   else node.append(summary, text);
   return node;
 }
@@ -38,7 +38,7 @@ export class RoomFeed {
   private restTimer: ReturnType<typeof setTimeout> | null = null;
   private shown = 0;
 
-  constructor(private readonly onCopy: () => Promise<boolean>) {
+  constructor(private readonly onCopy: () => Promise<boolean>, private readonly onSavePlan: () => void) {
     this.element.setAttribute('role', 'log');
     this.element.dataset['room'] = 'feed';
   }
@@ -51,6 +51,7 @@ export class RoomFeed {
       return;
     }
     if (this.shown === 0) this.element.replaceChildren();
+    const savable = snapshot.projectId !== null && snapshot.roomId !== null;
     feedSections(entries, snapshot.plan).forEach((section, position) => {
       let node = this.sections.get(section.key);
       if (node === undefined) {
@@ -59,7 +60,7 @@ export class RoomFeed {
         this.element.insertBefore(node, this.element.children[position] ?? null);
       }
       for (const item of section.entries) {
-        if (item.index >= this.shown) node.append(entryNode(item.entry, () => this.copyButton()));
+        if (item.index >= this.shown) node.append(entryNode(item.entry, () => this.copyButton(), savable ? () => this.saveButton() : null));
       }
     });
     this.shown = entries.length;
@@ -85,6 +86,14 @@ export class RoomFeed {
     button.dataset['room'] = 'copy-final';
     button.addEventListener('click', () => void this.copy(button));
     this.copyButtons.add(button);
+    return button;
+  }
+
+  private saveButton(): HTMLButtonElement {
+    const button = el('button', 'room-button room-copy', 'Save plan');
+    button.type = 'button';
+    button.dataset['room'] = 'save-plan';
+    button.addEventListener('click', () => this.onSavePlan());
     return button;
   }
 

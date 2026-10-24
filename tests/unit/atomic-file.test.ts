@@ -35,6 +35,15 @@ describe('writeAtomic', () => {
     await expect(readFile(file, 'utf8')).rejects.toThrow();
   });
 
+  it('creates no directory when ensureDir is false', async () => {
+    const file = path.join(dir, 'x', 'a.json');
+    await expect(writeAtomic(file, 'hi', { ensureDir: false })).rejects.toThrow();
+    expect(await readdir(dir)).toEqual([]);
+    await mkdir(path.join(dir, 'x'));
+    await writeAtomic(file, 'hi', { ensureDir: false });
+    expect(await readFile(file, 'utf8')).toBe('hi');
+  });
+
   it('creates missing directories', async () => {
     const file = path.join(dir, 'x', 'y', 'a.json');
     await writeAtomic(file, 'hi');

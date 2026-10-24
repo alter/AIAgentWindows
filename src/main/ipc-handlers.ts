@@ -40,6 +40,7 @@ function buildHandlers(controller: AgentController, room: RoomService, openroute
     [INVOKE_CHANNELS.roomResume]: () => room.resume(),
     [INVOKE_CHANNELS.roomModels]: () => room.models(),
     [INVOKE_CHANNELS.roomCopyFinal]: () => room.copyFinal(),
+    [INVOKE_CHANNELS.roomSavePlan]: ({ id, replace }) => room.savePlan(id, replace),
     [INVOKE_CHANNELS.roomTerminalBacklog]: ({ id }) => room.terminalBacklog(id),
     [INVOKE_CHANNELS.roomTerminalWrite]: ({ id, data }) => room.terminalWrite(id, data),
     [INVOKE_CHANNELS.roomTerminalResize]: ({ id, cols, rows }) => room.terminalResize(id, cols, rows),

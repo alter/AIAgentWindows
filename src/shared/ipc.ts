@@ -2,6 +2,7 @@
 import { AGENT_KINDS, isUuid, parseAgentTitle, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
 import type { OutputSnapshot } from './output-buffer';
+import type { SavePlanResult } from './plan-file';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
 import { MAX_PASTE_CHARS, parseOpenRouterSettings, type ModelItem, type OpenRouterMode, type OpenRouterSettings, type OpenRouterStatus } from './openrouter';
 import { MAX_ENTRIES, MAX_MESSAGE_CHARS, type ChatDelta, type ChatLoad, type ChatSend } from './openrouter-chat';
@@ -41,6 +42,7 @@ export const INVOKE_CHANNELS = {
   roomResume: 'room:resume',
   roomModels: 'room:models',
   roomCopyFinal: 'room:copy-final',
+  roomSavePlan: 'room:save-plan',
   roomTerminalBacklog: 'room:terminal-backlog',
   roomTerminalWrite: 'room:terminal-write',
   roomTerminalResize: 'room:terminal-resize',
@@ -155,6 +157,7 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.roomResume]: undefined;
   [INVOKE_CHANNELS.roomModels]: undefined;
   [INVOKE_CHANNELS.roomCopyFinal]: undefined;
+  [INVOKE_CHANNELS.roomSavePlan]: { id: string; replace: boolean };
   [INVOKE_CHANNELS.roomTerminalBacklog]: { id: string };
   [INVOKE_CHANNELS.roomTerminalWrite]: { id: string; data: string };
   [INVOKE_CHANNELS.roomTerminalResize]: { id: string; cols: number; rows: number };
@@ -213,6 +216,7 @@ export interface AppApi {
   roomResume(): Promise<void>;
   roomModels(): Promise<RoomModels>;
   roomCopyFinal(): Promise<boolean>;
+  roomSavePlan(id: string, replace: boolean): Promise<SavePlanResult>;
   roomTerminalBacklog(id: string): Promise<PtyBacklog>;
   roomTerminalWrite(id: string, data: string): Promise<void>;
   roomTerminalResize(id: string, cols: number, rows: number): Promise<void>;
@@ -367,6 +371,8 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.roomResume]: noPayload,
   [INVOKE_CHANNELS.roomModels]: noPayload,
   [INVOKE_CHANNELS.roomCopyFinal]: noPayload,
+  [INVOKE_CHANNELS.roomSavePlan]: (payload) =>
+    isRecord(payload) && isRoomId(payload['id']) && typeof payload['replace'] === 'boolean' ? { id: payload['id'], replace: payload['replace'] } : null,
   [INVOKE_CHANNELS.roomTerminalBacklog]: (payload) => withId(payload, (_record, id) => ({ id })),
   [INVOKE_CHANNELS.roomTerminalWrite]: parseWrite,
   [INVOKE_CHANNELS.roomTerminalResize]: parseResize,

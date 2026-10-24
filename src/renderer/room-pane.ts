@@ -24,6 +24,7 @@ import {
 import { api } from './api';
 import { el } from './dom';
 import { RoomFeed } from './room-feed';
+import { PlanSaver } from './room-plan-save';
 import { RoomTable } from './room-table';
 import type { RoomTreeState } from './room-tree';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
@@ -45,7 +46,8 @@ function field(text: string, control: HTMLElement): HTMLLabelElement {
 
 export class RoomPane {
   readonly element = el('section', 'room-pane');
-  private readonly feed = new RoomFeed(() => this.onCopyFinal());
+  private readonly saver = new PlanSaver();
+  private readonly feed = new RoomFeed(() => this.onCopyFinal(), () => void this.saver.save(this.snapshot.roomId));
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly table = new RoomTable();
   private readonly setup = el('details', 'room-setup');
@@ -215,6 +217,7 @@ export class RoomPane {
       return;
     }
     this.openedId = id;
+    this.saver.clear();
     this.debugDir = null;
     this.snapshot = opened.snapshot;
     this.applyForm(opened.form);
@@ -230,6 +233,7 @@ export class RoomPane {
       return;
     }
     this.openedId = null;
+    this.saver.clear();
     this.debugDir = null;
     this.message.textContent = '';
     this.prompt.value = '';
@@ -295,7 +299,7 @@ export class RoomPane {
     this.carryHistory.type = 'button';
     this.carryHistory.dataset['room'] = 'carry-history';
     carry.append(field('Working session', this.target), this.carryFinal, this.carryHistory);
-    box.append(this.prompt, this.setup, actions, this.status, this.message, carry);
+    box.append(this.prompt, this.setup, actions, this.status, this.message, this.saver.element, carry);
     this.start.addEventListener('click', () => void this.onStart());
     this.stop.addEventListener('click', () => void api.roomStop());
     this.mode.addEventListener('change', () => {

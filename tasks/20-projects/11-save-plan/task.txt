@@ -1,0 +1,60 @@
+TASK: Save plan into the project
+
+GOAL
+  A button on the final result of a project room saves its raw final text to
+  <project>/docs/plans/<slug>.md: main reads the text from the room record,
+  rewrites every status: running line of the first 8 lines to status: draft,
+  creates docs/ and docs/plans/ one level at a time after lstat, refuses a
+  symlinked component or target and a parent outside the project's realpath,
+  asks before replacing an existing file and moves it to the Trash first, and
+  writes through the file store with an exclusive temp file
+  (docs/plans/projects.md D6, AC7, T14). Serves milestone M3: project rooms
+  usable with CLI participants.
+
+CONTEXT
+  docs/plans/projects.md
+  AGENTS.md
+  src/shared/plan-file.ts
+  src/shared/room-view.ts
+  src/shared/ipc.ts
+  src/main/projects/save-plan.ts
+  src/main/store/atomic-file.ts
+  src/main/room-service.ts
+  src/main/ipc-handlers.ts
+  src/preload/index.ts
+  src/renderer/room-plan-save.ts
+  src/renderer/room-feed.ts
+  src/renderer/room-pane.ts
+  src/renderer/styles.css
+  tests/unit/plan-file.test.ts
+  tests/unit/atomic-file.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/integration/save-plan.test.ts
+  tests/integration/room-save-plan.test.ts
+  tests/scripts/test_save_plan_hook.py
+  tests/full/projects-plan.spec.ts
+
+SCOPE
+  + shared/plan-file.ts: `planSlug` (sanitised, at most 80 characters, empty or a Windows device name gives `room-<id>`), `planText` (every line among the first 8 matching `^status: *running *$` or `status:\s*running` becomes `status: draft`), `lastFinalText`, `SavePlanResult`
+  + main/projects/save-plan.ts: `savePlanFile` (one level at a time after lstat, symlink and containment refusals, confirmation, Trash, file store write)
+  + main/store/atomic-file.ts: `ensureDir` option (default true) so the write never runs `mkdir -p`
+  + main/room-service.ts, ipc-handlers.ts, preload, shared/ipc.ts: `room:save-plan { id, replace }`, `RoomService.savePlan` reads the record, the project folder and the final text in main
+  + renderer: Save plan button on the final entry of a project room, the saved path and the Replace / Cancel confirmation in the pane
+  + tests: plan-file, save-plan, room-save-plan, atomic-file, ipc-validate, tests/scripts hook test, tests/full/projects-plan.spec.ts
+  + AGENTS.md map rows for the new files
+  − the project map and attachments (13-project-map), a Save plan for a room outside any project, the history rendering as a source of the plan, any change to what a room turn writes
+
+OUTCOME
+  tests/unit/plan-file.test.ts, tests/integration/save-plan.test.ts, tests/integration/room-save-plan.test.ts, tests/scripts/test_save_plan_hook.py and tests/full/projects-plan.spec.ts pass; each behaviour of them was red before the change.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/plan-file.test.ts tests/integration/save-plan.test.ts tests/integration/room-save-plan.test.ts exits 0
+  3. [fast] python3 -m unittest tests.scripts.test_save_plan_hook exits 0
+  4. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

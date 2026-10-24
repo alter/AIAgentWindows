@@ -7,12 +7,14 @@ const TEMP_NAME = /\.(\d+)(?:\.[0-9a-f]+)?\.tmp$/;
 
 export interface AtomicDeps {
   suffix: () => string;
+  ensureDir: boolean;
 }
 
-const defaults: AtomicDeps = { suffix: () => randomBytes(4).toString('hex') };
+const defaults: AtomicDeps = { suffix: () => randomBytes(4).toString('hex'), ensureDir: true };
 
-export async function writeAtomic(file: string, text: string, deps: AtomicDeps = defaults): Promise<void> {
-  await mkdir(path.dirname(file), { recursive: true });
+export async function writeAtomic(file: string, text: string, given: Partial<AtomicDeps> = {}): Promise<void> {
+  const deps = { ...defaults, ...given };
+  if (deps.ensureDir) await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.${deps.suffix()}.tmp`;
   try {
     await writeFile(temp, text, { encoding: 'utf8', flag: 'wx' });

@@ -16,6 +16,7 @@ import type { OpenRouterSettings, OpenRouterStatus } from '../shared/openrouter'
 import type { ChatDelta, ChatLoad, ChatSend } from '../shared/openrouter-chat';
 import type { ThemeChoice } from '../shared/theme';
 import type { RoomModels } from '../shared/cli-models';
+import type { SavePlanResult } from '../shared/plan-file';
 import type { RoomConfig, RoomEvent, RoomListItem } from '../shared/room-model';
 import type { PickParentResult, ProjectActionResult, ProjectResult, ProjectView } from '../shared/projects';
 import type { RoomOpenResult, RoomSnapshot, RoomStartResult } from '../shared/room-view';
@@ -57,6 +58,7 @@ const api: AppApi = {
   roomStop: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomStop) as Promise<void>,
   roomCarry: (id, what) => ipcRenderer.invoke(INVOKE_CHANNELS.roomCarry, { id, what }) as Promise<boolean>,
   roomCopyFinal: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomCopyFinal) as Promise<boolean>,
+  roomSavePlan: (id, replace) => ipcRenderer.invoke(INVOKE_CHANNELS.roomSavePlan, { id, replace }) as Promise<SavePlanResult>,
   roomResume: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomResume) as Promise<void>,
   roomModels: () => ipcRenderer.invoke(INVOKE_CHANNELS.roomModels) as Promise<RoomModels>,
   roomTerminalBacklog: (id) => ipcRenderer.invoke(INVOKE_CHANNELS.roomTerminalBacklog, { id }) as Promise<PtyBacklog>,

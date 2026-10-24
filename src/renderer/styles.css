@@ -677,6 +677,13 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-status { font-size: 12px; }
 .room-message { padding: 4px 8px; border-radius: 6px; font-size: 12px; background: var(--err-bg); min-height: 16px; }
 .room-message:empty { padding: 0; background: transparent; }
+.room-plan { display: flex; flex-direction: column; gap: 6px; }
+.room-plan-note { padding: 4px 8px; border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.room-plan-note[data-tone="done"] { background: var(--ok-bg); }
+.room-plan-note[data-tone="failed"] { background: var(--err-bg); }
+.room-plan-note:empty { padding: 0; background: transparent; }
+.room-plan-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--warn-bg); font-size: 12px; }
+.room-plan-confirm[hidden] { display: none; }
 
 .room-pause { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); }
 .room-pause[hidden] { display: none; }

@@ -2,6 +2,7 @@
 import { AGENT_LABELS, ROOM_AGENT_KINDS, SITE_KINDS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type Agent, type SiteKind } from './agents';
 import { emptyRoomModels, type RoomModels } from './cli-models';
 import type { ModelItem } from './openrouter';
+import { lastFinalText } from './plan-file';
 import { renderCarryHistory } from './room-history';
 import {
   OPENROUTER_KIND,
@@ -369,8 +370,7 @@ export function entryState(entry: RoomEntry): EntryState {
 }
 
 export function finalText(snapshot: RoomSnapshot): string | null {
-  const last = [...snapshot.entries].reverse().find((entry) => entry.kind === 'final');
-  return last === undefined || last.text.length === 0 ? null : last.text;
+  return lastFinalText(snapshot.entries);
 }
 
 function sectionOf(entry: RoomEntry, plan: RoomPlan | null): Pick<FeedSection, 'key' | 'title'> {

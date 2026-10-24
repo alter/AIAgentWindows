@@ -6,12 +6,14 @@ import { RoomFolders } from './room-folders';
 import type { RoomModels } from '../shared/cli-models';
 import type { OutputSnapshot } from '../shared/output-buffer';
 import { readRecord, trashRoom, writeRecord, type TrashItem } from './room-archive';
-import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
+import { dropSegmentStops, isRoomId, parseRoomTitle, resumeMatches, resumePoint, roomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from '../shared/room-model';
 import type { OpenRouterModels } from '../shared/ipc';
 import { OPENROUTER_KIND } from '../shared/room-model';
 import type { OpenRouterStatus } from '../shared/openrouter';
 import type { FolderLookup } from '../shared/projects';
 import { openrouterProblem } from './openrouter/gate';
+import { savePlanFile } from './projects/save-plan';
+import { lastFinalText, planSlug, planText, type SavePlanResult } from '../shared/plan-file';
 import type { RoomTerminals } from './room-drivers';
 import {
   applyRoomEvent,
@@ -193,6 +195,20 @@ export class RoomService {
     this.folders.forget(id);
     if (this.snapshot.roomId === id) this.snapshot = emptyRoomSnapshot(this.snapshot.projectId);
     return true;
+  }
+
+  async savePlan(id: string, replace: boolean): Promise<SavePlanResult> {
+    if (!isRoomId(id)) return { ok: false, error: 'invalid room id' };
+    if (!this.folders.has(id)) await this.list();
+    const projectId = this.folders.projectOf(id);
+    if (projectId === null) return { ok: false, error: 'Save plan is only for a room of a project.' };
+    const record = await readRecord(this.folders.dirOf(projectId), id);
+    if (record === null) return { ok: false, error: 'the room cannot be read' };
+    const text = lastFinalText(record.entries);
+    if (text === null) return { ok: false, error: 'There is no final result to save.' };
+    const found = (await this.deps.projects?.folderOf(projectId)) ?? { ok: false as const, error: 'The project no longer exists.' };
+    if (!found.ok) return found;
+    return savePlanFile(found.folder, planSlug(roomTitle(record), id), planText(text), replace, { trash: this.deps.trash });
   }
 
   stop(): void {

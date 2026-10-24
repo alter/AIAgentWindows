@@ -193,6 +193,15 @@ describe('room channels', () => {
     expect(validateRequest(INVOKE_CHANNELS.roomDelete, 'room-1_a').ok).toBe(false);
   });
 
+  it('room save-plan takes a room id and a boolean replace flag and nothing else', () => {
+    expect(INVOKE_CHANNELS.roomSavePlan).toBe('room:save-plan');
+    expect(validateRequest(INVOKE_CHANNELS.roomSavePlan, { id: 'room-1_a', replace: false, extra: 1 })).toEqual({ ok: true, value: { id: 'room-1_a', replace: false } });
+    expect(validateRequest(INVOKE_CHANNELS.roomSavePlan, { id: 'room-1_a', replace: true })).toEqual({ ok: true, value: { id: 'room-1_a', replace: true } });
+    for (const payload of [{ id: '../x', replace: true }, { id: 'a/b', replace: false }, { id: 'room-1_a' }, { id: 'room-1_a', replace: 'yes' }, { replace: true }, 'room-1_a', null]) {
+      expect(validateRequest(INVOKE_CHANNELS.roomSavePlan, payload).ok).toBe(false);
+    }
+  });
+
   it('takes no payload for state, select and stop', () => {
     for (const channel of [INVOKE_CHANNELS.roomState, INVOKE_CHANNELS.roomList, INVOKE_CHANNELS.roomSelect, INVOKE_CHANNELS.roomStop, INVOKE_CHANNELS.roomResume, INVOKE_CHANNELS.roomCopyFinal]) {
       expect(validateRequest(channel, undefined).ok).toBe(true);
