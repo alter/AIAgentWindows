@@ -108,10 +108,11 @@ async function start(): Promise<void> {
   sites = siteViews;
   siteViews.setSidebarWidth(parseSidebarWidth(state.sidebarWidth));
   const trashItem = (process.env['AIAW_USER_DATA'] ?? '').length > 0 ? moveToFolder(path.join(userData, 'trash')) : (file: string) => shell.trashItem(file);
+  const gitRunner = new GitRunner({ platform: process.platform, ...defaultGitPaths(process.platform), hooksDir: path.join(userData, 'git-empty-hooks'), env: process.env });
   const projectService = new ProjectService({
     store,
     userData,
-    git: new GitRunner({ platform: process.platform, ...defaultGitPaths(process.platform), hooksDir: path.join(userData, 'git-empty-hooks'), env: process.env }),
+    git: gitRunner,
     pickFolder,
     trash: trashItem,
   });
@@ -193,6 +194,7 @@ async function start(): Promise<void> {
     roomsDir,
     userData,
     projects: projectService,
+    git: gitRunner,
     debugRoot,
     trash: trashItem,
     driverFor: drivers.factory,

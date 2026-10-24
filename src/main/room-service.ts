@@ -13,6 +13,9 @@ import type { OpenRouterStatus } from '../shared/openrouter';
 import type { FolderLookup } from '../shared/projects';
 import { openrouterProblem } from './openrouter/gate';
 import { savePlanFile } from './projects/save-plan';
+import { collectProjectMap, type FileLister } from './projects/map-files';
+import { modelCatalog, NO_CATALOG, type ModelCatalog } from '../shared/kinds/capabilities';
+import type { ModelItem } from '../shared/openrouter';
 import { lastFinalText, planSlug, planText, type SavePlanResult } from '../shared/plan-file';
 import type { RoomTerminals } from './room-drivers';
 import {
@@ -42,6 +45,7 @@ export interface RoomServiceDeps {
   roomsDir: string;
   userData: string;
   projects?: RoomProjects;
+  git?: FileLister;
   debugRoot?: string;
   trash: TrashItem;
   driverFor: DriverFactory;
@@ -123,24 +127,33 @@ export class RoomService {
     if (this.snapshot.projectId === projectId) this.snapshot = emptyRoomSnapshot();
   }
 
-  private async context(projectId: string | null): Promise<{ ok: true; ctx: RoomRunContext } | { ok: false; error: string }> {
+  private async context(projectId: string | null, catalog: ModelCatalog): Promise<{ ok: true; ctx: RoomRunContext } | { ok: false; error: string }> {
     if (projectId === null) return { ok: true, ctx: noProjectContext(this.deps.roomsDir) };
     const found = (await this.deps.projects?.folderOf(projectId)) ?? { ok: false as const, error: 'The project no longer exists.' };
-    return found.ok ? { ok: true, ctx: projectContext(this.folders.dirOf(projectId), projectId, found.folder) } : found;
+    if (!found.ok) return found;
+    const { git } = this.deps;
+    return {
+      ok: true,
+      ctx: projectContext(this.folders.dirOf(projectId), projectId, found.folder, {
+        catalog,
+        ...(git === undefined ? {} : { collectMap: (limits) => collectProjectMap(found.folder, git, { limits }) }),
+      }),
+    };
   }
 
-  private async openrouterProblem(config: RoomConfig): Promise<string | null> {
+  private async openrouter(config: RoomConfig): Promise<{ problem: string | null; models: readonly ModelItem[] }> {
     const gate = this.deps.openrouter;
-    if (gate === undefined || !config.participants.some((participant) => participant.kind === OPENROUTER_KIND)) return null;
-    return openrouterProblem(config.participants, gate.status(), (await gate.models(false)).models);
+    if (gate === undefined || !config.participants.some((participant) => participant.kind === OPENROUTER_KIND)) return { problem: null, models: [] };
+    const { models } = await gate.models(false);
+    return { problem: openrouterProblem(config.participants, gate.status(), models), models };
   }
 
   async start(config: RoomConfig, continueId?: string, resume?: boolean): Promise<RoomStartResult> {
     try {
-      const problem = await this.openrouterProblem(config);
+      const { problem, models } = await this.openrouter(config);
       if (problem !== null) return { ok: false, error: problem };
       const projectId = continueId === undefined ? this.snapshot.projectId : this.folders.projectOf(continueId);
-      const made = await this.context(projectId);
+      const made = await this.context(projectId, models.length === 0 ? NO_CATALOG : modelCatalog(models));
       if (!made.ok) return made;
       const from = continueId === undefined ? undefined : await this.continuation(continueId, resume === true ? config : undefined);
       const run = this.room.start(config, from, made.ctx);

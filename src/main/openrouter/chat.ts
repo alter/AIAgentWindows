@@ -21,6 +21,8 @@ export interface ChatInput {
   user: string;
   effort: string | null;
   web: boolean;
+  denyDataCollection?: boolean;
+  maxCompletionTokens?: number;
 }
 
 export interface ChatRequest {
@@ -67,18 +69,15 @@ export function requestBody(request: ChatRequest, stream: boolean): Record<strin
 }
 
 export function chatBody(input: ChatInput): Record<string, unknown> {
-  return requestBody(
-    {
-      model: input.model,
-      messages: [
-        { role: 'system', content: input.system },
-        { role: 'user', content: input.user },
-      ],
-      effort: input.effort,
-      web: input.web,
-    },
-    false,
-  );
+  const messages: ChatRequest['messages'] = [
+    { role: 'system', content: input.system },
+    { role: 'user', content: input.user },
+  ];
+  return {
+    ...requestBody({ model: input.model, messages, effort: input.effort, web: input.web }, false),
+    ...(input.denyDataCollection === true ? { provider: { data_collection: 'deny' } } : {}),
+    ...(input.maxCompletionTokens === undefined ? {} : { max_completion_tokens: input.maxCompletionTokens }),
+  };
 }
 
 export function postHeaders(key: string, accept: string): Record<string, string> {
@@ -180,6 +179,16 @@ async function pause(ms: number, options: ChatOptions): Promise<void> {
   }
 }
 
+function noEndpointsText(model: string): string {
+  return `No OpenRouter endpoint of ${model} accepts data_collection: deny, which this project room sends because the project map carries your code. Choose another model, or ask the owner to allow collection for this model.`;
+}
+
+function refusedForLackOfEndpoints(answer: Answer): boolean {
+  const value = parseJson(answer.text);
+  const error = isRecord(value) ? value['error'] : undefined;
+  return answer.status === 404 && /no endpoints/i.test(errorDetail(error));
+}
+
 export async function runChat(deps: ChatDeps, key: string, input: ChatInput, options: ChatOptions): Promise<string | null> {
   const deadline = Date.now() + options.timeoutMs;
   const body = JSON.stringify(chatBody(input));
@@ -188,5 +197,6 @@ export async function runChat(deps: ChatDeps, key: string, input: ChatInput, opt
     await pause(Math.min(waitMs(answer.retryAfter), Math.max(0, deadline - Date.now())), options);
     answer = await post(deps, key, body, options, deadline);
   }
+  if (input.denyDataCollection === true && refusedForLackOfEndpoints(answer)) throw new ChatError('failed', noEndpointsText(input.model));
   return readAnswer(answer.status, answer.text, answer.reset);
 }

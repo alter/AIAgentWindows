@@ -2,6 +2,7 @@
 import type { RoomEntry } from '../shared/room-model';
 import { COPY_REST_MS, entryState, feedSections, type FeedSection, type RoomSnapshot } from '../shared/room-view';
 import { el } from './dom';
+import { contextSentNode } from './room-context-sent';
 
 function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement, saveButton: (() => HTMLButtonElement) | null): HTMLDetailsElement {
   const node = el('details', `room-entry kind-${entry.kind}`);
@@ -19,8 +20,9 @@ function entryNode(entry: RoomEntry, copyButton: () => HTMLButtonElement, saveBu
     el('span', 'room-entry-time', new Date(entry.time).toLocaleTimeString()),
   );
   const text = el('pre', 'room-entry-text', entry.text);
-  if (entry.kind === 'final') node.append(summary, copyButton(), ...(saveButton === null ? [] : [saveButton()]), text, copyButton());
-  else node.append(summary, text);
+  const context = entry.digest === undefined ? [] : [contextSentNode(entry.digest)];
+  if (entry.kind === 'final') node.append(summary, copyButton(), ...(saveButton === null ? [] : [saveButton()]), text, ...context, copyButton());
+  else node.append(summary, text, ...context);
   return node;
 }
 

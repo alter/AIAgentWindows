@@ -116,7 +116,7 @@ const CLI_ACTIONS =
   'You may search the web and fetch pages when it helps. Do not run commands or edit files. You discuss and plan only: never execute the project\'s plans.';
 const WEB_ACTIONS = 'Do not run commands or edit files.';
 
-function introFor(participant: RoomParticipant, phase: PromptPhase): string {
+export function introFor(participant: RoomParticipant, phase: PromptPhase): string {
   const task = taskFor(phase);
   const actions = participant.kind === 'claude' || participant.kind === 'codex' ? CLI_ACTIONS : WEB_ACTIONS;
   return [
@@ -137,16 +137,20 @@ function cliPrompt(
   return { text, attachHistory: false, placeHistory: true };
 }
 
+const HISTORY_FILE_TEXT = 'The history is in the attached file.';
+const MAP_FILE_TEXT = 'The project map and the history are in the attached file.';
+
 function webPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
   continuation: PromptPhase,
+  projectMap: boolean,
 ): ParticipantPrompt {
   const intro = introFor(participant, continuation);
   const history = renderHistory(roomId, entries);
-  if (history.length > WEB_INLINE_LIMIT) {
-    return { text: `${intro}\nThe history is in the attached file.`, attachHistory: true, placeHistory: false };
+  if (projectMap || history.length > WEB_INLINE_LIMIT) {
+    return { text: `${intro}\n${projectMap ? MAP_FILE_TEXT : HISTORY_FILE_TEXT}`, attachHistory: true, placeHistory: false };
   }
   return { text: `${intro}\n\n${history}`, attachHistory: false, placeHistory: false };
 }
@@ -155,13 +159,18 @@ function openrouterPrompt(participant: RoomParticipant, continuation: PromptPhas
   return { text: introFor(participant, continuation), attachHistory: false, placeHistory: true };
 }
 
+export interface PromptOptions {
+  projectMap?: boolean;
+}
+
 export function buildParticipantPrompt(
   participant: RoomParticipant,
   roomId: string,
   entries: readonly RoomEntry[],
   continuation: PromptPhase = false,
+  options: PromptOptions = {},
 ): ParticipantPrompt {
   if (participant.kind === 'claude' || participant.kind === 'codex') return cliPrompt(participant, roomId, entries, continuation);
   if (participant.kind === 'openrouter') return openrouterPrompt(participant, continuation);
-  return webPrompt(participant, roomId, entries, continuation);
+  return webPrompt(participant, roomId, entries, continuation, options.projectMap === true);
 }

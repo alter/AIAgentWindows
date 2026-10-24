@@ -7,6 +7,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 export const FAKE_MODEL_MARKUP = '<img src=x onerror="window.__pwned=1">Evil <b>bold</b>';
 export const PROVIDER_LIMITED_MODEL = 'acme/provider-limited:free';
 export const ACCOUNT_LIMITED_MODEL = 'acme/account-limited:free';
+export const SMALL_CONTEXT_MODEL = 'acme/small-context';
+export const CEILING_MODEL = 'acme/ceiling';
+export const NO_ENDPOINTS_MODEL = 'acme/no-endpoints:free';
 export const FAKE_PROVIDER_NAME = 'Acme Cloud';
 export const FAKE_LIMIT_MARKUP = '<img src=x onerror="window.__pwned=4">busy <b>now</b>';
 export const ACCOUNT_RESET_MS = 45 * 60 * 1000;
@@ -22,7 +25,15 @@ export interface RecordedRequest {
 
 export interface ChatCall {
   n: number;
-  body: { model?: string; messages?: { role: string; content: string }[]; reasoning?: { effort?: string }; tools?: { type: string }[]; stream?: boolean } | null;
+  body: {
+    model?: string;
+    messages?: { role: string; content: string }[];
+    reasoning?: { effort?: string };
+    tools?: { type: string }[];
+    stream?: boolean;
+    provider?: { data_collection?: string };
+    max_completion_tokens?: number;
+  } | null;
   headers: Record<string, string | string[] | undefined>;
 }
 
@@ -103,6 +114,28 @@ export function fakeModels(): unknown {
     ],
     total_count: 8,
     links: { next: null },
+  };
+}
+
+export function fakeModelsWithLimits(): unknown {
+  const base = fakeModels() as { data: unknown[]; total_count: number; links: unknown };
+  const entry = (id: string, name: string, contextLength: number, extra: Record<string, unknown> = {}): unknown => ({
+    id,
+    name,
+    context_length: contextLength,
+    architecture: { output_modalities: ['text'] },
+    pricing: { prompt: '0.000001', completion: '0.000002' },
+    ...extra,
+  });
+  return {
+    ...base,
+    data: [
+      ...base.data,
+      entry(SMALL_CONTEXT_MODEL, 'Small Context', 4000),
+      entry(CEILING_MODEL, 'Reports a Ceiling', 32000, { top_provider: { max_completion_tokens: 2048 } }),
+      entry(NO_ENDPOINTS_MODEL, 'No Endpoints', 32000, { pricing: { prompt: '0', completion: '0' } }),
+    ],
+    total_count: base.total_count + 3,
   };
 }
 
@@ -197,7 +230,10 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
     if (!hold) response.end();
   };
 
-  const limitedReply = (model: string | undefined): ChatScript | undefined => {
+  const limitedReply = (model: string | undefined, denied: boolean): ChatScript | undefined => {
+    if (model === NO_ENDPOINTS_MODEL && denied) {
+      return { status: 404, body: { error: { code: 404, message: 'No endpoints found matching your data policy (Free model training). Update your settings at https://openrouter.ai/settings/privacy' } } };
+    }
     if (model === PROVIDER_LIMITED_MODEL) {
       const metadata = { error_type: 'rate_limit_exceeded', provider_name: FAKE_PROVIDER_NAME, provider_code: 429 };
       return { status: 429, body: { error: { code: 429, message: FAKE_LIMIT_MARKUP, metadata } } };
@@ -213,7 +249,7 @@ export async function startFakeOpenRouter(): Promise<FakeOpenRouter> {
   const chatReply = (call: ChatCall, response: http.ServerResponse): void => {
     const scripted = fake.chat(call);
     const plain = scripted === undefined || (scripted.status === undefined && scripted.body === undefined && scripted.stream === undefined && scripted.hang !== true);
-    const script = plain ? (limitedReply(call.body?.model) ?? scripted) : scripted;
+    const script = plain ? (limitedReply(call.body?.model, call.body?.provider?.data_collection === 'deny') ?? scripted) : scripted;
     if (script?.hang === true) return;
     if (call.body?.stream === true && script?.status === undefined && script?.body === undefined) {
       void streamReply(script?.stream?.parts ?? defaultStream(call), script?.stream?.delayMs ?? 5, script?.stream?.hold === true, response);

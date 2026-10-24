@@ -467,7 +467,7 @@ test('the feed is grouped by round, entries are collapsed spoilers, the final is
     const first = page.locator('[data-section="round-1"] details.room-entry').first();
     await expect(first).toHaveJSProperty('open', false);
     expect(await page.locator('[data-section="round-2"] details.room-entry').count()).toBe(2);
-    await first.locator('summary').click();
+    await first.locator('.room-entry-head').click();
     await expect(first).toHaveJSProperty('open', true);
     const others = page.locator('details.room-entry.kind-reply');
     expect(await others.evaluateAll((nodes) => nodes.map((node) => (node as HTMLDetailsElement).open))).toEqual([true, false, false, false]);
@@ -523,7 +523,7 @@ test('a new entry does not close or rebuild an entry the owner opened', async ()
     await field(page, 'start').click();
     const first = page.locator('details.room-entry.kind-reply').first();
     await first.waitFor({ state: 'attached', timeout: finishedWithin(PARTICIPANTS.length, 2).timeout });
-    await first.locator('summary').click();
+    await first.locator('.room-entry-head').click();
     await first.evaluate((node) => node.setAttribute('data-mark', 'kept'));
     await expect(field(page, 'status')).toContainText('done', finishedWithin(PARTICIPANTS.length, 2));
     await expect(first).toHaveAttribute('data-mark', 'kept');

@@ -1,6 +1,8 @@
 // room-context.ts
 import path from 'node:path';
 import { isProjectId } from '../shared/projects';
+import type { ModelCatalog } from '../shared/kinds/capabilities';
+import type { MapLimits } from '../shared/project-map';
 import type { RoomParticipant } from '../shared/room-model';
 
 export interface RoomCwd {
@@ -13,6 +15,13 @@ export interface RoomRunContext {
   roomsDir: string;
   projectId: string | null;
   cwdFor(participant: RoomParticipant): RoomCwd;
+  catalog?: ModelCatalog;
+  collectMap?(limits: MapLimits): Promise<{ text: string }>;
+}
+
+export interface ProjectExtras {
+  catalog?: ModelCatalog;
+  collectMap?(limits: MapLimits): Promise<{ text: string }>;
 }
 
 export class FolderNames {
@@ -40,6 +49,6 @@ export function noProjectContext(roomsDir: string): RoomRunContext {
   return { roomsDir, projectId: null, cwdFor: (participant) => ({ path: path.join(roomsDir, names.of(participant)), create: true, isolated: false }) };
 }
 
-export function projectContext(roomsDir: string, projectId: string, folder: string): RoomRunContext {
-  return { roomsDir, projectId, cwdFor: () => ({ path: folder, create: false, isolated: true }) };
+export function projectContext(roomsDir: string, projectId: string, folder: string, extras: ProjectExtras = {}): RoomRunContext {
+  return { roomsDir, projectId, cwdFor: () => ({ path: folder, create: false, isolated: true }), ...extras };
 }

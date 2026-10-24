@@ -150,6 +150,8 @@ class OpenRouterDriver implements ParticipantDriver {
           user: request.text,
           effort: this.participant.effort ?? null,
           web: this.participant.web === true,
+          ...(request.denyDataCollection === true ? { denyDataCollection: true } : {}),
+          ...(request.maxCompletionTokens === undefined ? {} : { maxCompletionTokens: request.maxCompletionTokens }),
         },
         { timeoutMs: request.timeoutMs, signal: AbortSignal.any([request.signal, own.signal]) },
       );
@@ -258,6 +260,17 @@ class SiteDriver implements ParticipantDriver {
     await rec.finish({ outcome, code, trace, dom });
   }
 
+  private async attach(request: TurnRequest): Promise<string> {
+    try {
+      for (const file of request.files) await this.seat.adapter.attachFile(this.seat.runner, file);
+      return request.text;
+    } catch (error) {
+      if (request.inline === undefined || !(error instanceof SiteAdapterError) || error.code !== 'attach-unsupported') throw error;
+      request.onInline?.();
+      return request.inline;
+    }
+  }
+
   async turn(request: TurnRequest): Promise<string | null> {
     const turn = randomBytes(3).toString('hex');
     const rec = this.open(request, turn);
@@ -268,9 +281,9 @@ class SiteDriver implements ParticipantDriver {
     let trace: Readonly<Record<string, SiteLogValue>> = {};
     try {
       await this.ready(request, rec);
-      for (const file of request.files) await this.seat.adapter.attachFile(this.seat.runner, file);
+      const text = await this.attach(request);
       watch = await this.watch(rec, stream);
-      const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
+      const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, text, {
         ...DEFAULT_TURN_OPTIONS,
         pollMs: this.timing.pollMs,
         settleMs: this.timing.settleMs,

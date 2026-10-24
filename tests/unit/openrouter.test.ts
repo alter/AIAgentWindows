@@ -175,6 +175,20 @@ describe('model list parse', () => {
     expect(parse([entry('a/neg-context', { context_length: -5 })])[0]?.contextLength).toBeNull();
   });
 
+  it('reads the completion ceiling a model reports, and only a positive whole number of it', () => {
+    const [reports, silent, zero, text, fraction] = parse([
+      entry('a/reports', { top_provider: { max_completion_tokens: 2048 } }),
+      entry('a/silent', { top_provider: { max_completion_tokens: null } }),
+      entry('a/zero', { top_provider: { max_completion_tokens: 0 } }),
+      entry('a/text', { top_provider: { max_completion_tokens: 'lots' } }),
+      entry('a/fraction', { top_provider: { max_completion_tokens: 10.5 } }),
+    ]);
+    expect(reports?.maxCompletionTokens).toBe(2048);
+    for (const model of [silent, zero, text, fraction]) expect(model).not.toHaveProperty('maxCompletionTokens');
+    expect(parse([entry('a/no-provider', { top_provider: 'x' })])[0]).not.toHaveProperty('maxCompletionTokens');
+    expect(parse([entry('a/none')])[0]).not.toHaveProperty('maxCompletionTokens');
+  });
+
   it('returns nothing for a body that is not a model list', () => {
     expect(parseModels(null, NOW)).toEqual([]);
     expect(parseModels({}, NOW)).toEqual([]);

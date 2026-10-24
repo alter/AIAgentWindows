@@ -1,4 +1,5 @@
 // room-model.ts
+import { parseDigest, type ContextDigest } from './context-digest';
 import { AGENT_KINDS, AGENT_LABELS, OPENROUTER_KIND, ROOM_AGENT_KINDS, isSiteKind, type AgentKind } from './agents';
 import { MODEL_ID_PATTERN, isFreeModel } from './openrouter';
 
@@ -67,6 +68,7 @@ export interface RoomEntry {
   text: string;
   round?: number;
   state?: RoomEntryState;
+  digest?: ContextDigest;
 }
 
 export type RoomStatus = 'done' | 'stopped' | 'failed';
@@ -285,6 +287,8 @@ function parseEntry(value: unknown): RoomEntry | null {
     if (typeof state !== 'string' || !(ENTRY_STATES as readonly string[]).includes(state)) return null;
     entry.state = state as RoomEntryState;
   }
+  const digest = parseDigest(value['digest']);
+  if (digest !== null) entry.digest = digest;
   return entry;
 }
 

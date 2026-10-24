@@ -48,6 +48,7 @@ export interface ModelItem {
   completionUsdPerMillion: number | null;
   free: boolean;
   efforts: string[];
+  maxCompletionTokens?: number;
 }
 
 export interface OpenRouterSettings {
@@ -154,6 +155,11 @@ function contextOf(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
 }
 
+function completionCeilingOf(provider: unknown): { maxCompletionTokens?: number } {
+  const value = isRecord(provider) ? provider['max_completion_tokens'] : undefined;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? { maxCompletionTokens: value } : {};
+}
+
 function producesText(architecture: unknown): boolean {
   if (architecture === undefined) return true;
   if (!isRecord(architecture)) return false;
@@ -193,6 +199,7 @@ function parseModel(raw: unknown, nowMs: number): ModelItem | null {
     completionUsdPerMillion: completion,
     free: isFreeModel(id, prompt, completion),
     efforts: parseEfforts(raw['reasoning']),
+    ...completionCeilingOf(raw['top_provider']),
   };
 }
 

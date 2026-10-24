@@ -6,7 +6,11 @@ import { roomPackPath, writeRecord } from './room-archive';
 import type { RoomCwd, RoomRunContext } from './room-context';
 import { newNonce, renderEntryBlock, renderHistoryHeader, type PromptPhase } from '../shared/room-history';
 import { NO_CATALOG, capabilitiesOf } from '../shared/kinds/capabilities';
-import { composePack, historyProvider, type PackFile } from './runs/context-pack';
+import type { ContextDigest } from '../shared/context-digest';
+import { type PackFile } from './runs/context-pack';
+import { digestOf, runMap } from './runs/digest';
+import type { RunMap } from './runs/project-map-provider';
+import { buildPack, mapLimitsFor, receivesMap } from './runs/project-pack';
 import {
   MAX_ERROR_CHARS,
   MAX_HISTORY_CHARS,
@@ -38,6 +42,10 @@ export interface TurnRequest {
   system?: string;
   text: string;
   files: string[];
+  inline?: string;
+  onInline?(): void;
+  denyDataCollection?: boolean;
+  maxCompletionTokens?: number;
   roomName: string;
   timeoutMs: number;
   signal: AbortSignal;
@@ -156,6 +164,7 @@ class RunState {
   total: number;
   readonly waiting = new Set<() => void>();
   readonly drivers = new Map<string, Promise<ParticipantDriver>>();
+  map: RunMap | null = null;
   private readonly packCounts = new Map<string, number>();
   readonly finalizer: RoomParticipant;
   private readonly nonce: string;
@@ -329,6 +338,7 @@ export class Room {
         plan: roomPlan(run.config),
         ...(run.previous === undefined ? {} : { previous: run.previous }),
       });
+      run.map = await this.collectMap(run);
       if (run.resumed === undefined) this.append(run, OWNER_ID, OWNER_LABEL, 'prompt', run.config.prompt);
       else {
         run.rewrite();
@@ -352,6 +362,16 @@ export class Room {
       this.emit({ type: 'finished', roomId: run.id, status });
     }
     return { roomId: run.id, historyPath: run.historyPath, status, entries: [...run.entries] };
+  }
+
+  private async collectMap(run: RunState): Promise<RunMap | null> {
+    const { ctx, config } = run;
+    if (ctx.collectMap === undefined || !receivesMap(config.participants)) return null;
+    try {
+      return runMap((await ctx.collectMap(mapLimitsFor(config.participants, ctx.catalog ?? NO_CATALOG))).text);
+    } catch {
+      return null;
+    }
   }
 
   private async finalize(run: RunState): Promise<void> {
@@ -435,6 +455,7 @@ export class Room {
     if (outcome.kind === 'aborted') return false;
     const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
     const mark: EntryMark = {};
+    if (outcome.digest !== undefined) mark.digest = outcome.digest;
     if (round !== undefined) mark.round = round;
     if (outcome.kind === 'error' && outcome.timedOut === true) mark.state = 'timeout';
     this.append(run, participant.id, participant.label, kind, outcome.text, mark);
@@ -443,24 +464,52 @@ export class Room {
     return outcome.kind === 'reply';
   }
 
-  private async turn(
+  private async turn(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase): Promise<TurnOutcome> {
+    const sent: { digest?: () => ContextDigest } = {};
+    const outcome = await this.attempt(run, participant, seen, phase, sent);
+    return outcome.kind === 'aborted' || sent.digest === undefined ? outcome : { ...outcome, digest: sent.digest() };
+  }
+
+  private async attempt(
     run: RunState,
     participant: RoomParticipant,
     seen: readonly RoomEntry[],
     phase: PromptPhase,
+    sent: { digest?: () => ContextDigest },
   ): Promise<TurnOutcome> {
     let driver: ParticipantDriver | null = null;
     try {
       driver = await this.driver(run, participant);
-      const pack = composePack(
-        [historyProvider({ participant, roomId: run.id, seen, phase, renderRun: (entries) => run.render(entries) })],
-        capabilitiesOf(participant.kind, participant, NO_CATALOG),
-      );
+      const project = run.ctx.projectId !== null;
+      const built = buildPack({
+        participant,
+        roomId: run.id,
+        seen,
+        phase,
+        renderRun: (entries) => run.render(entries),
+        capabilities: capabilitiesOf(participant.kind, participant, run.ctx.catalog ?? NO_CATALOG),
+        map: run.map,
+        project,
+      });
+      const { pack } = built;
+      const files = await this.deliver(run, participant, pack.files);
+      let inlined = false;
+      sent.digest = () =>
+        digestOf({
+          all: run.entries,
+          built,
+          files: files.map((file, index) => ({ name: path.basename(file), bytes: Buffer.byteLength(pack.files[index]?.content ?? '', 'utf8') })),
+          ...(run.map === null || !built.parts.some((part) => part.id === 'project-map') ? {} : { map: run.map.hash }),
+          inlined,
+        });
       const request: TurnRequest = {
         runId: run.id,
         ...(pack.system === undefined ? {} : { system: pack.system }),
         text: pack.text,
-        files: await this.deliver(run, participant, pack.files),
+        files,
+        ...(built.inline === undefined ? {} : { inline: built.inline.text, onInline: () => (inlined = true) }),
+        ...(built.denyDataCollection === true ? { denyDataCollection: true } : {}),
+        ...(built.maxCompletionTokens === undefined ? {} : { maxCompletionTokens: built.maxCompletionTokens }),
         roomName: run.title ?? run.id,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,
@@ -509,6 +558,10 @@ export class Room {
 interface EntryMark {
   round?: number;
   state?: RoomEntryState;
+  digest?: ContextDigest;
 }
 
-type TurnOutcome = { kind: 'reply'; text: string } | { kind: 'error'; text: string; timedOut?: boolean } | { kind: 'aborted' };
+type TurnOutcome =
+  | { kind: 'reply'; text: string; digest?: ContextDigest }
+  | { kind: 'error'; text: string; timedOut?: boolean; digest?: ContextDigest }
+  | { kind: 'aborted' };

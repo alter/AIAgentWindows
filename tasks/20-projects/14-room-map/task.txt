@@ -1,0 +1,77 @@
+TASK: project map for web and OpenRouter participants, the budget, the digest and its disclosure
+
+GOAL
+  A project room sends its web and OpenRouter participants the project map next to the
+  history: once per run, one attachment for a web page (the same text inlined when the page
+  cannot take files), a system part cut to the model's context for OpenRouter with
+  `provider.data_collection: "deny"` and `max_completion_tokens` only when the model
+  reports one. Every turn records a digest of what was sent, which survives a rename, a
+  restart and a continuation and shows in the feed as "Context sent"; the room says which
+  sites and models receive the map (docs/plans/projects.md D11, D12, D13, D22, D25, T17).
+  Serves milestone M3: project rooms usable with every participant kind.
+
+CONTEXT
+  docs/plans/projects.md
+  AGENTS.md
+  docs/tech/openrouter@2026-10-23.md
+  src/main/runs/context-pack.ts
+  src/main/runs/project-pack.ts
+  src/main/runs/project-map-provider.ts
+  src/main/runs/digest.ts
+  src/main/room.ts
+  src/main/room-service.ts
+  src/main/room-drivers.ts
+  src/main/openrouter/chat.ts
+  src/shared/context-digest.ts
+  src/shared/context-sent.ts
+  src/shared/pack-fit.ts
+  src/shared/kinds/capabilities.ts
+  src/renderer/room-feed.ts
+  src/renderer/room-context-sent.ts
+  src/renderer/room-recipients.ts
+  tests/integration/room-map.test.ts
+  tests/full/projects-map.spec.ts
+  src/main/index.ts
+  src/main/room-context.ts
+  src/renderer/room-pane.ts
+  src/renderer/styles.css
+  src/shared/openrouter.ts
+  src/shared/room-history.ts
+  src/shared/room-model.ts
+  tests/fixtures/openrouter-fake.ts
+  tests/full/room.spec.ts
+  tests/unit/context-digest.test.ts
+  tests/unit/context-sent.test.ts
+  tests/unit/kind-capabilities.test.ts
+  tests/unit/openrouter-chat-body.test.ts
+  tests/unit/openrouter.test.ts
+  tests/unit/pack-fit.test.ts
+  tests/unit/project-pack.test.ts
+
+SCOPE
+  + shared/context-digest.ts: the digest of a turn and its parser; `parseEntry` keeps it, so a rename, a reopen and a continuation do not lose it
+  + shared/pack-fit.ts: history takes precedence, the map shrinks first, the oldest entries go next, the latest prompt stays
+  + shared/context-sent.ts: the "Context sent" view of a digest and the recipients line (reducers, no DOM)
+  + shared/kinds/capabilities.ts: the completion ceiling a model reports, the answer reserve and the input budget at 3 characters per token, `modelCatalog`
+  + shared/openrouter.ts: `top_provider.max_completion_tokens` parsed; shared/room-history.ts: the web prompt names the attachment when a map travels with it
+  + main/runs/project-map-provider.ts, project-pack.ts, digest.ts: the project-map `ContextProvider`, the pack per recipient kind with its inline fallback and OpenRouter fields, the digest with hashes
+  + main/room.ts, room-context.ts, room-service.ts, index.ts: the map built once per run, packs built per recipient, the digest on the turn's entry, the run context carries the catalog and the map collector
+  + main/room-drivers.ts, main/openrouter/chat.ts: try-then-inline on `attach-unsupported`; `provider.data_collection` and `max_completion_tokens` in `chatBody` only; a refusal for lack of endpoints is a readable error naming `data_collection`
+  + renderer: "Context sent" disclosure under each turn (textContent only), the recipients line above Start
+  + tests: unit for each pure module, integration `room-map` on the fake OpenRouter server (4000-context model, ceiling model, "no endpoints" refusal), JSDOM page with and without a file input, stub CLI, secret canaries on every outgoing byte; smoke `projects-map`
+  − roles, the orchestrator, pack content stored by hash, any change to a "No project" room's request bytes, to a CLI participant's prompt or to the shared `requestBody` of the streaming chat agent
+  − the CLI intro sentence "You may search the web" in a project room (named in the plan notes, left as it is)
+
+OUTCOME
+  tests/integration/room-map.test.ts and tests/full/projects-map.spec.ts pass; every fast-tier command of docs/PROJECT.md section 6 exits 0.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/pack-fit.test.ts tests/unit/context-digest.test.ts tests/unit/context-sent.test.ts tests/unit/project-pack.test.ts tests/unit/openrouter-chat-body.test.ts tests/unit/kind-capabilities.test.ts tests/integration/room-map.test.ts exits 0
+  3. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

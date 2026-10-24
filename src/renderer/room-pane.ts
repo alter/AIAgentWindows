@@ -25,6 +25,7 @@ import { api } from './api';
 import { el } from './dom';
 import { RoomFeed } from './room-feed';
 import { PlanSaver } from './room-plan-save';
+import { RoomRecipients } from './room-recipients';
 import { RoomTable } from './room-table';
 import type { RoomTreeState } from './room-tree';
 import { TerminalPane, roomSessionIo } from './terminal-pane';
@@ -47,6 +48,7 @@ function field(text: string, control: HTMLElement): HTMLLabelElement {
 export class RoomPane {
   readonly element = el('section', 'room-pane');
   private readonly saver = new PlanSaver();
+  private readonly recipients = new RoomRecipients();
   private readonly feed = new RoomFeed(() => this.onCopyFinal(), () => void this.saver.save(this.snapshot.roomId));
   private readonly prompt = el('textarea', 'room-prompt');
   private readonly table = new RoomTable();
@@ -256,6 +258,7 @@ export class RoomPane {
 
   private refreshDigest(): void {
     this.digest.textContent = setupDigest(this.table.ids().length, this.mode.value as RoomMode, this.rounds.value);
+    this.recipients.update(this.table.rows(), this.snapshot.projectId);
   }
 
   private controls(): HTMLElement {
@@ -299,7 +302,7 @@ export class RoomPane {
     this.carryHistory.type = 'button';
     this.carryHistory.dataset['room'] = 'carry-history';
     carry.append(field('Working session', this.target), this.carryFinal, this.carryHistory);
-    box.append(this.prompt, this.setup, actions, this.status, this.message, this.saver.element, carry);
+    box.append(this.prompt, this.setup, this.recipients.element, actions, this.status, this.message, this.saver.element, carry);
     this.start.addEventListener('click', () => void this.onStart());
     this.stop.addEventListener('click', () => void api.roomStop());
     this.mode.addEventListener('change', () => {
@@ -417,6 +420,7 @@ export class RoomPane {
 
   private renderState(): void {
     this.table.setSiteKinds(projectSiteKinds(this.agents, this.snapshot.projectId));
+    this.recipients.update(this.table.rows(), this.snapshot.projectId);
     this.renderPause();
     this.renderProgress();
     const { phase, completed, total, running, historyPath, paused } = this.snapshot;
