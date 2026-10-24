@@ -42,6 +42,7 @@ export interface TurnRequest {
   text: string;
   attachPath: string | null;
   historyText: string | null;
+  roomName: string;
   timeoutMs: number;
   signal: AbortSignal;
   debugSites: boolean;
@@ -453,6 +454,7 @@ export class Room {
         text: prompt.text,
         attachPath: prompt.attachHistory ? await this.attachment(run, participant, seen) : null,
         historyText: prompt.placeHistory ? run.render(seen) : null,
+        roomName: run.title ?? run.id,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,
         debugSites: run.config.debugSites,

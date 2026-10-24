@@ -112,7 +112,8 @@ function taskFor(phase: PromptPhase): string {
   return 'Read the whole history, in order, then answer the latest request.';
 }
 
-const CLI_ACTIONS = 'You may search the web and fetch pages when it helps. Do not run commands or edit files.';
+const CLI_ACTIONS =
+  'You may search the web and fetch pages when it helps. Do not run commands or edit files. You discuss and plan only: never execute the project\'s plans.';
 const WEB_ACTIONS = 'Do not run commands or edit files.';
 
 function introFor(participant: RoomParticipant, phase: PromptPhase): string {

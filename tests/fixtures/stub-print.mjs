@@ -89,7 +89,7 @@ function logInvocation(argv, prompt) {
   const file = process.env.AIAW_STUB_ARGV_LOG;
   if (!file) return;
   const childSession = process.env.CLAUDE_CODE_CHILD_SESSION === undefined ? 'unset' : 'set';
-  appendFileSync(file, JSON.stringify({ argv, stdin: prompt, cwd: process.cwd(), childSession, pid: process.pid }) + '\n');
+  appendFileSync(file, JSON.stringify({ argv, stdin: prompt, cwd: process.cwd(), childSession, gitOptionalLocks: process.env.GIT_OPTIONAL_LOCKS ?? 'unset', pid: process.pid }) + '\n');
 }
 
 function replyFor(prompt) {

@@ -80,7 +80,7 @@ afterEach(async () => {
 });
 
 function request(debugSites: boolean, overrides: Partial<TurnRequest> = {}): TurnRequest {
-  return { runId: 'run1', text: SECRET_PROMPT, attachPath: null, historyText: null, timeoutMs: 5000, signal: new AbortController().signal, debugSites, ...overrides };
+  return { runId: 'run1', text: SECRET_PROMPT, attachPath: null, historyText: null, roomName: 'room', timeoutMs: 5000, signal: new AbortController().signal, debugSites, ...overrides };
 }
 
 async function driverFor(adapter: SiteAdapter, runner: PageRunner, debugRoot: string | undefined, extra: { prepare?: () => Promise<void> } = {}) {
@@ -93,7 +93,7 @@ async function driverFor(adapter: SiteAdapter, runner: PageRunner, debugRoot: st
     siteLog: (site, event, fields) => lines.push([site, event, fields]),
     debugRoot,
   });
-  return drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false });
+  return drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false, isolated: false });
 }
 
 const quiet: PageRunner = { run: () => Promise.resolve('') };
@@ -181,7 +181,7 @@ describe('site debug recording of a turn', () => {
       timing: { readyMs: 30, readyPollMs: 5 },
       debugRoot,
     });
-    const driver = await drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false });
+    const driver = await drivers.factory(PARTICIPANT, 'run-1', { path: root, create: false, isolated: false });
     await expect(driver.turn(request(true))).rejects.toMatchObject({ code: 'not-ready' });
     const meta = JSON.parse(await readFile(path.join(await turnDir(debugRoot), 'meta.json'), 'utf8'));
     expect(meta).toMatchObject({ outcome: 'failed', code: 'not-ready' });

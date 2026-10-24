@@ -1,0 +1,54 @@
+TASK: turn profile, deny list, CLI isolation in a project room
+
+GOAL
+  A CLI turn of a project room runs inside the owner's real repository, so it
+  runs with a turn profile that applies no user, project or local settings,
+  denies the project's secrets to `Read`, names no web tool, adds no
+  `<shared>` directory and never asks the CLI to skip its safeguards; a room
+  outside any project keeps today's argv. The turn writes nothing into the
+  project folder (docs/plans/projects.md D5, D8, D22, D23 TurnProfile part,
+  AC4 CLI, env and snapshot parts, T12). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  docs/tech/claude-code@2.1.309.md
+  docs/tech/codex@0.164.0.md
+  tasks/20-projects/probes/t03
+  src/shared/cli-args.ts
+  src/main/room-drivers.ts
+  src/main/room-context.ts
+  src/main/room.ts
+  src/shared/room-history.ts
+  src/shared/deny-list.ts
+  src/shared/turn-profile.ts
+  AGENTS.md
+  tests/fixtures/stub-print.mjs
+  tests/unit/cli-args.test.ts
+  tests/unit/deny-list.test.ts
+  tests/unit/room-history.test.ts
+  tests/unit/site-recorder.test.ts
+  tests/integration/room-projects.test.ts
+
+SCOPE
+  + shared/turn-profile.ts: `TurnProfile { mode: 'plan', isolation, denyRead[], tools, extraDirs[], name }`, `freeRoomProfile`, `projectRoomProfile`, `roomProfile`
+  + shared/cli-args.ts: `buildRoomTurnSpawn(kind, options, profile)` builds the room argv from the profile, `forbiddenRoomArg`, the one place that refuses the bypass flags, `GIT_OPTIONAL_LOCKS=0` in every room turn env; `buildSpawn` and `InfoOptions` untouched
+  + shared/deny-list.ts: the D5 deny patterns, `isDenied(relPath)`, `denyReadRules()`
+  + shared/room-history.ts: one sentence in the CLI intro (discuss and plan only)
+  + main/room-context.ts, room-drivers.ts, room.ts: `RoomCwd.isolated`, the driver picks the profile, `TurnRequest.roomName`
+  + AGENTS.md: the Shared row of the Map names `turn-profile.ts` and `deny-list.ts`
+  + tests: deny-list.test.ts (new), cli-args.test.ts, room-history.test.ts, room-projects.test.ts (profile, env, snapshot), site-recorder.test.ts (shapes), stub-print.mjs logs `GIT_OPTIONAL_LOCKS`
+  − the Codex fallback of the plan's Assumptions (no test shows the flags rejected), the project map (13-project-map), site seats (10-room-seats), Save plan (11-save-plan)
+
+OUTCOME
+  tests/unit/cli-args.test.ts, tests/unit/deny-list.test.ts and tests/integration/room-projects.test.ts pass; each behaviour of them was red before the change.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/cli-args.test.ts tests/unit/deny-list.test.ts tests/unit/room-history.test.ts tests/unit/site-recorder.test.ts tests/integration/room-projects.test.ts exits 0
+  3. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

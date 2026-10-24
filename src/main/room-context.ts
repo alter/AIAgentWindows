@@ -6,6 +6,7 @@ import type { RoomParticipant } from '../shared/room-model';
 export interface RoomCwd {
   path: string;
   create: boolean;
+  isolated: boolean;
 }
 
 export interface RoomRunContext {
@@ -36,9 +37,9 @@ export function projectRoomsDir(userData: string, projectId: string): string {
 
 export function noProjectContext(roomsDir: string): RoomRunContext {
   const names = new FolderNames();
-  return { roomsDir, projectId: null, cwdFor: (participant) => ({ path: path.join(roomsDir, names.of(participant)), create: true }) };
+  return { roomsDir, projectId: null, cwdFor: (participant) => ({ path: path.join(roomsDir, names.of(participant)), create: true, isolated: false }) };
 }
 
 export function projectContext(roomsDir: string, projectId: string, folder: string): RoomRunContext {
-  return { roomsDir, projectId, cwdFor: () => ({ path: folder, create: false }) };
+  return { roomsDir, projectId, cwdFor: () => ({ path: folder, create: false, isolated: true }) };
 }

@@ -3,6 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
 import { isCliKind, type CliKind } from '../shared/agents';
 import { buildRoomTurnSpawn } from '../shared/cli-args';
+import { roomProfile } from '../shared/turn-profile';
 import { stripEntryMarkerLines } from '../shared/room-history';
 import type { RoomParticipant } from '../shared/room-model';
 import type { SiteLogValue } from '../shared/site-log';
@@ -81,23 +82,27 @@ class CliDriver implements ParticipantDriver {
   ) {}
 
   async turn(request: TurnRequest): Promise<string | null> {
-    const { path: cwd, create } = this.cwd;
+    const { path: cwd, create, isolated } = this.cwd;
     if (create) await mkdir(cwd, { recursive: true });
     const session = this.session ?? { id: this.kind === 'claude' ? randomUUID() : null, started: false };
     const own = new AbortController();
     this.running.add(own);
     try {
-      const spec = buildRoomTurnSpawn(this.kind, {
-        cwd,
-        sessionId: session.id ?? undefined,
-        sharedDir: this.deps.sharedDir,
-        resume: session.started,
-        platform: this.deps.platform,
-        loginShell: this.deps.loginShell,
-        model: this.participant.model,
-        effort: this.participant.effort,
-        env: this.deps.envFor(this.participant),
-      });
+      const spec = buildRoomTurnSpawn(
+        this.kind,
+        {
+          cwd,
+          sessionId: session.id ?? undefined,
+          sharedDir: this.deps.sharedDir,
+          resume: session.started,
+          platform: this.deps.platform,
+          loginShell: this.deps.loginShell,
+          model: this.participant.model,
+          effort: this.participant.effort,
+          env: this.deps.envFor(this.participant),
+        },
+        roomProfile(isolated, this.deps.sharedDir, request.roomName),
+      );
       const result = await runCliTurn({
         kind: this.kind,
         spec,

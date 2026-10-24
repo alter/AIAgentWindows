@@ -68,6 +68,13 @@ describe('buildParticipantPrompt', () => {
     expect(intro(buildParticipantPrompt(B, 'r1', history).text)).not.toMatch(/web/i);
   });
 
+  it('tells a CLI participant to discuss and plan only, and a web participant nothing of the kind', () => {
+    const intro = (text: string): string => text.slice(0, text.indexOf('<<<'));
+    expect(intro(buildParticipantPrompt(A, 'r1', history).text)).toMatch(/never execute the project's plans/i);
+    expect(intro(buildParticipantPrompt(A, 'r1', history, true).text)).toMatch(/never execute the project's plans/i);
+    expect(intro(buildParticipantPrompt(B, 'r1', history).text)).not.toMatch(/execute the project's plans/i);
+  });
+
   it('inlines a CLI history above the web limit instead of attaching it', () => {
     const big = [entry({ text: 'x'.repeat(WEB_INLINE_LIMIT + 1) })];
     const prompt = buildParticipantPrompt(A, 'r1', big);

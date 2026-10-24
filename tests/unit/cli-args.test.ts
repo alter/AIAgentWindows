@@ -1,6 +1,8 @@
 // cli-args.test.ts
 import { describe, expect, it } from 'vitest';
-import { buildInfoSpawn, buildRoomTurnSpawn, buildSpawn, type SpawnOptions } from '../../src/shared/cli-args';
+import { buildInfoSpawn, buildRoomTurnSpawn, buildSpawn, forbiddenRoomArg, type SpawnOptions } from '../../src/shared/cli-args';
+import { denyReadRules } from '../../src/shared/deny-list';
+import { freeRoomProfile, projectRoomProfile, roomProfile, type TurnProfile } from '../../src/shared/turn-profile';
 
 const SESSION = '3f2b8c1e-9a4d-4e57-b6a0-1c2d3e4f5a6b';
 const HOSTILE = '/tmp/a b"; touch /tmp/pwned; "';
@@ -192,5 +194,171 @@ describe('buildInfoSpawn', () => {
     expect(() => buildInfoSpawn('claude', ['--help'], { ...base, cwd: '' })).toThrow(/cwd/);
     const env = { ...base.env, CLAUDE_CODE_CHILD_SESSION: '1', HOME: '/h' };
     expect(buildInfoSpawn('claude', ['--help'], { ...base, env }).env).toEqual({ SHELL: '/bin/bash', PATH: '/usr/bin', HOME: '/h' });
+  });
+});
+
+describe('buildRoomTurnSpawn profiles', () => {
+  const direct = (kind: 'claude' | 'codex', profile: TurnProfile | undefined, overrides: Partial<SpawnOptions> = {}): string[] =>
+    buildRoomTurnSpawn(kind, options({ platform: 'win32', ...overrides }), profile).args;
+  const valueAfter = (args: string[], flag: string): string | undefined => args[args.indexOf(flag) + 1];
+
+  it('keeps the profile of a room outside any project exactly as it was', () => {
+    expect(direct('claude', undefined)).toEqual([
+      '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'plan',
+      '--tools', 'Read,Grep,Glob,WebSearch,WebFetch', '--allowedTools', 'WebSearch,WebFetch',
+      '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disallowedTools', 'mcp__*',
+      '--add-dir', SHARED, '--session-id', SESSION,
+    ]);
+    expect(direct('claude', undefined, { resume: true, model: 'm', effort: 'low' })).toEqual([
+      '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'plan',
+      '--tools', 'Read,Grep,Glob,WebSearch,WebFetch', '--allowedTools', 'WebSearch,WebFetch',
+      '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disallowedTools', 'mcp__*',
+      '--model', 'm', '--effort', 'low', '--add-dir', SHARED, '--resume', SESSION,
+    ]);
+    expect(direct('codex', undefined, { sessionId: undefined })).toEqual([
+      'exec', '--sandbox', 'read-only', '-c', 'web_search="live"', '--skip-git-repo-check', '--json', '-',
+    ]);
+    expect(direct('codex', undefined, { resume: true })).toEqual([
+      'exec', '--sandbox', 'read-only', '-c', 'web_search="live"', '--skip-git-repo-check', '--json', 'resume', SESSION, '-',
+    ]);
+  });
+
+  it('builds the same arguments for the default and for the explicit free profile', () => {
+    for (const kind of ['claude', 'codex'] as const) {
+      expect(direct(kind, freeRoomProfile(SHARED))).toEqual(direct(kind, undefined));
+      expect(direct(kind, roomProfile(false, SHARED, 'any room'))).toEqual(direct(kind, undefined));
+    }
+  });
+
+  it('runs a Claude project room restricted, with three file tools, the deny rules and the room name, and no shared directory', () => {
+    const args = direct('claude', projectRoomProfile('Plan the API'));
+    expect(args).toContain('--restricted');
+    expect(args).toContain('--strict-mcp-config');
+    expect(valueAfter(args, '--permission-mode')).toBe('plan');
+    expect(valueAfter(args, '--tools')).toBe('Read,Grep,Glob');
+    expect(valueAfter(args, '-n')).toBe('Plan the API');
+    expect(args).not.toContain('--add-dir');
+    expect(args).not.toContain('--allowedTools');
+    expect(args.join(' ')).not.toMatch(/Web(Search|Fetch)/);
+    expect(args).not.toContain(SHARED);
+    const settings = JSON.parse(valueAfter(args, '--settings') ?? 'null') as { permissions: { deny: string[] } };
+    expect(settings).toEqual({ permissions: { deny: denyReadRules() } });
+    expect(valueAfter(args, '--session-id')).toBe(SESSION);
+  });
+
+  it('resumes a Claude project room session with the same isolation', () => {
+    const args = direct('claude', projectRoomProfile('r'), { resume: true });
+    expect(valueAfter(args, '--resume')).toBe(SESSION);
+    expect(args).not.toContain('--session-id');
+    expect(args).toContain('--restricted');
+  });
+
+  it('runs a Codex project room without the user config, plugins and web search, read-only, with no session name', () => {
+    const args = direct('codex', projectRoomProfile('Plan the API'), { sessionId: undefined, model: 'gpt-x', effort: 'high' });
+    expect(args[0]).toBe('exec');
+    expect(args).toContain('--ignore-user-config');
+    expect(valueAfter(args, '--sandbox')).toBe('read-only');
+    expect(args).toContain('web_search="disabled"');
+    expect(args).not.toContain('web_search="live"');
+    expect(args).toContain('features.plugins=false');
+    expect(args).not.toContain('-n');
+    expect(args).not.toContain('--name');
+    expect(args).not.toContain('--ignore-rules');
+    expect(args[args.length - 1]).toBe('-');
+  });
+
+  it('puts every Codex project flag before resume on a continued turn', () => {
+    const args = direct('codex', projectRoomProfile('r'), { resume: true });
+    const at = args.indexOf('resume');
+    for (const flag of ['--ignore-user-config', 'features.plugins=false', 'web_search="disabled"', '--sandbox']) {
+      expect(args.indexOf(flag)).toBeGreaterThan(-1);
+      expect(args.indexOf(flag)).toBeLessThan(at);
+    }
+    expect(args.slice(at)).toEqual(['resume', SESSION, '-']);
+  });
+
+  it('cleans the room name into one safe argument', () => {
+    const named = (name: string): string | undefined => valueAfter(direct('claude', projectRoomProfile(name)), '-n');
+    expect(named('--dangerously-skip-permissions')).toBe('dangerously-skip-permissions');
+    expect(named('two\nlines\there')).toBe('two lines here');
+    expect(named('x'.repeat(200))).toHaveLength(80);
+    expect(direct('claude', projectRoomProfile(' - \n'))).not.toContain('-n');
+  });
+
+  it('keeps a hostile room name as one entry of the login-shell form', () => {
+    const spec = buildRoomTurnSpawn('claude', options(), projectRoomProfile('a b"; touch /tmp/pwned'));
+    expect(spec.args[3]).toBe(SCRIPT);
+    expect(spec.args).toContain('a b"; touch /tmp/pwned');
+  });
+});
+
+describe('buildRoomTurnSpawn never asks the CLI to skip its safeguards', () => {
+  const kinds = ['claude', 'codex'] as const;
+  const profiles: Array<[string, TurnProfile]> = [
+    ['free', freeRoomProfile(SHARED)],
+    ['project', projectRoomProfile('Plan the API')],
+  ];
+  const cases = kinds.flatMap((kind) =>
+    profiles.flatMap(([label, profile]) =>
+      [false, true].flatMap((resume) =>
+        ['win32', 'darwin'].map((platform) => ({ kind, label, profile, resume, platform })),
+      ),
+    ),
+  );
+  const BAD_FLAGS = [
+    'bypassPermissions',
+    '--dangerously-skip-permissions',
+    '--allow-dangerously-skip-permissions',
+    '--dangerously-bypass-approvals-and-sandbox',
+    '--dangerously-bypass-hook-trust',
+    '--yolo',
+  ];
+
+  it.each(cases)('$kind $label resume=$resume on $platform carries none of the bypass flags', ({ kind, profile, resume, platform }) => {
+    const spec = buildRoomTurnSpawn(kind, options({ resume, platform, model: 'm', effort: 'high' }), profile);
+    for (const bad of BAD_FLAGS) expect(spec.args).not.toContain(bad);
+    expect(spec.args.some((arg) => arg.startsWith('--dangerously'))).toBe(false);
+    expect(forbiddenRoomArg(spec.args)).toBeNull();
+    expect(spec.args.join(' ')).not.toMatch(/danger-full-access|workspace-write/);
+  });
+
+  it('refuses a profile or an option that smuggles one in', () => {
+    for (const bad of BAD_FLAGS) {
+      expect(() => buildRoomTurnSpawn('claude', options(), { ...freeRoomProfile(SHARED), extraDirs: [bad] })).toThrow(bad);
+      expect(() => buildRoomTurnSpawn('codex', options({ model: bad, sessionId: undefined }), freeRoomProfile(SHARED))).toThrow(bad);
+    }
+    expect(() => buildRoomTurnSpawn('claude', options({ effort: '--dangerously-skip-permissions' }), freeRoomProfile(SHARED))).toThrow();
+  });
+
+  it('refuses any mode but plan', () => {
+    const bypass = { ...freeRoomProfile(SHARED), mode: 'bypassPermissions' } as unknown as TurnProfile;
+    expect(() => buildRoomTurnSpawn('claude', options(), bypass)).toThrow(/plan/);
+    expect(() => buildRoomTurnSpawn('codex', options({ sessionId: undefined }), bypass)).toThrow(/plan/);
+  });
+
+  it('leaves the pty agents and the info spawn without a profile and without the room flags', () => {
+    for (const kind of kinds) {
+      expect(buildSpawn(kind, options({ platform: 'win32' })).args.join(' ')).not.toMatch(/restricted|ignore-user-config|--tools|permission-mode/);
+    }
+    expect(buildInfoSpawn('claude', ['--help'], { cwd: '/w', platform: 'win32', env: {} }).args).toEqual(['--help']);
+  });
+});
+
+describe('buildRoomTurnSpawn environment', () => {
+  it.each([
+    ['claude', 'win32', 'free'],
+    ['claude', 'darwin', 'project'],
+    ['codex', 'win32', 'project'],
+    ['codex', 'darwin', 'free'],
+  ] as const)('%s on %s with the %s profile gets GIT_OPTIONAL_LOCKS=0 on top of the given environment', (kind, platform, label) => {
+    const profile = label === 'free' ? freeRoomProfile(SHARED) : projectRoomProfile('r');
+    const env = { PATH: '/usr/bin', HOME: '/h', GIT_OPTIONAL_LOCKS: '1', CLAUDE_CODE_CHILD_SESSION: '1' };
+    const spec = buildRoomTurnSpawn(kind, options({ platform, env, sessionId: kind === 'claude' ? SESSION : undefined }), profile);
+    expect(spec.env).toEqual({ PATH: '/usr/bin', HOME: '/h', GIT_OPTIONAL_LOCKS: '0' });
+    expect(env.GIT_OPTIONAL_LOCKS).toBe('1');
+  });
+
+  it('adds nothing of the kind to a pty agent', () => {
+    expect(buildSpawn('claude', options({ env: { PATH: '/p' } })).env).toEqual({ PATH: '/p' });
   });
 });

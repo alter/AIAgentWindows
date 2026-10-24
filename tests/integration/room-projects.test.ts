@@ -1,5 +1,5 @@
 // room-projects.test.ts
-import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,17 +8,21 @@ import { createRoomDrivers, type RoomDrivers } from '../../src/main/room-drivers
 import { RoomService } from '../../src/main/room-service';
 import { ProjectService, type ProjectGit } from '../../src/main/projects/service';
 import type { RoomModels } from '../../src/shared/cli-models';
+import { denyReadRules } from '../../src/shared/deny-list';
 import type { ProjectView } from '../../src/shared/projects';
 import type { RoomConfig, RoomEvent, RoomListItem, RoomParticipant, RoomRecord } from '../../src/shared/room-model';
 import { openStore } from '../unit/helpers/app-state';
 
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const CLAUDE: RoomParticipant = { id: 'claude', kind: 'claude', label: 'Claude Code' };
+const CODEX: RoomParticipant = { id: 'codex', kind: 'codex', label: 'Codex' };
 const NO_MODELS: RoomModels = { claude: { models: [], efforts: [] }, codex: { models: [] } };
 
 interface StubCall {
   argv: string[];
   cwd: string;
+  stdin: string;
+  gitOptionalLocks: string;
 }
 
 interface Stack {
@@ -312,5 +316,123 @@ describe('rooms of a project through the id-only channels', () => {
     const app = await stack();
     expect((await app.rooms.open('room-unknown')).ok).toBe(false);
     expect(await app.rooms.rename('room-unknown', 'x')).toBe(false);
+  });
+});
+
+async function entriesOf(root: string, relative = ''): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readdir(path.join(root, relative), { withFileTypes: true })) {
+    const rel = path.join(relative, entry.name);
+    const info = await lstat(path.join(root, rel), { bigint: true });
+    const type = info.isSymbolicLink() ? 'link' : info.isDirectory() ? 'dir' : 'file';
+    out.push(`${rel}|${type}|${info.size}|${info.mtimeNs}`);
+    if (type === 'dir') out.push(...(await entriesOf(root, rel)));
+  }
+  return out.sort();
+}
+
+async function plantRepository(folder: string): Promise<void> {
+  await mkdir(path.join(folder, '.git', 'objects'), { recursive: true });
+  await writeFile(path.join(folder, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  await writeFile(path.join(folder, '.git', 'config'), '[core]\n\tbare = false\n');
+  await writeFile(path.join(folder, '.git', 'index'), 'DIRC');
+  await mkdir(path.join(folder, '.claude'), { recursive: true });
+  await writeFile(path.join(folder, '.claude', 'settings.json'), '{"hooks":{}}\n');
+  await writeFile(path.join(folder, '.env'), 'CANARY=1\n');
+  await mkdir(path.join(folder, 'src'), { recursive: true });
+  await writeFile(path.join(folder, 'src', 'index.ts'), 'export {};\n');
+  await symlink(path.join(folder, 'src'), path.join(folder, 'linked'));
+}
+
+describe('a project room turn', () => {
+  const both = { participants: [CLAUDE, CODEX], rounds: 2 };
+
+  it('runs every CLI participant with its isolation profile in the project folder', async () => {
+    const app = await stack();
+    const project = await addProject(app, 'profiled');
+    await run(app, project.id, both);
+    const all = await calls();
+    const claude = all.filter((call) => call.argv.includes('-p'));
+    const codex = all.filter((call) => call.argv[0] === 'exec');
+    expect(claude.length).toBeGreaterThan(0);
+    expect(codex.length).toBeGreaterThan(0);
+    expect(all.map((call) => call.cwd)).toEqual(all.map(() => project.folder));
+    for (const call of claude) {
+      expect(call.argv).toContain('--restricted');
+      expect(call.argv).toContain('--strict-mcp-config');
+      expect(flagValue(call, '--tools')).toBe('Read,Grep,Glob');
+      expect(flagValue(call, '--permission-mode')).toBe('plan');
+      expect(flagValue(call, '-n')).toBeDefined();
+      expect(call.argv).not.toContain('--add-dir');
+      expect(call.argv.join(' ')).not.toMatch(/Web(Search|Fetch)/);
+      expect(JSON.parse(flagValue(call, '--settings') ?? 'null')).toEqual({ permissions: { deny: denyReadRules() } });
+    }
+    for (const call of codex) {
+      expect(call.argv).toContain('--ignore-user-config');
+      expect(call.argv).toContain('web_search="disabled"');
+      expect(call.argv).toContain('features.plugins=false');
+      expect(flagValue(call, '--sandbox')).toBe('read-only');
+      expect(call.argv).not.toContain('-n');
+    }
+    for (const call of all) expect(call.argv.join(' ')).not.toMatch(/dangerously|bypassPermissions|--yolo/);
+  });
+
+  it('names the Claude session after the room and tells the participants they only discuss', async () => {
+    const app = await stack();
+    const project = await addProject(app, 'named');
+    const id = await run(app, project.id);
+    expect(await app.rooms.rename(id, 'Plan the API')).toBe(true);
+    await writeFile(log, '');
+    const again = await app.rooms.start(config(), id);
+    if (!again.ok) throw new Error(again.error);
+    await vi.waitFor(() => expect(app.seen.filter((event) => event.type === 'finished')).toHaveLength(2), { timeout: 15000 });
+    const all = await calls();
+    expect(all.length).toBeGreaterThan(0);
+    for (const call of all) {
+      expect(flagValue(call, '-n')).toBe('Plan the API');
+      expect(call.stdin).toMatch(/never execute the project's plans/i);
+    }
+  });
+
+  it('gives every room turn GIT_OPTIONAL_LOCKS=0, project or not', async () => {
+    const app = await stack();
+    const project = await addProject(app, 'locks');
+    await run(app, project.id, both);
+    await run(app, null, both);
+    const all = await calls();
+    expect(all.length).toBeGreaterThanOrEqual(4);
+    expect(all.map((call) => call.gitOptionalLocks)).toEqual(all.map(() => '0'));
+  });
+
+  it('keeps the profile of a room outside any project: shared directory, web tools, no isolation flags', async () => {
+    const app = await stack();
+    await run(app, null, both);
+    const all = await calls();
+    const shared = path.join(userData, 'shared');
+    for (const call of all.filter((one) => one.argv.includes('-p'))) {
+      expect(flagValue(call, '--tools')).toBe('Read,Grep,Glob,WebSearch,WebFetch');
+      expect(flagValue(call, '--add-dir')).toBe(shared);
+      expect(call.argv).not.toContain('--restricted');
+      expect(call.argv).not.toContain('--settings');
+      expect(call.argv).not.toContain('-n');
+    }
+    for (const call of all.filter((one) => one.argv[0] === 'exec')) {
+      expect(call.argv).toContain('web_search="live"');
+      expect(call.argv).not.toContain('--ignore-user-config');
+    }
+  });
+
+  it('leaves every entry of the project folder, .git and .claude included, as it was', async () => {
+    const app = await stack();
+    const project = await addProject(app, 'untouched');
+    await plantRepository(project.folder);
+    const before = await entriesOf(project.folder);
+    expect(before.some((line) => line.startsWith(path.join('.git', 'HEAD')))).toBe(true);
+    expect(before.some((line) => line.startsWith(path.join('.claude', 'settings.json')))).toBe(true);
+    expect(before.some((line) => line.startsWith('linked|link|'))).toBe(true);
+    await run(app, project.id, { participants: [CLAUDE, CODEX], rounds: 2 });
+    expect((await calls()).length).toBeGreaterThanOrEqual(4);
+    expect(await entriesOf(project.folder)).toEqual(before);
+    expect(await exists(path.join(project.folder, 'history.md'))).toBe(false);
   });
 });
