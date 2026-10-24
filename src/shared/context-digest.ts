@@ -35,6 +35,7 @@ export interface ContextDigest {
   files: DigestFile[];
   map?: string;
   cut?: DigestCut;
+  collectionAllowed?: true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +97,11 @@ export function parseDigest(value: unknown): ContextDigest | null {
   const files = parseList(value['files'], MAX_DIGEST_FILES, parseFile);
   if (history === null || parts === null || files === null) return null;
   const digest: ContextDigest = { history, parts, files };
-  const { map, cut } = value;
+  const { map, cut, collectionAllowed } = value;
+  if (collectionAllowed !== undefined) {
+    if (collectionAllowed !== true) return null;
+    digest.collectionAllowed = true;
+  }
   if (map !== undefined) {
     if (!isHash(map)) return null;
     digest.map = map;

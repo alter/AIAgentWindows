@@ -152,6 +152,36 @@ describe('an OpenRouter participant', () => {
   });
 });
 
+describe('an OpenRouter participant that may be collected', () => {
+  const ALLOWED: RoomParticipant = { ...SMALL, allowCollection: true };
+
+  it('is sent no deny and is flagged, with the pack, the fit and the ceiling as for a participant that is not allowed', () => {
+    const allowed = buildPack(input(ALLOWED));
+    const denied = buildPack(input(SMALL));
+    expect(allowed.denyDataCollection).toBeUndefined();
+    expect(allowed.collectionAllowed).toBe(true);
+    expect(denied.denyDataCollection).toBe(true);
+    expect(denied.collectionAllowed).toBeUndefined();
+    expect(allowed.pack).toEqual(denied.pack);
+    expect(allowed.cut).toEqual(denied.cut);
+    expect(allowed.maxCompletionTokens).toBe(denied.maxCompletionTokens);
+  });
+
+  it('is not flagged outside a project room, where nothing is denied anyway', () => {
+    const built = buildPack(input(ALLOWED, { project: false, map: null }));
+    expect(built.denyDataCollection).toBeUndefined();
+    expect(built.collectionAllowed).toBeUndefined();
+  });
+
+  it('puts the flag into the digest of the turn and leaves it out otherwise', () => {
+    const seen = longHistory();
+    const flagged = digestOf({ all: seen, built: buildPack(input(ALLOWED, { seen })), files: [], map: RUN_MAP.hash, inlined: false });
+    const plain = digestOf({ all: seen, built: buildPack(input(SMALL, { seen })), files: [], map: RUN_MAP.hash, inlined: false });
+    expect(flagged.collectionAllowed).toBe(true);
+    expect(plain).not.toHaveProperty('collectionAllowed');
+  });
+});
+
 describe('projectMapProvider', () => {
   it('marks the map as data and places it by capability', () => {
     const provider = projectMapProvider('MAP');

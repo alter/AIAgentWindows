@@ -45,6 +45,7 @@ export interface RoomParticipant {
   effort?: string;
   web?: boolean;
   modelName?: string;
+  allowCollection?: boolean;
 }
 
 export interface RoomConfig {
@@ -90,7 +91,14 @@ export type RoomListItem =
   | { id: string; projectId: string | null; unreadable: false; createdAt: number; updatedAt: number; status: RoomRecordStatus; firstPrompt: string; title: string }
   | { id: string; projectId: string | null; unreadable: true };
 
-export type StepState = 'running' | 'replied' | 'failed' | 'timeout';
+export type StepState = 'running' | 'replied' | 'failed' | 'timeout' | 'skipped';
+
+export const PERMANENT_ERROR_CODE = 'refused';
+export const COLLECTION_SWITCH_LABEL = 'Allow data collection';
+
+export function isPermanentError(error: unknown): boolean {
+  return error instanceof Error && (error as { code?: unknown }).code === PERMANENT_ERROR_CODE;
+}
 
 export interface RoomPlan {
   mode: RoomMode;
@@ -197,12 +205,13 @@ function parseShaped(value: unknown, pattern: RegExp): string | null | undefined
 function parseOpenRouterParticipant(id: string, value: Record<string, unknown>): RoomParticipant | null {
   const model = parseShaped(value['model'], MODEL_ID_PATTERN);
   const effort = parseShaped(value['effort'], EFFORT_PATTERN);
-  const { modelName, web } = value;
+  const { modelName, web, allowCollection } = value;
   if (typeof model !== 'string' || effort === null) return null;
   if (modelName !== undefined && (typeof modelName !== 'string' || modelName.length > MAX_MODEL_NAME_CHARS || modelName.length < 1 || hasControl(modelName))) return null;
   if (web !== undefined && typeof web !== 'boolean') return null;
+  if (allowCollection !== undefined && typeof allowCollection !== 'boolean') return null;
   const parts = { kind: OPENROUTER_KIND, model, ...(effort === undefined ? {} : { effort }), ...(modelName === undefined ? {} : { modelName }) } as const;
-  return { id, ...parts, web: web ?? !isFreeModel(model, null, null), label: instanceLabel(parts) };
+  return { id, ...parts, web: web ?? !isFreeModel(model, null, null), ...(allowCollection === true ? { allowCollection } : {}), label: instanceLabel(parts) };
 }
 
 function parseParticipant(value: unknown): RoomParticipant | null {
@@ -210,7 +219,7 @@ function parseParticipant(value: unknown): RoomParticipant | null {
   const { id, kind } = value;
   if (typeof id !== 'string' || !PARTICIPANT_ID_PATTERN.test(id) || !isRoomKind(kind)) return null;
   if (kind === OPENROUTER_KIND) return parseOpenRouterParticipant(id, value);
-  if (value['web'] !== undefined || value['modelName'] !== undefined) return null;
+  if (value['web'] !== undefined || value['modelName'] !== undefined || value['allowCollection'] !== undefined) return null;
   const model = parseShaped(value['model'], MODEL_PATTERN);
   const effort = parseShaped(value['effort'], EFFORT_PATTERN);
   if (model === null || effort === null) return null;

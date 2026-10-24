@@ -445,7 +445,7 @@ describe('finalizer choice', () => {
 const TWO_ROUNDS: RoomPlan = { ...PLAN, rounds: 2 };
 const BEGIN: RoomEvent = { type: 'started', roomId: 'r1', historyPath: '/h/r1.md', total: 5, plan: TWO_ROUNDS };
 
-function step(participantId: string, state: 'running' | 'replied' | 'failed' | 'timeout', completed: number): RoomEvent {
+function step(participantId: string, state: 'running' | 'replied' | 'failed' | 'timeout' | 'skipped', completed: number): RoomEvent {
   return { type: 'progress', roomId: 'r1', participantId, state, completed, total: 5 };
 }
 
@@ -1113,5 +1113,47 @@ describe('start action', () => {
     expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'stopped')).prompt).toBe('the ask');
     expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'failed')).prompt).toBe('the ask');
     expect(formFromRecord(record([prompt('the ask'), answer('a', 1)], 'done')).prompt).toBe('');
+  });
+});
+
+describe('a skipped participant', () => {
+  it('shows the skipped chip, distinct from error, and counts the turn as done', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('a', 'replied', 1), step('b', 'running', 1), step('b', 'failed', 2), step('a', 'running', 2), step('a', 'replied', 3), step('b', 'skipped', 4)];
+    expect(chips(events)).toEqual([['a', 'answered'], ['b', 'skipped']]);
+    expect(roomProgress(run(events))?.remainingText).toBe('1 turn left');
+    expect(roomProgress(run(events))?.chips.find((chip) => chip.id === 'b')?.state).not.toBe('error');
+  });
+
+  it('is a settled chip: the next round starts with everybody waiting again', () => {
+    const events = [BEGIN, step('a', 'running', 0), step('a', 'replied', 1), step('b', 'skipped', 2), step('a', 'running', 2)];
+    expect(roomProgress(run(events))?.headline).toBe('Round 2 of 2');
+    expect(chips(events)).toEqual([['a', 'running'], ['b', 'waiting']]);
+    const again = [BEGIN, step('b', 'skipped', 1), step('b', 'running', 1)];
+    expect(roomProgress(run(again))?.headline).toBe('Round 2 of 2');
+  });
+});
+
+describe('the collection switch of a row', () => {
+  const or = { id: 'openrouter', kind: 'openrouter' as const, model: 'acme/paid-model', web: false };
+  const make = (rows: RoomFormValues['rows']): RoomFormValues => ({ prompt: 'q', mode: 'relay', rounds: '1', timeoutMinutes: '1', checked: ['openrouter'], rows });
+
+  it('goes into the participant only when on, and only for an OpenRouter row', () => {
+    const on = formToConfig(make([{ ...or, allowCollection: true }]));
+    expect(on.ok && on.config.participants[0]?.allowCollection).toBe(true);
+    for (const row of [or, { ...or, allowCollection: false }]) {
+      const off = formToConfig(make([row]));
+      expect(off.ok && off.config.participants[0]).not.toHaveProperty('allowCollection');
+    }
+    const claude = formToConfig({ ...make([{ id: 'claude', kind: 'claude', allowCollection: true }]), checked: ['claude'] });
+    expect(claude.ok && claude.config.participants[0]).not.toHaveProperty('allowCollection');
+  });
+
+  it('comes back from a record into the row, so a reopened room shows the switch as saved', () => {
+    const participants = [{ id: 'openrouter', kind: 'openrouter' as const, label: 'OpenRouter \u00b7 acme/paid-model', model: 'acme/paid-model', web: false, allowCollection: true }];
+    const config = { mode: 'relay' as const, rounds: 1, participants, finalizerId: 'openrouter', turnTimeoutMs: 60000, debugSites: false };
+    const form = formFromRecord({ version: 1, id: 'r1', createdAt: 1, updatedAt: 1, status: 'done', config, entries: [], nonce: 'n1' });
+    expect(form.rows?.[0]?.allowCollection).toBe(true);
+    const off = formFromRecord({ version: 1, id: 'r1', createdAt: 1, updatedAt: 1, status: 'done', config: { ...config, participants: [{ id: 'openrouter', kind: 'openrouter' as const, label: 'x', model: 'acme/paid-model', web: false }] }, entries: [], nonce: 'n1' });
+    expect(off.rows?.[0]).not.toHaveProperty('allowCollection');
   });
 });

@@ -38,6 +38,12 @@ describe('parseDigest', () => {
     expect(parseDigest(JSON.parse(JSON.stringify(DIGEST)))).toEqual(DIGEST);
   });
 
+  it('keeps the collection flag only as true, and refuses anything else', () => {
+    const allowed = { ...DIGEST, collectionAllowed: true };
+    expect(parseDigest(JSON.parse(JSON.stringify(allowed)))).toEqual(allowed);
+    for (const value of [false, 'true', 1, null]) expect(parseDigest({ ...DIGEST, collectionAllowed: value })).toBeNull();
+  });
+
   it('keeps a digest without a map, files or a cut', () => {
     const small = { history: { first: 0, last: 0, count: 1 }, parts: [{ id: 'history', bytes: 1, hash: HASH }], files: [] };
     expect(parseDigest(small)).toEqual(small);

@@ -1,0 +1,77 @@
+TASK: allow data collection per OpenRouter participant, skip a participant after a permanent refusal
+
+GOAL
+  An OpenRouter participant of a project room fails every round with "No
+  OpenRouter endpoint of <model> accepts data_collection: deny" when the model
+  has no endpoint under that routing (free models often have none). Two
+  changes, owner request 2026-10-24 ("do 3; if it is not set, do 1"):
+  (3) a per-participant switch "Allow data collection" (default off) in the
+  Room participant row; when on, that participant's request omits
+  `provider.data_collection: "deny"`, everything else unchanged, and the
+  "Context sent" disclosure and the recipients line say collection is allowed
+  for it; (1) when the refusal arrives and the switch is off, the participant
+  is skipped for the rest of the run: one error entry, no further calls, its
+  chip shows `skipped`, relay and the turn counter pass over it; the next run
+  tries it once again. Reverses ONE owner-reversible default of
+  docs/plans/projects.md D12/D13 (deny always). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  docs/PROJECT.md
+  AGENTS.md
+  tasks/20-projects/task.txt
+  src/shared/room-model.ts
+  src/shared/room-view.ts
+  src/shared/context-sent.ts
+  src/shared/context-digest.ts
+  src/main/room.ts
+  src/main/openrouter/chat.ts
+  src/main/runs/project-pack.ts
+  src/main/runs/digest.ts
+  src/renderer/room-openrouter-row.ts
+  src/renderer/room-table.ts
+  src/renderer/room-pane.ts
+  src/renderer/room-recipients.ts
+  src/renderer/room-context-sent.ts
+  src/renderer/styles.css
+  tests/fixtures/openrouter-fake.ts
+  tests/unit/room-model.test.ts
+  tests/unit/room-view.test.ts
+  tests/unit/context-sent.test.ts
+  tests/unit/context-digest.test.ts
+  tests/unit/project-pack.test.ts
+  tests/unit/openrouter-chat-body.test.ts
+  tests/integration/room-collection.test.ts
+  tests/integration/room-map.test.ts
+  tests/full/projects-collection.spec.ts
+  tests/full/projects-map.spec.ts
+  tests/full/room-layout.spec.ts
+
+SCOPE
+  + shared/room-model.ts: `allowCollection` on an OpenRouter participant (fail-closed parse: boolean only, any other kind refused, stored only when true), `PERMANENT_ERROR_CODE` and `isPermanentError`, `StepState` `skipped`
+  + shared/room-view.ts: chip state `skipped`, `FormRow.allowCollection`, the row to participant mapping and the form from a record
+  + shared/context-digest.ts, context-sent.ts: the digest flag `collectionAllowed` and its line, `collectionRecipients` and the recipients sentence
+  + main/runs/project-pack.ts, runs/digest.ts: `denyDataCollection` follows the participant, the flag goes to the digest
+  + main/openrouter/chat.ts: the refusal error carries the permanent code and the text names the switch
+  + main/room.ts: the skipped set of a run (cleared with the run), progress `skipped`
+  + renderer/room-openrouter-row.ts, room-table.ts, room-pane.ts, room-recipients.ts, room-context-sent.ts, styles.css: the switch cell with its warning (project rooms only), the skipped chip, the recipients flag
+  + tests: unit, integration (tests/integration/room-collection.test.ts with the fake server), electron-smoke spec tests/full/projects-collection.spec.ts
+  + docs/PROJECT.md (Project rooms row note), AGENTS.md Map rows if a module is added, docs/plans/projects.md Assumption and Log line (status stays done)
+  − the acceptance criteria and tasks of docs/plans/projects.md
+  − other error kinds (429, network, timeout) keep today's behaviour; no retry of a refusal inside a run
+  − the OpenRouter chat agent of the sidebar, CLI and site participants, cli-args.ts, room-drivers.ts site and CLI drivers
+
+OUTCOME
+  tests/integration/room-collection.test.ts and tests/full/projects-collection.spec.ts pass; a project room with a refusing model calls it once per run, and with the switch on it answers with a request that has no data_collection field.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/integration/room-collection.test.ts tests/unit/room-model.test.ts tests/unit/room-view.test.ts tests/unit/context-sent.test.ts exits 0
+  3. [full] electron-smoke exit 0, with tests/full/projects-collection.spec.ts
+  4. reverse control: ignore the switch in project-pack.ts, do not skip in room.ts, skip on a 429 in the refusal check, each in a scratch copy: tests/integration/room-collection.test.ts turns red
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

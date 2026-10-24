@@ -424,6 +424,7 @@ export class RoomPane {
 
   private renderState(): void {
     this.table.setSiteKinds(projectSiteKinds(this.agents, this.snapshot.projectId));
+    this.table.setProject(this.snapshot.projectId !== null);
     this.recipients.update(this.table.rows(), this.snapshot.projectId);
     this.renderPause();
     this.renderProgress();

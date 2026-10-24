@@ -2,8 +2,9 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { attributionHeaders } from '../../shared/openrouter';
 import { LENGTH_TEXT, MODEL_FAILED_TEXT, UNREADABLE_TEXT, errorDetail, failureText, rateLimitText } from '../../shared/openrouter-chat';
+import { COLLECTION_SWITCH_LABEL, PERMANENT_ERROR_CODE } from '../../shared/room-model';
 
-export type ChatErrorCode = 'unauthorized' | 'timeout' | 'failed';
+export type ChatErrorCode = 'unauthorized' | 'timeout' | 'failed' | typeof PERMANENT_ERROR_CODE;
 
 export class ChatError extends Error {
   constructor(
@@ -180,7 +181,7 @@ async function pause(ms: number, options: ChatOptions): Promise<void> {
 }
 
 function noEndpointsText(model: string): string {
-  return `No OpenRouter endpoint of ${model} accepts data_collection: deny, which this project room sends because the project map carries your code. Choose another model, or ask the owner to allow collection for this model.`;
+  return `No OpenRouter endpoint of ${model} accepts data_collection: deny, which this project room sends because the project map carries your code. Choose another model, or turn on "${COLLECTION_SWITCH_LABEL}" for this participant in the room table (the provider may then keep the prompts).`;
 }
 
 function refusedForLackOfEndpoints(answer: Answer): boolean {
@@ -197,6 +198,6 @@ export async function runChat(deps: ChatDeps, key: string, input: ChatInput, opt
     await pause(Math.min(waitMs(answer.retryAfter), Math.max(0, deadline - Date.now())), options);
     answer = await post(deps, key, body, options, deadline);
   }
-  if (input.denyDataCollection === true && refusedForLackOfEndpoints(answer)) throw new ChatError('failed', noEndpointsText(input.model));
+  if (input.denyDataCollection === true && refusedForLackOfEndpoints(answer)) throw new ChatError(PERMANENT_ERROR_CODE, noEndpointsText(input.model));
   return readAnswer(answer.status, answer.text, answer.reset);
 }

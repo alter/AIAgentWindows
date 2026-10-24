@@ -16,6 +16,7 @@ import {
   MAX_HISTORY_CHARS,
   MAX_REPLY_CHARS,
   entriesBeforeRound,
+  isPermanentError,
   relaySchedule,
   roomPlan,
   roomTitle,
@@ -163,6 +164,7 @@ class RunState {
   chars: number;
   total: number;
   readonly waiting = new Set<() => void>();
+  readonly skipped = new Set<string>();
   readonly drivers = new Map<string, Promise<ParticipantDriver>>();
   map: RunMap | null = null;
   private readonly packCounts = new Map<string, number>();
@@ -450,9 +452,14 @@ export class Room {
   }
 
   private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase, round?: number): Promise<boolean> {
+    if (run.skipped.has(participant.id)) {
+      this.progress(run, participant, 'skipped');
+      return false;
+    }
     this.progress(run, participant, 'running');
     const outcome = await this.turn(run, participant, seen, phase);
     if (outcome.kind === 'aborted') return false;
+    if (outcome.kind === 'error' && outcome.permanent === true) run.skipped.add(participant.id);
     const kind: RoomEntryKind = outcome.kind === 'reply' ? (phase === 'final' ? 'final' : 'reply') : 'error';
     const mark: EntryMark = {};
     if (outcome.digest !== undefined) mark.digest = outcome.digest;
@@ -536,7 +543,7 @@ export class Room {
       }
     } catch (error) {
       await driver?.reset().catch(() => undefined);
-      return run.signal.aborted ? { kind: 'aborted' } : { kind: 'error', text: errorText(error), timedOut: isTimeout(error) };
+      return run.signal.aborted ? { kind: 'aborted' } : { kind: 'error', text: errorText(error), timedOut: isTimeout(error), permanent: isPermanentError(error) };
     }
   }
 
@@ -563,5 +570,5 @@ interface EntryMark {
 
 type TurnOutcome =
   | { kind: 'reply'; text: string; digest?: ContextDigest }
-  | { kind: 'error'; text: string; timedOut?: boolean; digest?: ContextDigest }
+  | { kind: 'error'; text: string; timedOut?: boolean; permanent?: boolean; digest?: ContextDigest }
   | { kind: 'aborted' };

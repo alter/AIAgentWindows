@@ -1,5 +1,5 @@
 // room-recipients.ts
-import { recipientsLine, type RecipientRow } from '../shared/context-sent';
+import { collectionRecipients, recipientsLine, type RecipientRow } from '../shared/context-sent';
 import { el } from './dom';
 
 export class RoomRecipients {
@@ -14,5 +14,6 @@ export class RoomRecipients {
     const line = recipientsLine(rows, projectId);
     this.element.hidden = line === null;
     this.element.textContent = line ?? '';
+    this.element.dataset['collection'] = collectionRecipients(rows, projectId).length > 0 ? 'allowed' : 'denied';
   }
 }

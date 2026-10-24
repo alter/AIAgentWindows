@@ -37,7 +37,7 @@ export type RoomPhase = 'idle' | 'running' | RoomStatus;
 export type CarryWhat = 'final' | 'history';
 export const CARRY_KINDS: readonly CarryWhat[] = ['final', 'history'];
 
-export type ChipState = 'waiting' | 'running' | 'answered' | 'error' | 'timeout' | 'stopped';
+export type ChipState = 'waiting' | 'running' | 'answered' | 'error' | 'timeout' | 'stopped' | 'skipped';
 
 export interface RoomSnapshot {
   phase: RoomPhase;
@@ -63,6 +63,7 @@ export interface FormRow {
   effort?: string;
   web?: boolean;
   modelName?: string;
+  allowCollection?: boolean;
 }
 
 export interface RoomFormValues {
@@ -102,8 +103,8 @@ export function emptyRoomSnapshot(projectId: string | null = null): RoomSnapshot
   return { phase: 'idle', projectId, roomId: null, historyPath: null, entries: [], running: [], paused: [], completed: 0, total: 0, plan: null, round: 0, chips: {} };
 }
 
-const CHIP_OF_STEP: Record<StepState, ChipState> = { running: 'running', replied: 'answered', failed: 'error', timeout: 'timeout' };
-const SETTLED_CHIPS: readonly ChipState[] = ['answered', 'error', 'timeout'];
+const CHIP_OF_STEP: Record<StepState, ChipState> = { running: 'running', replied: 'answered', failed: 'error', timeout: 'timeout', skipped: 'skipped' };
+const SETTLED_CHIPS: readonly ChipState[] = ['answered', 'error', 'timeout', 'skipped'];
 
 function waitingChips(plan: RoomPlan): Record<string, ChipState> {
   return Object.fromEntries(plan.participants.map((participant) => [participant.id, 'waiting' as const]));
@@ -158,7 +159,8 @@ function rowParticipant(row: FormRow): RoomParticipant {
     ...(named ? { modelName: row.modelName } : {}),
   };
   const web = row.kind === OPENROUTER_KIND && row.web !== undefined ? { web: row.web } : {};
-  return { id: row.id, ...parts, ...web, label: instanceLabel(parts) };
+  const collection = row.kind === OPENROUTER_KIND && row.allowCollection === true ? { allowCollection: true } : {};
+  return { id: row.id, ...parts, ...web, ...collection, label: instanceLabel(parts) };
 }
 
 function tickedParticipants(checked: readonly string[], rows: readonly FormRow[]): RoomParticipant[] {
@@ -440,13 +442,14 @@ export function formFromRecord(record: RoomRecord): RoomFormValues {
     rounds: String(config.rounds),
     timeoutMinutes: String(config.turnTimeoutMs / MS_PER_MINUTE),
     checked: config.participants.map((participant) => participant.id),
-    rows: config.participants.map(({ id, kind, model, effort, web, modelName }) => ({
+    rows: config.participants.map(({ id, kind, model, effort, web, modelName, allowCollection }) => ({
       id,
       kind,
       ...(model === undefined ? {} : { model }),
       ...(effort === undefined ? {} : { effort }),
       ...(web === undefined ? {} : { web }),
       ...(modelName === undefined ? {} : { modelName }),
+      ...(allowCollection === true ? { allowCollection } : {}),
     })),
     finalizerId: config.finalizerId,
     debugSites: config.debugSites,

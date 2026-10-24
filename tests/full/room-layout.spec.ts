@@ -244,7 +244,7 @@ test('a table is read as a table: headers with scope, buttons named after the ro
   try {
     await field(page, 'open').click();
     await expect(field(page, 'pane')).toBeVisible();
-    await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(7);
+    await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(8);
     await tableRow(page, 'claude').locator('[data-row-field="model"]').fill('opus');
     await expect(tableRow(page, 'claude').locator('[data-row-field="up"]')).toHaveAttribute('aria-label', /Claude Code · opus/);
     await expect(tableRow(page, 'claude').locator('[data-row-field="remove"]')).toHaveAttribute('aria-label', /Claude Code · opus/);

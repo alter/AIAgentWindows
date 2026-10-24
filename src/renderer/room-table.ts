@@ -2,7 +2,7 @@
 import { isSiteKind, type SiteKind } from '../shared/agents';
 import { emptyRoomModels, type RoomModels } from '../shared/cli-models';
 import type { ModelItem } from '../shared/openrouter';
-import { OPENROUTER_KIND, kindLabel, type RoomKind } from '../shared/room-model';
+import { COLLECTION_SWITCH_LABEL, OPENROUTER_KIND, kindLabel, type RoomKind } from '../shared/room-model';
 import {
   addMenuOptions,
   addRow,
@@ -34,7 +34,7 @@ interface RowView {
   buttons: Record<RowAction, HTMLButtonElement>;
 }
 
-const COLUMNS = ['#', 'Agent', 'Model', 'Effort', 'Web', 'Final'];
+const COLUMNS = ['#', 'Agent', 'Model', 'Effort', 'Web', COLLECTION_SWITCH_LABEL, 'Final'];
 const COLUMN_COUNT = COLUMNS.length + 1;
 const CLI_KINDS: readonly RoomKind[] = ['claude', 'codex'];
 const NOT_APPLICABLE = '—';
@@ -67,6 +67,7 @@ export class RoomTable {
   private siteKinds: readonly SiteKind[] | null = null;
   private finalId = '';
   private busy = false;
+  private projectRoom = false;
   private changeListener: (() => void) | null = null;
 
   constructor() {
@@ -129,6 +130,11 @@ export class RoomTable {
 
   setSiteKinds(kinds: readonly SiteKind[] | null): void {
     this.siteKinds = kinds;
+  }
+
+  setProject(project: boolean): void {
+    this.projectRoom = project;
+    for (const view of this.views) view.openrouter?.setProject(project);
   }
 
   onChange(listener: () => void): void {
@@ -259,8 +265,11 @@ export class RoomTable {
     const modelCell = el('td');
     const effortCell = el('td');
     const webCell = el('td', 'room-or-web');
+    const collectionCell = el('td', 'room-or-collection');
     if (orCells !== null) {
+      orCells.setProject(this.projectRoom);
       orCells.setModels(this.openrouterModels);
+      collectionCell.append(...orCells.collectionNodes);
       modelCell.append(...orCells.modelNodes);
       effortCell.append(...orCells.effortNodes);
       webCell.append(...orCells.webNodes);
@@ -305,7 +314,7 @@ export class RoomTable {
     const actions = el('td', 'room-table-actions');
     actions.append(buttons.up, buttons.down, buttons.remove);
     const hasModel = view.model !== null || orCells !== null;
-    root.append(place, agent, hasModel ? modelCell : notApplicable(), hasModel ? effortCell : notApplicable(), orCells === null ? notApplicable() : webCell, finalCell, actions);
+    root.append(place, agent, hasModel ? modelCell : notApplicable(), hasModel ? effortCell : notApplicable(), orCells === null ? notApplicable() : webCell, orCells === null ? notApplicable() : collectionCell, finalCell, actions);
     return view;
   }
 

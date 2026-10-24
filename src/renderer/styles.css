@@ -535,6 +535,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-setup-title { font-weight: 700; }
 .room-setup-digest { font-style: italic; }
 .room-recipients { font-size: 12px; padding: 4px 0; }
+.room-recipients[data-collection="allowed"] { padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--warn-bg); color: var(--text); }
 .room-context { margin-top: 6px; font-size: 12px; }
 .room-context-title { cursor: pointer; }
 .room-context-lines { margin: 4px 0 0; padding-left: 18px; }
@@ -568,6 +569,9 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-table select[data-row-field="model"] { width: 100%; min-width: 200px; max-width: 360px; }
 .room-or-hint { display: block; margin-top: 2px; font-size: 11px; }
 .room-or-web { min-width: 110px; }
+.room-or-collection { min-width: 140px; }
+.room-or-warn { display: block; margin-top: 2px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; background: var(--warn-bg); color: var(--text); }
+.room-or-warn[hidden] { display: none; }
 .room-table-action {
   min-width: 28px;
   min-height: 28px;
@@ -635,6 +639,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .room-chip.state-answered { background: var(--ok-bg); }
 .room-chip.state-error, .room-chip.state-timeout { background: var(--err-bg); }
 .room-chip.state-stopped { background: var(--warn-bg); }
+.room-chip.state-skipped { background: var(--stop-bg); }
 .room-banner { padding: 10px 14px; border-radius: 6px; font-size: 16px; font-weight: 700; }
 .room-banner[hidden] { display: none; }
 .room-banner[data-tone="done"] { background: var(--ok-bg); }

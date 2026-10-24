@@ -33,6 +33,7 @@ export interface PackBuild {
   cut?: DigestCut;
   maxCompletionTokens?: number;
   denyDataCollection?: boolean;
+  collectionAllowed?: true;
 }
 
 const FILE_SEPARATOR = '\n\n';
@@ -83,7 +84,7 @@ function openRouterBuild(input: PackBuildInput): PackBuild {
     sent,
     ...(cut === undefined ? {} : { cut }),
     ...(reserve === null ? {} : { maxCompletionTokens: reserve }),
-    denyDataCollection: true,
+    ...(input.participant.allowCollection === true ? { collectionAllowed: true as const } : { denyDataCollection: true }),
   };
 }
 

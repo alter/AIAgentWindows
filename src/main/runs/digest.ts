@@ -41,5 +41,6 @@ export function digestOf(input: DigestInput): ContextDigest {
     files: [...files],
     ...(map === undefined ? {} : { map }),
     ...(cut === undefined ? {} : { cut }),
+    ...(built.collectionAllowed === true ? { collectionAllowed: true as const } : {}),
   };
 }

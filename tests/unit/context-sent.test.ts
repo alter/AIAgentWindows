@@ -1,7 +1,7 @@
 // context-sent.test.ts
 import { describe, expect, it } from 'vitest';
 import type { ContextDigest } from '../../src/shared/context-digest';
-import { contextSentView, recipientsLine } from '../../src/shared/context-sent';
+import { collectionRecipients, contextSentView, recipientsLine } from '../../src/shared/context-sent';
 
 const HASH = '0123456789abcdef';
 
@@ -37,6 +37,43 @@ describe('contextSentView', () => {
   it('has no map, file or cut line when the digest has none', () => {
     const plain = contextSentView({ history: { first: 0, last: 0, count: 1 }, parts: [{ id: 'history', bytes: 5, hash: HASH }], files: [] });
     expect(plain.lines).toHaveLength(2);
+  });
+});
+
+describe('collection allowed in the context sent', () => {
+  const plain: ContextDigest = { history: { first: 0, last: 0, count: 1 }, parts: [{ id: 'history', bytes: 5, hash: HASH }], files: [] };
+
+  it('flags a digest of a participant that may be collected, and adds a line for it', () => {
+    const allowed = contextSentView({ ...plain, collectionAllowed: true });
+    const denied = contextSentView(plain);
+    expect(allowed.collectionAllowed).toBe(true);
+    expect(denied.collectionAllowed).toBe(false);
+    expect(allowed.lines).toHaveLength(denied.lines.length + 1);
+  });
+});
+
+describe('collectionRecipients', () => {
+  const rows = [
+    { kind: 'claude' as const },
+    { kind: 'openrouter' as const, model: 'acme/paid-model', modelName: 'Acme Paid', allowCollection: true },
+    { kind: 'openrouter' as const, model: 'acme/free-model:free', modelName: 'Acme Free' },
+    { kind: 'openrouter' as const, model: 'acme/other', modelName: 'Other', allowCollection: false },
+  ];
+
+  it('lists only the OpenRouter rows that allow collection, in a project room', () => {
+    expect(collectionRecipients(rows, 'proj-1')).toEqual(['OpenRouter \u00b7 Acme Paid']);
+    expect(collectionRecipients(rows.slice(0, 1), 'proj-1')).toEqual([]);
+  });
+
+  it('is empty without a project, where nothing is denied or collected by the room', () => {
+    expect(collectionRecipients(rows, null)).toEqual([]);
+  });
+
+  it('changes the recipients line for a room with such a row and not for one without', () => {
+    const without = recipientsLine(rows.filter((row) => row.allowCollection !== true), 'proj-1');
+    const withRow = recipientsLine(rows, 'proj-1') ?? '';
+    expect(withRow).not.toBe(recipientsLine(rows.map((row) => ({ ...row, allowCollection: false })), 'proj-1'));
+    expect(without).not.toBeNull();
   });
 });
 

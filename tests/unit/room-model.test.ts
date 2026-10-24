@@ -13,6 +13,8 @@ import {
   parseRoomRecord,
   parseRoomTitle,
   entriesBeforeRound,
+  isPermanentError,
+  PERMANENT_ERROR_CODE,
   resumeMatches,
   resumePoint,
   roomTitle,
@@ -522,5 +524,50 @@ describe('instanceLabel for openrouter', () => {
     expect(instanceLabel({ kind: 'openrouter', model: 'a/b' })).toBe('OpenRouter \u00b7 a/b');
     expect(instanceLabel({ kind: 'openrouter', model: 'a/b', modelName: 'Ab', effort: 'low' })).toBe('OpenRouter \u00b7 Ab \u00b7 low');
     expect(instanceLabel({ kind: 'openrouter' })).toBe('OpenRouter');
+  });
+});
+
+describe('allowCollection of an openrouter participant', () => {
+  const base = { prompt: 'q', mode: 'relay', rounds: 1, turnTimeoutMs: 5000 };
+  const config = (participants: unknown[]) => parseRoomConfig({ ...base, participants });
+  const row = (extra: Record<string, unknown>) => ({ id: 'openrouter', kind: 'openrouter', model: 'acme/paid-model', ...extra });
+
+  it('is stored only when true, so every earlier config and record reads as not allowed', () => {
+    const on = config([row({ allowCollection: true })]);
+    expect(on.ok && on.config.participants[0]?.allowCollection).toBe(true);
+    for (const extra of [{}, { allowCollection: false }]) {
+      const parsed = config([row(extra)]);
+      expect(parsed.ok && parsed.config.participants[0]).not.toHaveProperty('allowCollection');
+    }
+  });
+
+  it('refuses anything but a boolean, and any kind other than openrouter', () => {
+    for (const allowCollection of ['true', 1, null, {}, []]) expect(config([row({ allowCollection })]).ok).toBe(false);
+    expect(config([{ id: 'claude', kind: 'claude', allowCollection: true }]).ok).toBe(false);
+    expect(config([{ id: 'chatgpt', kind: 'chatgpt', allowCollection: false }]).ok).toBe(false);
+  });
+
+  it('survives a parse of the record it sits in', () => {
+    const participants = [{ id: 'openrouter', kind: 'openrouter', label: 'x', model: 'acme/paid-model', web: false, allowCollection: true }];
+    const record = parseRoomRecord(recordOf({ config: { mode: 'relay', rounds: 1, participants, finalizerId: 'openrouter', turnTimeoutMs: 5000, debugSites: false } }));
+    expect(record?.config.participants[0]?.allowCollection).toBe(true);
+  });
+
+  it('does not stop a stopped run from resuming when the switch changed', () => {
+    const run: RoomParticipant = { id: 'openrouter', kind: 'openrouter', label: 'OpenRouter', model: 'a/b', web: true };
+    const setup = { mode: 'relay' as const, rounds: 1, participants: [run], finalizerId: 'openrouter' };
+    const changed = { ...setup, prompt: 'q', turnTimeoutMs: 1000, debugSites: false, participants: [{ ...run, allowCollection: true }] };
+    expect(resumeMatches({ prompt: 'q', done: [] }, setup, changed)).toBe(true);
+  });
+});
+
+describe('isPermanentError', () => {
+  it('is true only for an error carrying the permanent code', () => {
+    const permanent = Object.assign(new Error('x'), { code: PERMANENT_ERROR_CODE });
+    expect(isPermanentError(permanent)).toBe(true);
+    expect(isPermanentError(Object.assign(new Error('x'), { code: 'failed' }))).toBe(false);
+    expect(isPermanentError(Object.assign(new Error('x'), { code: 'timeout' }))).toBe(false);
+    expect(isPermanentError(new Error('x'))).toBe(false);
+    expect(isPermanentError('refused')).toBe(false);
   });
 });

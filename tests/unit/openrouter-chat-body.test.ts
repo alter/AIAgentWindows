@@ -1,6 +1,7 @@
 // openrouter-chat-body.test.ts
 import { describe, expect, it } from 'vitest';
 import { ChatError, chatBody, requestBody, runChat, type ChatInput } from '../../src/main/openrouter/chat';
+import { COLLECTION_SWITCH_LABEL, PERMANENT_ERROR_CODE, isPermanentError } from '../../src/shared/room-model';
 
 const INPUT: ChatInput = { model: 'acme/paid-model', system: 'sys', user: 'usr', effort: 'high', web: true };
 
@@ -49,17 +50,28 @@ describe('a refusal for lack of endpoints', () => {
   it('names data_collection when the request denied collection', async () => {
     const error = await failure({ ...INPUT, denyDataCollection: true }, reply(404, refusal));
     expect(error).toBeInstanceOf(ChatError);
-    expect(error.code).toBe('failed');
+    expect(error.code).toBe(PERMANENT_ERROR_CODE);
+    expect(isPermanentError(error)).toBe(true);
     expect(error.message).toContain('data_collection');
     expect(error.message).toContain('acme/paid-model');
+    expect(error.message).toContain(COLLECTION_SWITCH_LABEL);
   });
 
   it('stays the plain HTTP error when collection was not denied, and for other 404 bodies', async () => {
     const plain = await failure(INPUT, reply(404, refusal));
     expect(plain.message).not.toContain('data_collection');
+    expect(isPermanentError(plain)).toBe(false);
     const other = await failure({ ...INPUT, denyDataCollection: true }, reply(404, { error: { code: 404, message: 'Model not found' } }));
     expect(other.message).not.toContain('data_collection');
     const unreadable = await failure({ ...INPUT, denyDataCollection: true }, () => Promise.resolve(new Response('<html>', { status: 404 })));
     expect(unreadable.message).not.toContain('data_collection');
+    expect(isPermanentError(other)).toBe(false);
+    expect(isPermanentError(unreadable)).toBe(false);
+  });
+
+  it('never makes a rate limit permanent, with or without the deny', async () => {
+    const limited = reply(429, { error: { code: 429, message: 'No endpoints found for rate limits' } });
+    expect(isPermanentError(await failure({ ...INPUT, denyDataCollection: true }, limited))).toBe(false);
+    expect(isPermanentError(await failure(INPUT, limited))).toBe(false);
   });
 });
