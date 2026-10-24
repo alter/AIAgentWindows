@@ -1,6 +1,7 @@
 // ipc.ts
 import { AGENT_KINDS, isUuid, parseAgentTitle, type Agent, type AgentKind } from './agents';
 import type { RoomModels } from './cli-models';
+import { parseCopyAgentsFrom, type CopyAgentsFrom } from './copy-agents';
 import type { OutputSnapshot } from './output-buffer';
 import type { SavePlanResult } from './plan-file';
 import { isRoomId, parseRoomConfig, parseRoomTitle, type RoomConfig, type RoomEvent, type RoomListItem } from './room-model';
@@ -180,8 +181,8 @@ export interface InvokeRequests {
   [INVOKE_CHANNELS.openrouterSettings]: { id: string; settings: OpenRouterSettings };
   [INVOKE_CHANNELS.projectsList]: undefined;
   [INVOKE_CHANNELS.projectsPickParent]: undefined;
-  [INVOKE_CHANNELS.projectsCreate]: { token: string; name: string };
-  [INVOKE_CHANNELS.projectsAddExisting]: undefined;
+  [INVOKE_CHANNELS.projectsCreate]: { token: string; name: string; copyAgentsFrom?: CopyAgentsFrom };
+  [INVOKE_CHANNELS.projectsAddExisting]: { copyAgentsFrom?: CopyAgentsFrom };
   [INVOKE_CHANNELS.projectsRename]: { id: string; name: string };
   [INVOKE_CHANNELS.projectsDelete]: { id: string };
 }
@@ -239,8 +240,8 @@ export interface AppApi {
   openrouterSettings(id: string, settings: OpenRouterSettings): Promise<boolean>;
   projectsList(): Promise<ProjectView[]>;
   projectsPickParent(): Promise<PickParentResult>;
-  projectsCreate(token: string, name: string): Promise<ProjectResult>;
-  projectsAddExisting(): Promise<ProjectResult>;
+  projectsCreate(token: string, name: string, copyAgentsFrom: CopyAgentsFrom): Promise<ProjectResult>;
+  projectsAddExisting(copyAgentsFrom: CopyAgentsFrom): Promise<ProjectResult>;
   projectsRename(id: string, name: string): Promise<ProjectActionResult>;
   projectsDelete(id: string): Promise<ProjectActionResult>;
   onAgentsChanged(listener: (snapshot: AgentsSnapshot) => void): () => void;
@@ -300,6 +301,12 @@ function withUuid<T extends object>(payload: unknown, build: (record: Record<str
 function entryIndex(record: Record<string, unknown>, id: string): { id: string; index: number } | null {
   const index = record['index'];
   return typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < MAX_ENTRIES ? { id, index } : null;
+}
+
+function optionalCopySource(payload: Record<string, unknown>): { copyAgentsFrom?: CopyAgentsFrom } | null {
+  if (!Object.hasOwn(payload, 'copyAgentsFrom')) return {};
+  const copyAgentsFrom = parseCopyAgentsFrom(payload['copyAgentsFrom']);
+  return copyAgentsFrom === null ? null : { copyAgentsFrom };
 }
 
 function noPayload(payload: unknown): undefined | null {
@@ -426,9 +433,11 @@ const PARSERS: { [C in InvokeChannel]: Parser<InvokeRequests[C]> } = {
   [INVOKE_CHANNELS.projectsCreate]: (payload) => {
     if (!isRecord(payload) || !isUuid(payload['token'])) return null;
     const name = payload['name'];
-    return typeof name === 'string' && name.length <= MAX_NAME_INPUT_CHARS ? { token: payload['token'], name } : null;
+    if (typeof name !== 'string' || name.length > MAX_NAME_INPUT_CHARS) return null;
+    const copy = optionalCopySource(payload);
+    return copy === null ? null : { token: payload['token'], name, ...copy };
   },
-  [INVOKE_CHANNELS.projectsAddExisting]: noPayload,
+  [INVOKE_CHANNELS.projectsAddExisting]: (payload) => (payload === undefined ? {} : isRecord(payload) ? optionalCopySource(payload) : null),
   [INVOKE_CHANNELS.projectsRename]: (payload) => {
     if (!isRecord(payload) || !isProjectId(payload['id'])) return null;
     const name = parseProjectName(payload['name']);

@@ -108,6 +108,7 @@ test('an OpenRouter agent added to a project with a long agent list is brought i
     await signIn(page, fake);
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     const node = page.locator('[data-project="tree"] [data-project-id]');
     await expect(node).toHaveCount(1);
     for (let count = 1; count <= 7; count += 1) {

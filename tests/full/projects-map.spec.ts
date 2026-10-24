@@ -64,6 +64,7 @@ test('a project room names who gets the map, and every turn carries a Context se
     await expect(block(page).getByText('Connected', { exact: true })).toBeVisible();
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     const node = page.locator('[data-project="tree"] [data-project-id]');
     await expect(node).toHaveCount(1);
     await node.locator('[data-project="add-room"]').click();

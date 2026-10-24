@@ -25,6 +25,7 @@ SCOPE
   + 12-context-pack — kind capabilities and context pack (behaviour-neutral)
   + 13-project-map — project map module and git ls-files
   + 14-room-map — map for web and OpenRouter participants, digest, disclosure
+  + 15-copy-agents — copy the agents of No project or another project into a new project (owner request 2026-10-24)
   − roles, worktrees, write modes, orchestrator, kind descriptors, driver registry, scenario fixtures — docs/plans/roles.md
   − pushing, pull requests, releases; several app windows; migration of existing agents
 

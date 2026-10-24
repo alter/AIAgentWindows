@@ -24,7 +24,7 @@ export interface ProjectView {
 }
 
 export type PickParentResult = { ok: true; token: string; parentName: string } | { ok: false };
-export type ProjectResult = { ok: true; project: ProjectView } | { ok: false; error: string; cancelled?: true };
+export type ProjectResult = { ok: true; project: ProjectView; copied?: number; copyError?: string } | { ok: false; error: string; cancelled?: true };
 export type FolderLookup = { ok: true; folder: string } | { ok: false; error: string };
 export type ProjectActionResult = { ok: true; warning?: string } | { ok: false; error: string };
 

@@ -1,5 +1,6 @@
 // project-tree.ts
 import type { AgentKind } from '../shared/agents';
+import { copyAgentsOptions, defaultCopyChoice, sourceOfChoice } from '../shared/copy-agents';
 import type { AppApi } from '../shared/ipc';
 import { pointAnchor } from '../shared/popup-place';
 import { MAX_PROJECT_NAME_CHARS, MAX_FOLDER_NAME_BYTES, parseProjectName, type ProjectView } from '../shared/projects';
@@ -42,6 +43,8 @@ export class ProjectTree {
   private readonly form = el('div', 'projects-form');
   private readonly formLabel = el('label', 'projects-form-label');
   private readonly nameInput = el('input', 'projects-name-input');
+  private readonly copyRow = el('label', 'projects-form-copy');
+  private readonly copySelect = el('select', 'projects-copy-select');
   private readonly create = el('button', 'projects-form-button', 'Create');
   private readonly cancel = el('button', 'projects-form-button', 'Cancel');
   private readonly list = el('ul', 'projects-list');
@@ -61,6 +64,7 @@ export class ProjectTree {
   private readonly confirmNo = el('button', 'projects-confirm-no', 'Cancel');
   private nodes: readonly TreeNode[] = [];
   private newFolder: NewFolder | null = null;
+  private existingForm = false;
   private menuId: string | null = null;
   private pendingId: string | null = null;
   private pendingAgentId: string | null = null;
@@ -121,6 +125,7 @@ export class ProjectTree {
     if (this.pendingAgentId !== null && this.agentLabel(this.pendingAgentId) === null) this.setPendingAgent(null);
     if (this.pendingRoomId !== null && this.roomLabel(this.pendingRoomId) === null) this.setPendingRoom(null);
     if (this.editing !== null && !ids.has(this.editing.id)) this.editing = null;
+    if (!this.form.hidden) this.renderCopyOptions();
     this.render();
   }
 
@@ -147,7 +152,7 @@ export class ProjectTree {
     });
     this.addMenu.hidden = true;
     this.addMenu.setAttribute('role', 'menu');
-    const existing = this.menuButton('Existing folder…', 'add-existing', () => void this.addExisting());
+    const existing = this.menuButton('Existing folder…', 'add-existing', () => this.openExisting());
     const fresh = this.menuButton('New folder…', 'add-new', () => void this.pickParent());
     this.addMenu.append(existing, fresh);
   }
@@ -186,24 +191,67 @@ export class ProjectTree {
     });
     this.create.type = 'button';
     this.create.dataset['project'] = 'create';
-    this.create.addEventListener('click', () => void this.submitNew());
+    this.create.addEventListener('click', () => void (this.existingForm ? this.submitExisting() : this.submitNew()));
     this.cancel.type = 'button';
     this.cancel.dataset['project'] = 'create-cancel';
     this.cancel.addEventListener('click', () => this.closeForm());
-    this.form.append(this.formLabel, this.nameInput, this.create, this.cancel);
+    this.copySelect.dataset['project'] = 'copy-from';
+    this.copyRow.append(el('span', 'projects-form-copy-label', 'Copy agents from'), this.copySelect);
+    this.form.append(this.formLabel, this.nameInput, this.copyRow, this.create, this.cancel);
+  }
+
+  private renderCopyOptions(): void {
+    const previous = this.copySelect.value;
+    const options = copyAgentsOptions(this.nodes.flatMap((node) => (node.projectId === null ? [] : [{ id: node.projectId, name: node.label }])));
+    this.copySelect.replaceChildren(
+      ...options.map((option) => {
+        const item = el('option', undefined, option.label);
+        item.value = option.value;
+        return item;
+      }),
+    );
+    this.copySelect.value = options.some((option) => option.value === previous) ? previous : defaultCopyChoice(options);
+  }
+
+  private openForm(label: string, buttonText: string, existing: boolean): void {
+    this.existingForm = existing;
+    this.formLabel.textContent = label;
+    this.create.textContent = buttonText;
+    this.nameInput.hidden = existing;
+    this.nameInput.value = '';
+    this.renderCopyOptions();
+    this.form.hidden = false;
+    this.showNotice('');
   }
 
   private closeForm(): void {
     this.newFolder = null;
+    this.existingForm = false;
     this.form.hidden = true;
     this.nameInput.value = '';
+    this.copySelect.replaceChildren();
   }
 
-  private async addExisting(): Promise<void> {
+  private openExisting(): void {
+    this.newFolder = null;
+    this.openForm('Add an existing folder', 'Choose folder…', true);
+  }
+
+  private copySource(): ReturnType<typeof sourceOfChoice> {
+    const source = sourceOfChoice(this.copySelect.value);
+    if (source === null) this.showNotice('Choose where to copy the agents from.');
+    return source;
+  }
+
+  private async submitExisting(): Promise<void> {
+    const source = this.copySource();
+    if (source === null) return;
     try {
-      const result = await this.api.projectsAddExisting();
-      if (result.ok) this.showNotice('');
-      else if (result.cancelled !== true) this.showNotice(result.error);
+      const result = await this.api.projectsAddExisting(source);
+      if (result.ok) {
+        this.closeForm();
+        this.showNotice(result.copyError ?? '');
+      } else if (result.cancelled !== true) this.showNotice(result.error);
       this.refresh();
     } catch {
       this.showNotice('The project could not be added.');
@@ -215,10 +263,7 @@ export class ProjectTree {
       const result = await this.api.projectsPickParent();
       if (!result.ok) return;
       this.newFolder = { token: result.token, parentName: result.parentName };
-      this.formLabel.textContent = `New folder in ${result.parentName}`;
-      this.nameInput.value = '';
-      this.form.hidden = false;
-      this.showNotice('');
+      this.openForm(`New folder in ${result.parentName}`, 'Create', false);
       this.nameInput.focus();
     } catch {
       this.showNotice('The parent folder could not be chosen.');
@@ -228,11 +273,13 @@ export class ProjectTree {
   private async submitNew(): Promise<void> {
     const target = this.newFolder;
     if (target === null) return;
+    const source = this.copySource();
+    if (source === null) return;
     try {
-      const result = await this.api.projectsCreate(target.token, this.nameInput.value);
+      const result = await this.api.projectsCreate(target.token, this.nameInput.value, source);
       if (result.ok) {
         this.closeForm();
-        this.showNotice('');
+        this.showNotice(result.copyError ?? '');
         this.refresh();
       } else {
         this.showNotice(result.error);

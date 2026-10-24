@@ -32,6 +32,7 @@ test('an OpenRouter chat of a project is stored under the project folder, not in
 
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     const node = page.locator('[data-project="tree"] [data-project-id]');
     await expect(node).toHaveCount(1);
     await node.locator('[data-project="add-agent"]').click();

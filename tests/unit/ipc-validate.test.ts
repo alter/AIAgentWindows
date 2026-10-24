@@ -373,10 +373,29 @@ describe('theme channels', () => {
     const PICK = '0b9a5d6e-3f43-4c1b-9d57-1f6b7a2c8e10';
     const PROJECT = '3f2c9a1e-aaaa-4bbb-8ccc-1234567890ab';
 
-    it('list, pick-parent and add-existing take no payload', () => {
-      for (const channel of [INVOKE_CHANNELS.projectsList, INVOKE_CHANNELS.projectsPickParent, INVOKE_CHANNELS.projectsAddExisting]) {
+    it('list and pick-parent take no payload', () => {
+      for (const channel of [INVOKE_CHANNELS.projectsList, INVOKE_CHANNELS.projectsPickParent]) {
         expect(validateRequest(channel, undefined).ok).toBe(true);
         expect(validateRequest(channel, { path: '/etc' }).ok).toBe(false);
+      }
+    });
+
+    it('add-existing takes an optional copy source and never a path', () => {
+      expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, undefined)).toEqual({ ok: true, value: {} });
+      expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, {})).toEqual({ ok: true, value: {} });
+      expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, { copyAgentsFrom: 'none' })).toEqual({ ok: true, value: { copyAgentsFrom: 'none' } });
+      expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, { copyAgentsFrom: { projectId: null } })).toEqual({ ok: true, value: { copyAgentsFrom: { projectId: null } } });
+      expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, { copyAgentsFrom: { projectId: PROJECT }, path: '/etc' })).toEqual({ ok: true, value: { copyAgentsFrom: { projectId: PROJECT } } });
+      for (const payload of [null, 5, [], { copyAgentsFrom: 'copy' }, { copyAgentsFrom: undefined }, { copyAgentsFrom: null }, { copyAgentsFrom: {} }, { copyAgentsFrom: { projectId: '../x' } }]) {
+        expect(validateRequest(INVOKE_CHANNELS.projectsAddExisting, payload).ok).toBe(false);
+      }
+    });
+
+    it('create carries the copy source and refuses a malformed one instead of reading it as none', () => {
+      expect(validateRequest(INVOKE_CHANNELS.projectsCreate, { token: PICK, name: 'app', copyAgentsFrom: 'none' })).toEqual({ ok: true, value: { token: PICK, name: 'app', copyAgentsFrom: 'none' } });
+      expect(validateRequest(INVOKE_CHANNELS.projectsCreate, { token: PICK, name: 'app', copyAgentsFrom: { projectId: PROJECT } })).toEqual({ ok: true, value: { token: PICK, name: 'app', copyAgentsFrom: { projectId: PROJECT } } });
+      for (const copyAgentsFrom of ['copy', null, undefined, {}, { projectId: 5 }, { projectId: PROJECT, x: 1 }]) {
+        expect(validateRequest(INVOKE_CHANNELS.projectsCreate, { token: PICK, name: 'app', copyAgentsFrom }).ok).toBe(false);
       }
     });
 

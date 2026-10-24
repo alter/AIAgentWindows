@@ -70,8 +70,8 @@ function buildHandlers(controller: AgentController, room: RoomService, openroute
     },
     [INVOKE_CHANNELS.projectsList]: () => projects.list(),
     [INVOKE_CHANNELS.projectsPickParent]: () => projects.pickParent(),
-    [INVOKE_CHANNELS.projectsCreate]: ({ token, name }) => projects.create(token, name),
-    [INVOKE_CHANNELS.projectsAddExisting]: () => projects.addExisting(),
+    [INVOKE_CHANNELS.projectsCreate]: ({ token, name, copyAgentsFrom }) => projects.create(token, name, copyAgentsFrom),
+    [INVOKE_CHANNELS.projectsAddExisting]: ({ copyAgentsFrom }) => projects.addExisting(copyAgentsFrom),
     [INVOKE_CHANNELS.projectsRename]: ({ id, name }) => projects.rename(id, name),
     [INVOKE_CHANNELS.projectsDelete]: ({ id }) => projects.delete(id),
   };

@@ -34,6 +34,7 @@ function field(page: Page, name: string): Locator {
 async function addExisting(page: Page, count: number): Promise<void> {
   await page.locator('[data-project="add"]').click();
   await page.locator('[data-project="add-existing"]').click();
+  await page.locator('[data-project="create"]').click();
   await expect(page.locator('[data-project="tree"] [data-project-id]')).toHaveCount(count);
 }
 

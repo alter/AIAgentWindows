@@ -4,6 +4,7 @@ import path from 'node:path';
 import { AGENT_LABELS, OPENROUTER_KIND, isCliKind, isSiteKind, parseAgentTitle, removeAgent, type Agent, type AgentKind, type AppState } from '../shared/agents';
 import { buildSpawn, type SpawnSpec } from '../shared/cli-args';
 import type { Rollout } from '../shared/codex-claim';
+import { copySourceAgents, type CopyAgentsResult, type CopySource } from '../shared/copy-agents';
 import { emptyOpenRouterSettings, parseOpenRouterSettings, type OpenRouterSettings } from '../shared/openrouter';
 import { openrouterTitle } from '../shared/openrouter-chat';
 import type { FolderLookup } from '../shared/projects';
@@ -112,16 +113,31 @@ export class AgentController {
     if (refused !== null) return { ok: false, error: refused };
     const found = projectId === undefined ? undefined : await this.projectFolder(projectId);
     if (found !== undefined && !found.ok) return { ok: false, error: found.error };
-    const folder = found?.folder;
-    const created = isCliKind(kind) ? await this.createCliAgent(kind, folder) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent() : this.createSiteAgent(kind);
-    if (created === null) return { ok: true };
-    const agent = projectId === undefined ? created : { ...created, projectId };
+    const agent = await this.build(kind, projectId, found?.folder);
+    if (agent === null) return { ok: true };
     this.agents.push(agent);
     this.selectedId = agent.id;
     this.roomOpen = false;
     await this.persist('agents');
     this.emitChanged();
     return { ok: true };
+  }
+
+  async copyAgents(source: CopySource, projectId: string): Promise<CopyAgentsResult> {
+    const refused = this.deps.store.failure();
+    if (refused !== null) return { ok: false, error: refused };
+    const found = await this.projectFolder(projectId);
+    if (!found.ok) return { ok: false, error: found.error };
+    const copies: Agent[] = [];
+    for (const original of copySourceAgents(this.agents, source)) {
+      const copy = await this.build(original.kind, projectId, found.folder, original.openrouter);
+      if (copy !== null) copies.push(copy);
+    }
+    if (copies.length === 0) return { ok: true, count: 0 };
+    this.agents.push(...copies);
+    await this.persist('agents');
+    this.emitChanged();
+    return { ok: true, count: copies.length };
   }
 
   async select(id: string): Promise<void> {
@@ -237,6 +253,11 @@ export class AgentController {
     this.pty.killAll();
   }
 
+  private async build(kind: AgentKind, projectId: string | undefined, folder: string | undefined, settings?: OpenRouterSettings): Promise<Agent | null> {
+    const created = isCliKind(kind) ? await this.createCliAgent(kind, folder) : kind === OPENROUTER_KIND ? this.createOpenRouterAgent(settings) : this.createSiteAgent(kind);
+    return created === null || projectId === undefined ? created : { ...created, projectId };
+  }
+
   private async createCliAgent(kind: 'claude' | 'codex', folder: string | undefined): Promise<Agent | null> {
     const cwd = folder ?? (await this.deps.pickFolder());
     if (cwd === null) return null;
@@ -258,8 +279,8 @@ export class AgentController {
       : { id, kind, title, cwd, sessionId, createdAt: Date.now() };
   }
 
-  private createOpenRouterAgent(): Agent {
-    const settings = emptyOpenRouterSettings();
+  private createOpenRouterAgent(copied?: OpenRouterSettings): Agent {
+    const settings = copied === undefined ? emptyOpenRouterSettings() : { ...copied };
     return { id: randomUUID(), kind: OPENROUTER_KIND, title: openrouterTitle(settings), openrouter: settings, createdAt: Date.now() };
   }
 

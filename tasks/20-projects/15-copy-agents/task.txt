@@ -1,0 +1,69 @@
+TASK: copy agents into a new project
+
+GOAL
+  Creating a project (an existing folder or a new one) offers a "Copy agents
+  from" select: "No project" first, then "Do not copy", then every project.
+  The agents of the chosen source are created again in the new project, same
+  kinds, same order, fresh sessions; the source stays as it is. Owner request
+  2026-10-24: agents are no longer added by hand to every project. Serves
+  milestone M3 (docs/plans/projects.md D1, D3, D9, T09 add-agent path).
+
+CONTEXT
+  docs/plans/projects.md
+  docs/PROJECT.md
+  AGENTS.md
+  tasks/20-projects/task.txt
+  src/shared/copy-agents.ts
+  src/shared/agents.ts
+  src/shared/projects.ts
+  src/shared/ipc.ts
+  src/preload/index.ts
+  src/main/agent-controller.ts
+  src/main/ipc-handlers.ts
+  src/main/index.ts
+  src/main/projects/service.ts
+  src/renderer/project-tree.ts
+  src/renderer/styles.css
+  tests/unit/copy-agents.test.ts
+  tests/unit/ipc-validate.test.ts
+  tests/integration/copy-agents.test.ts
+  tests/integration/project-service.test.ts
+  tests/full/projects-copy.spec.ts
+  tests/full/projects.spec.ts
+  tests/full/projects-chat.spec.ts
+  tests/full/projects-room.spec.ts
+  tests/full/projects-room-return.spec.ts
+  tests/full/projects-plan.spec.ts
+  tests/full/projects-map.spec.ts
+  tests/full/projects-seats.spec.ts
+  tests/full/no-project-tree.spec.ts
+  tests/full/openrouter-many.spec.ts
+  tests/full/popup-sidebar.spec.ts
+
+SCOPE
+  + shared/copy-agents.ts: the option list (No project, Do not copy, projects in index order), the fail-closed parser of `copyAgentsFrom` (`'none' | { projectId: string | null }`), the choice-to-source mapping, the pure selection of a source's agents
+  + shared/ipc.ts, preload, ipc-handlers.ts: `projects:create` and `projects:add-existing` carry an optional `copyAgentsFrom` (absent = `'none'`, present and malformed = refused)
+  + main/agent-controller.ts: `copyAgents(source, projectId)` on the add-agent path (one builder shared with `add`), one persist for all copies, selection untouched
+  + main/projects/service.ts: the copy after the project is enrolled; an unknown source id creates the project without copies and returns `copyError`
+  + main/index.ts: the project service reaches the controller through a callback
+  + renderer/project-tree.ts, styles.css: a form for both flows with the select, default the first option
+  + tests: unit (copy-agents, ipc-validate), integration (controller and service), the electron-smoke spec projects-copy.spec.ts, and the existing specs whose Existing folder flow gains the form
+  + docs/PROJECT.md, AGENTS.md Map (shared row): Projects row note, `copy-agents.ts`; docs/plans/projects.md: Assumption and Log line (status stays done)
+  − the acceptance criteria and tasks of docs/plans/projects.md
+  − moving agents, copying sessions, conversations or room records, copying rooms
+  − renaming an agent, any change of room.ts, room-drivers.ts or cli-args.ts
+
+OUTCOME
+  tests/integration/copy-agents.test.ts and tests/full/projects-copy.spec.ts pass; a project created with the default select holds copies of the No project agents, and they survive a restart.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/copy-agents.test.ts tests/unit/ipc-validate.test.ts tests/integration/copy-agents.test.ts exits 0
+  3. [full] electron-smoke exit 0, with tests/full/projects-copy.spec.ts
+  4. reverse control: copy the source list wrongly (the whole app instead of the chosen source) in a scratch copy and tests/integration/copy-agents.test.ts turns red
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

@@ -46,6 +46,7 @@ test('the No project node nests its Rooms and Agents sections exactly like a pro
     const page = await app.firstWindow();
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     await expect(page.locator('[data-project="tree"] [data-project-id]')).toHaveCount(1);
     const project = '[data-project="tree"] [data-project-id]';
     const none = '[data-project="no-project"]';

@@ -115,6 +115,7 @@ async function start(): Promise<void> {
     git: gitRunner,
     pickFolder,
     trash: trashItem,
+    copyAgents: async (source, projectId) => (controller === null ? { ok: false, error: 'The agents are not ready yet.' } : controller.copyAgents(source, projectId)),
   });
   controller = new AgentController(
     {

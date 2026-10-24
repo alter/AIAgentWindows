@@ -171,6 +171,9 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .projects-form { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
 .projects-form-label { flex: 1 0 100%; }
 .projects-name-input { flex: 1 1 8em; min-width: 0; padding: 4px 6px; }
+.projects-name-input[hidden] { display: none; }
+.projects-form-copy { display: flex; flex: 1 0 100%; flex-direction: column; gap: 2px; font-size: 12px; }
+.projects-copy-select { min-width: 0; padding: 4px 6px; font: inherit; }
 .projects-form-button, .projects-confirm-yes, .projects-confirm-no {
   padding: 5px 12px;
   border: 1px solid var(--border);

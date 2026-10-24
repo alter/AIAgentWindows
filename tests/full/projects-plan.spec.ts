@@ -47,6 +47,7 @@ test('Save plan writes the final text into docs/plans of the project, asks befor
 
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     await page.locator('[data-project="tree"] [data-project-id] [data-project="add-room"]').click();
     await field(page, 'prompt').fill('Plan the import feature');
     await field(page, 'mode').selectOption('relay');

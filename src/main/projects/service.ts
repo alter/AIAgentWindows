@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
+import type { CopyAgentsFrom, CopyAgentsResult, CopySource } from '../../shared/copy-agents';
 import {
   isProjectId,
   nameFromFolder,
@@ -35,11 +36,13 @@ export interface ProjectsDeps {
   git: ProjectGit;
   pickFolder(): Promise<string | null>;
   trash: TrashFn;
+  copyAgents?(source: CopySource, projectId: string): Promise<CopyAgentsResult>;
   now?(): number;
   newId?(): string;
   newToken?(): string;
 }
 
+const UNKNOWN_SOURCE = 'The project to copy agents from no longer exists. The project was created without copies.';
 const INSIDE_USER_DATA = 'A project folder cannot live inside the application data folder.';
 
 class DuplicateFolder extends Error {
@@ -124,7 +127,7 @@ export class ProjectService {
     return { ok: true, token: this.pending.token, parentName: path.basename(parent) };
   }
 
-  async create(token: string, name: string): Promise<ProjectResult> {
+  async create(token: string, name: string, copy: CopyAgentsFrom = 'none'): Promise<ProjectResult> {
     const pending = this.pending;
     if (pending === null || pending.token !== token) return fail('The parent folder choice has expired: choose the parent folder again.');
     const checked = parseFolderName(name);
@@ -133,13 +136,13 @@ export class ProjectService {
     if (refused !== null) return fail(refused);
     this.pending = null;
     try {
-      return await this.createFolder(pending.parent, checked.name);
+      return await this.createFolder(pending.parent, checked.name, copy);
     } catch (error) {
       return fail(messageOf(error));
     }
   }
 
-  async addExisting(): Promise<ProjectResult> {
+  async addExisting(copy: CopyAgentsFrom = 'none'): Promise<ProjectResult> {
     const picked = await this.deps.pickFolder();
     if (picked === null) return { ok: false, error: 'No folder was chosen.', cancelled: true };
     const refused = this.deps.store.failure();
@@ -148,7 +151,7 @@ export class ProjectService {
       const folder = await realpath(picked);
       if (!(await stat(folder)).isDirectory()) return fail('That is not a folder.');
       if (await this.insideUserData(folder)) return fail(INSIDE_USER_DATA);
-      return await this.enroll(folder, nameFromFolder(folder));
+      return await this.enroll(folder, nameFromFolder(folder), copy);
     } catch (error) {
       return fail(messageOf(error));
     }
@@ -184,7 +187,7 @@ export class ProjectService {
     return warning === null ? { ok: true } : { ok: true, warning };
   }
 
-  private async createFolder(parentPicked: string, name: string): Promise<ProjectResult> {
+  private async createFolder(parentPicked: string, name: string, copy: CopyAgentsFrom): Promise<ProjectResult> {
     const git = await this.deps.git.available();
     if (!git.ok) return fail(git.error);
     const parent = await realpath(parentPicked);
@@ -201,7 +204,7 @@ export class ProjectService {
     }
     const init = await this.deps.git.init(folder);
     if (!init.ok) return fail(`${init.error} The folder ${folder} was created and stays there.`);
-    return this.enroll(await realpath(folder), name);
+    return this.enroll(await realpath(folder), name, copy);
   }
 
   private async insideUserData(folder: string): Promise<boolean> {
@@ -209,7 +212,7 @@ export class ProjectService {
     return folder === root || folder.startsWith(`${root}${path.sep}`);
   }
 
-  private async enroll(folder: string, name: string): Promise<ProjectResult> {
+  private async enroll(folder: string, name: string, copy: CopyAgentsFrom): Promise<ProjectResult> {
     const project: Project = { id: (this.deps.newId ?? randomUUID)(), name, folder, createdAt: (this.deps.now ?? Date.now)() };
     const known = this.projects().find((item) => item.folder === folder);
     if (known !== undefined) return fail(duplicateMessage(known.name));
@@ -223,7 +226,20 @@ export class ProjectService {
     } catch (error) {
       return fail(error instanceof DuplicateFolder ? duplicateMessage(error.name) : messageOf(error));
     }
-    return { ok: true, project: viewOf(project, false) };
+    return { ok: true, project: viewOf(project, false), ...(await this.copyInto(copy, project.id)) };
+  }
+
+  private async copyInto(copy: CopyAgentsFrom, projectId: string): Promise<{ copied?: number; copyError?: string }> {
+    if (copy === 'none') return {};
+    const { copyAgents } = this.deps;
+    if (copy.projectId !== null && !this.projects().some((item) => item.id === copy.projectId)) return { copyError: UNKNOWN_SOURCE };
+    if (copyAgents === undefined) return { copyError: 'Copying agents is not available.' };
+    try {
+      const result = await copyAgents(copy, projectId);
+      return result.ok ? { copied: result.count } : { copyError: result.error };
+    } catch (error) {
+      return { copyError: `The agents could not be copied: ${messageOf(error)}` };
+    }
   }
 
   private async trashStorage(id: string): Promise<string | null> {

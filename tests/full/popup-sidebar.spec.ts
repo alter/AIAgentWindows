@@ -37,6 +37,7 @@ test('popups opened from a project row stay inside the sidebar, left of the site
     const page = await app.firstWindow();
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
+    await page.locator('[data-project="create"]').click();
     await expect(page.locator('[data-project="tree"] [data-project-id]')).toHaveCount(1);
 
     await page.locator('[data-project="add-agent"]').first().click();

@@ -65,6 +65,7 @@ function notice(page: Page): Locator {
 async function addExisting(page: Page): Promise<void> {
   await page.locator('[data-project="add"]').click();
   await page.locator('[data-project="add-existing"]').click();
+  await page.locator('[data-project="create"]').click();
 }
 
 async function openNewFolder(page: Page): Promise<void> {
