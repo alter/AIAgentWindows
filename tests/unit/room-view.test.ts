@@ -1,11 +1,12 @@
 // room-view.test.ts
 import { describe, expect, it } from 'vitest';
-import { AGENT_LABELS, ROOM_AGENT_KINDS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type SiteKind } from '../../src/shared/agents';
+import { AGENT_LABELS, ROOM_AGENT_KINDS, SITE_KINDS_WITH_ADAPTER, isSiteKind, type Agent, type SiteKind } from '../../src/shared/agents';
 import type { RoomEntry, RoomEvent, RoomPlan, RoomRecord, RoomRecordConfig } from '../../src/shared/room-model';
 import type { RoomModels } from '../../src/shared/cli-models';
 import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
 import {
   addMenuOptions,
+  projectSiteKinds,
   addRow,
   defaultRows,
   effortChoices,
@@ -316,6 +317,29 @@ describe('participants without an adapter', () => {
     const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
     if (deepseek === undefined) throw new Error('no deepseek participant');
     expect(() => seats(deepseek)).toThrow(/DeepSeek has no site adapter/);
+  });
+
+  it('the seat of a project room is the site agent of that project, a room outside any project takes the agent outside every project, and a project without the kind has no seat', async () => {
+    const calls: string[] = [];
+    const base = { kind: 'deepseek' as const, title: 'DeepSeek', createdAt: 0 };
+    const agents = [{ ...base, id: 'in-b', projectId: 'project-b' }, { ...base, id: 'loose' }, { ...base, id: 'in-a', projectId: 'project-a' }];
+    const seats = createSiteSeats({
+      agents: () => agents,
+      page: () => ({ executeJavaScriptInIsolatedWorld: () => Promise.resolve(null), isDestroyed: () => false }),
+      prepare: (item) => {
+        calls.push(item.id);
+        return Promise.resolve();
+      },
+      newChat: () => Promise.resolve(),
+      adapterFor,
+    });
+    const deepseek = ROOM_PARTICIPANTS.find((item) => item.kind === 'deepseek');
+    if (deepseek === undefined) throw new Error('no deepseek participant');
+    for (const projectId of ['project-a', null, 'project-b']) await seats(deepseek, projectId)?.prepare?.(1, new AbortController().signal);
+    expect(calls).toEqual(['in-a', 'loose', 'in-b']);
+    expect(seats(deepseek, 'project-c')).toBeNull();
+    const looseOnly = createSiteSeats({ agents: () => [{ ...base, id: 'loose' }], page: () => { throw new Error('unused'); }, prepare: () => Promise.resolve(), newChat: () => Promise.resolve(), adapterFor });
+    expect(looseOnly(deepseek, 'project-a')).toBeNull();
   });
 });
 
@@ -883,6 +907,28 @@ describe('participant row logic', () => {
     expect(options[3]?.note).toBe('Grok is already in the table');
     expect(options[4]?.note).toBe('DeepSeek has no site adapter');
     expect(addMenuOptions(defaultRows()).every((option) => option.available)).toBe(true);
+  });
+
+  it('in a project room disables a site kind that has no agent in the project, with its reason, and leaves a room outside any project alone', () => {
+    const rows = defaultRows();
+    const inProject = addMenuOptions(rows, ['chatgpt', 'grok', 'deepseek'], true, ['grok']);
+    expect(inProject.map((option) => option.available)).toEqual([true, true, false, true, false, true]);
+    expect(inProject[2]?.note).toBe('Add a ChatGPT agent to this project first');
+    expect(inProject[4]?.note).toBe('Add a DeepSeek agent to this project first');
+    const none = addMenuOptions(rows, undefined, true, []);
+    expect(none.filter((option) => isSiteKind(option.kind)).every((option) => !option.available)).toBe(true);
+    expect(none.filter((option) => !isSiteKind(option.kind)).every((option) => option.available)).toBe(true);
+    expect(addMenuOptions(rows, undefined, true, null).every((option) => option.available)).toBe(true);
+    expect(addMenuOptions(addRow(rows, 'grok'), undefined, true, ['grok'])[3]?.note).toBe('Grok is already in the table');
+  });
+
+  it('lists the site kinds that have an agent in the room project and nothing for a room outside any project', () => {
+    const agent = (id: string, kind: Agent['kind'], projectId?: string): Agent => ({ id, kind, title: id, createdAt: 0, ...(projectId === undefined ? {} : { projectId }) });
+    const agents = [agent('a', 'grok', 'p1'), agent('b', 'claude', 'p1'), agent('c', 'chatgpt', 'p2'), agent('d', 'deepseek')];
+    expect(projectSiteKinds(agents, 'p1')).toEqual(['grok']);
+    expect(projectSiteKinds(agents, 'p2')).toEqual(['chatgpt']);
+    expect(projectSiteKinds(agents, 'p3')).toEqual([]);
+    expect(projectSiteKinds(agents, null)).toBeNull();
   });
 
   it('moves a row one place up or down and keeps every id once', () => {

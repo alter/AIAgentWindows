@@ -16,6 +16,7 @@ import { openStore } from '../unit/helpers/app-state';
 const STUB = path.resolve(__dirname, '..', 'fixtures', 'stub-cli.mjs');
 const CLAUDE: RoomParticipant = { id: 'claude', kind: 'claude', label: 'Claude Code' };
 const CODEX: RoomParticipant = { id: 'codex', kind: 'codex', label: 'Codex' };
+const DEEPSEEK: RoomParticipant = { id: 'deepseek', kind: 'deepseek', label: 'DeepSeek' };
 const NO_MODELS: RoomModels = { claude: { models: [], efforts: [] }, codex: { models: [] } };
 
 interface StubCall {
@@ -38,6 +39,8 @@ let work: string;
 let log: string;
 let picks: (string | null)[];
 let stacks: Stack[];
+let stubEnv: Record<string, string>;
+let seatCalls: Array<[string, string | null]>;
 
 const git: ProjectGit = {
   available: () => Promise.resolve({ ok: true, output: 'git version 0' }),
@@ -64,8 +67,12 @@ async function stack(): Promise<Stack> {
       CLAUDE_CONFIG_DIR: path.join(dir, 'claude-config'),
       CODEX_HOME: path.join(dir, 'codex-home'),
       AIAW_STUB_ARGV_LOG: log,
+      ...stubEnv,
     }),
-    siteFor: () => null,
+    siteFor: (participant, projectId) => {
+      seatCalls.push([participant.id, projectId]);
+      return null;
+    },
     timing: { killGraceMs: 200 },
   });
   const seen: RoomEvent[] = [];
@@ -151,6 +158,8 @@ beforeEach(async () => {
   await mkdir(work);
   picks = [];
   stacks = [];
+  stubEnv = {};
+  seatCalls = [];
 });
 
 afterEach(async () => {
@@ -190,6 +199,39 @@ describe('rooms of two projects in one app run', () => {
     expect(listed(items, first.id)).toEqual([inFirst]);
     expect(listed(items, second.id)).toEqual([inSecond]);
     expect(listed(items, null)).toEqual([loose]);
+  });
+
+  it('asks for the site seat of the project of the room and of no project for a room outside one', async () => {
+    const app = await stack();
+    const first = await addProject(app, 'first');
+    const second = await addProject(app, 'second');
+    const site = { participants: [DEEPSEEK], finalizerId: DEEPSEEK.id };
+    await run(app, first.id, site);
+    await run(app, second.id, site);
+    await run(app, null, site);
+    expect(seatCalls.every(([id]) => id === 'deepseek')).toBe(true);
+    expect([...new Set(seatCalls.map(([, projectId]) => projectId))]).toEqual([first.id, second.id, null]);
+  });
+
+  it('refuses to open a room of another project while a room runs and names the running room', async () => {
+    const app = await stack();
+    const first = await addProject(app, 'first');
+    const second = await addProject(app, 'second');
+    const other = await run(app, second.id);
+    stubEnv['AIAW_STUB_HANG'] = '1';
+    expect(app.rooms.newRoom(first.id)).toBe(true);
+    const finishedBefore = app.seen.filter((event) => event.type === 'finished').length;
+    const started = await app.rooms.start(config({ prompt: 'hang question one' }));
+    if (!started.ok) throw new Error(started.error);
+    await vi.waitFor(async () => expect((await app.rooms.list()).find((item) => item.id === started.roomId)).toBeDefined());
+    const before = app.rooms.state();
+    const refused = await app.rooms.open(other);
+    expect(refused.ok).toBe(false);
+    expect(refused.ok ? '' : refused.error).toContain('hang question one');
+    expect(app.rooms.state()).toBe(before);
+    app.rooms.stop();
+    await vi.waitFor(() => expect(app.seen.filter((event) => event.type === 'finished')).toHaveLength(finishedBefore + 1), { timeout: 15000 });
+    expect((await app.rooms.open(other)).ok).toBe(true);
   });
 
   it('runs a room outside any project in its own subfolder of the rooms folder, as before', async () => {

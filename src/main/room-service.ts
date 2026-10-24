@@ -95,15 +95,19 @@ export class RoomService {
   }
 
   async open(id: string): Promise<RoomOpenResult> {
-    if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
+    if (this.room.isRunning()) return this.runningRefusal();
     if (!isRoomId(id)) return { ok: false, error: 'invalid room id' };
     if (!this.folders.has(id)) await this.list();
     const projectId = this.folders.projectOf(id);
     const record = await readRecord(this.folders.dirOf(projectId), id);
     if (record === null) return { ok: false, error: 'the room cannot be read' };
-    if (this.room.isRunning()) return { ok: false, error: 'a room run is in progress' };
+    if (this.room.isRunning()) return this.runningRefusal();
     this.snapshot = snapshotFromRecord(record, this.historyPath(id, projectId), projectId);
     return { ok: true, snapshot: this.snapshot, form: formFromRecord(record) };
+  }
+
+  private runningRefusal(): { ok: false; error: string } {
+    return { ok: false, error: `The room "${this.room.runningName() ?? ''}" is running: stop it first.` };
   }
 
   newRoom(projectId: string | null): boolean {

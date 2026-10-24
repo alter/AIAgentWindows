@@ -14,13 +14,13 @@ export interface SiteSeatDeps {
   adapterFor(kind: SiteKind): SiteAdapter | null;
 }
 
-export function createSiteSeats(deps: SiteSeatDeps): (participant: RoomParticipant) => SiteSeat | null {
-  return (participant) => {
+export function createSiteSeats(deps: SiteSeatDeps): (participant: RoomParticipant, projectId?: string | null) => SiteSeat | null {
+  return (participant, projectId = null) => {
     const kind = participant.kind;
     if (!isSiteKind(kind)) return null;
     const adapter = deps.adapterFor(kind);
     if (adapter === null) throw new Error(missingAdapterNote(participant.label));
-    const agent = deps.agents().find((item) => item.kind === kind);
+    const agent = deps.agents().find((item) => item.kind === kind && (item.projectId ?? null) === projectId);
     if (agent === undefined) return null;
     const site = { ...agent, kind };
     return {

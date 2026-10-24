@@ -1,5 +1,5 @@
 // room-table.ts
-import { isSiteKind } from '../shared/agents';
+import { isSiteKind, type SiteKind } from '../shared/agents';
 import { emptyRoomModels, type RoomModels } from '../shared/cli-models';
 import type { ModelItem } from '../shared/openrouter';
 import { OPENROUTER_KIND, kindLabel, type RoomKind } from '../shared/room-model';
@@ -64,6 +64,7 @@ export class RoomTable {
   private models: RoomModels = emptyRoomModels();
   private openrouterModels: readonly ModelItem[] = [];
   private signedIn = false;
+  private siteKinds: readonly SiteKind[] | null = null;
   private finalId = '';
   private busy = false;
   private changeListener: (() => void) | null = null;
@@ -124,6 +125,10 @@ export class RoomTable {
     if (result === null || !result.ok) return;
     this.openrouterModels = result.models;
     for (const view of this.views) view.openrouter?.setModels(result.models);
+  }
+
+  setSiteKinds(kinds: readonly SiteKind[] | null): void {
+    this.siteKinds = kinds;
   }
 
   onChange(listener: () => void): void {
@@ -353,7 +358,7 @@ export class RoomTable {
     if (this.busy) return;
     if (this.signedIn && this.openrouterModels.length === 0) void this.loadOpenRouterModels(true);
     this.menu.replaceChildren(
-      ...addMenuOptions(this.rows(), undefined, this.signedIn).map((option) => {
+      ...addMenuOptions(this.rows(), undefined, this.signedIn, this.siteKinds).map((option) => {
         const item = el('button', 'room-add-item');
         item.type = 'button';
         item.dataset['add'] = option.kind;

@@ -9,6 +9,7 @@ import {
   emptyRoomSnapshot,
   formToConfig,
   nextRoomAfterDelete,
+  projectSiteKinds,
   roomProgress,
   roomTreeRows,
   setupDigest,
@@ -75,6 +76,7 @@ export class RoomPane {
     for (const pane of this.sessions.values()) pane.refit();
   });
   private snapshot: RoomSnapshot = emptyRoomSnapshot();
+  private agents: readonly Agent[] = [];
   private debugDir: string | null = null;
   private openedId: string | null = null;
   private listed: readonly RoomListItem[] = [];
@@ -143,6 +145,7 @@ export class RoomPane {
   }
 
   setAgents(agents: readonly Agent[]): void {
+    this.agents = agents;
     const previous = this.target.value;
     this.target.replaceChildren();
     for (const agent of agents.filter((item) => isCliKind(item.kind))) {
@@ -230,7 +233,7 @@ export class RoomPane {
     this.debugDir = null;
     this.message.textContent = '';
     this.prompt.value = '';
-    this.snapshot = emptyRoomSnapshot();
+    this.snapshot = emptyRoomSnapshot(projectId);
     this.setup.open = setupOpenOnRoom(0);
     this.feed.reload(this.snapshot);
     this.renderState();
@@ -409,6 +412,7 @@ export class RoomPane {
   }
 
   private renderState(): void {
+    this.table.setSiteKinds(projectSiteKinds(this.agents, this.snapshot.projectId));
     this.renderPause();
     this.renderProgress();
     const { phase, completed, total, running, historyPath, paused } = this.snapshot;

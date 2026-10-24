@@ -51,7 +51,7 @@ export interface RoomDriverDeps {
   platform: string;
   loginShell?: boolean;
   envFor(participant: RoomParticipant): Readonly<Record<string, string | undefined>>;
-  siteFor(participant: RoomParticipant): SiteSeat | null;
+  siteFor(participant: RoomParticipant, projectId: string | null): SiteSeat | null;
   openrouter?: OpenRouterTurns;
   timing?: Partial<RoomTiming>;
   siteLog?: SiteLogger;
@@ -327,10 +327,10 @@ export interface RoomDrivers {
 export function createRoomDrivers(deps: RoomDriverDeps): RoomDrivers {
   const timing: RoomTiming = { ...DEFAULT_ROOM_TIMING, ...deps.timing };
   const running = new Set<AbortController>();
-  const factory: DriverFactory = async (participant, _runId, cwd) => {
+  const factory: DriverFactory = async (participant, _runId, cwd, projectId = null) => {
     if (isCliKind(participant.kind)) return new CliDriver(participant, participant.kind, deps, timing, running, cwd);
     if (participant.kind === 'openrouter') return new OpenRouterDriver(participant, deps.openrouter, running);
-    const seat = deps.siteFor(participant);
+    const seat = deps.siteFor(participant, projectId);
     if (seat === null) throw new Error(`${participant.label} has no open chat page`);
     return new SiteDriver(seat, timing, deps.siteLog ?? (() => undefined), deps.debugRoot ?? null);
   };

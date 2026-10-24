@@ -1,0 +1,47 @@
+TASK: site seat by the room's project, Add participant by project, one run at a time
+
+GOAL
+  A site participant of a project room uses the site agent of that kind in
+  the room's project and no other, a room outside any project keeps taking the
+  agent outside every project, a site kind with no agent in the room's project
+  is disabled in Add participant with its reason, and opening a room while
+  another room runs is refused with the running room's name
+  (docs/plans/projects.md D10, AC4 seat and refusal parts, T13). Serves
+  milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  src/main/site-seats.ts
+  src/main/room-drivers.ts
+  src/main/room.ts
+  src/main/room-service.ts
+  src/main/room-context.ts
+  src/shared/room-view.ts
+  src/renderer/room-table.ts
+  src/renderer/room-pane.ts
+  tests/unit/room-view.test.ts
+  tests/integration/room-projects.test.ts
+  tests/full/projects-seats.spec.ts
+
+SCOPE
+  + main/site-seats.ts: the seat is looked up by kind and the room's project id (`projectId` of the agent, null for an agent outside every project)
+  + main/room.ts, room-drivers.ts: `DriverFactory` gets the run's `projectId` and `siteFor(participant, projectId)`; `Room.runningName()`
+  + main/room-service.ts: `open` refused during a run with `The room "<name>" is running: stop it first.`
+  + shared/room-view.ts: `projectSiteKinds`, `addMenuOptions` takes the site kinds the room's project has and disables the others with the note `Add a <label> agent to this project first`
+  + renderer/room-table.ts, room-pane.ts: the pane gives the table the site kinds of the room's project (nothing for a room outside any project)
+  + tests: room-view.test.ts, room-projects.test.ts, tests/full/projects-seats.spec.ts
+  − the project map and attachments (13-project-map), Save plan (11-save-plan), parallel runs across projects (docs/plans/roles.md D15), any change to a room outside any project
+
+OUTCOME
+  tests/unit/room-view.test.ts, tests/integration/room-projects.test.ts and tests/full/projects-seats.spec.ts pass; each behaviour of them was red before the change.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/room-view.test.ts tests/integration/room-projects.test.ts exits 0
+  3. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

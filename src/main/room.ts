@@ -19,6 +19,7 @@ import {
   entriesBeforeRound,
   relaySchedule,
   roomPlan,
+  roomTitle,
   OWNER_ID,
   ROOM_ID,
   truncateText,
@@ -64,7 +65,7 @@ export class OwnerPause extends Error {
   }
 }
 
-export type DriverFactory = (participant: RoomParticipant, runId: string, cwd: RoomCwd) => Promise<ParticipantDriver>;
+export type DriverFactory = (participant: RoomParticipant, runId: string, cwd: RoomCwd, projectId?: string | null) => Promise<ParticipantDriver>;
 
 export interface RoomDeps {
   driverFor: DriverFactory;
@@ -270,6 +271,10 @@ export class Room {
     return this.current !== null;
   }
 
+  runningName(): string | null {
+    return this.current === null ? null : roomTitle({ entries: this.current.entries, title: this.current.title });
+  }
+
   start(config: RoomConfig, from: RoomContinuation | undefined, ctx: RoomRunContext): RoomRun {
     if (this.current !== null) throw new Error('a room run is already in progress');
     const now = this.now();
@@ -411,7 +416,7 @@ export class Room {
   private driver(run: RunState, participant: RoomParticipant): Promise<ParticipantDriver> {
     let driver = run.drivers.get(participant.id);
     if (driver === undefined) {
-      driver = this.deps.driverFor(participant, run.id, run.ctx.cwdFor(participant));
+      driver = this.deps.driverFor(participant, run.id, run.ctx.cwdFor(participant), run.ctx.projectId);
       run.drivers.set(participant.id, driver);
       driver.catch(() => run.drivers.delete(participant.id));
     }
