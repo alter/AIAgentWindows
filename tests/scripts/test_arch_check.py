@@ -173,6 +173,25 @@ class ArchCheckTest(unittest.TestCase):
         self.put("src/main/projects/service.ts", "\nimport { r } from '../room-archive';\n")
         self.assertTrue(arch_check.check(self.root)[0].startswith("src/main/projects/service.ts:2 [projects-service-layer]"))
 
+    def test_runs_import_electron(self) -> None:
+        self.put("src/main/runs/other.ts", "import { app } from 'electron';\n")
+        self.assertEqual(self.codes(), {"runs-electron"})
+
+    def test_context_pack_imports_only_shared(self) -> None:
+        self.put("src/main/runs/context-pack.ts", "import { a } from '../../shared/room-history';\nimport type { b } from '../../shared/kinds/capabilities';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
+    def test_context_pack_imports_main_node_or_a_package(self) -> None:
+        self.put("src/main/runs/context-pack.ts", "\nimport { r } from '../room-archive';\nimport { f } from 'node:fs';\nimport { z } from 'zod';\nimport { s } from './other';\n")
+        problems = arch_check.check(self.root)
+        self.assertEqual(self.codes(), {"context-pack-layer"})
+        self.assertEqual(len(problems), 4)
+        self.assertTrue(problems[0].startswith("src/main/runs/context-pack.ts:2 [context-pack-layer]"))
+
+    def test_other_runs_files_may_import_main_and_node(self) -> None:
+        self.put("src/main/runs/other.ts", "import { r } from '../room-archive';\nimport { f } from 'node:fs';\n")
+        self.assertEqual(arch_check.check(self.root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

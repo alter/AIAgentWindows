@@ -1,0 +1,48 @@
+TASK: context pack and kind capabilities, behaviour-neutral
+
+GOAL
+  Room.turn composes what a participant receives as one context pack
+  ({ system?, text, files[] }) from ContextProvider[] against the recipient's
+  capabilities, and drivers only deliver it; the history is the only provider,
+  the prompts, the web attachment files and the record bytes stay what they
+  were (docs/plans/projects.md D16, D22, D23, AC6, T15). Serves milestone M3.
+
+CONTEXT
+  docs/plans/projects.md
+  AGENTS.md
+  src/shared/kinds/capabilities.ts
+  src/main/runs/context-pack.ts
+  src/main/room.ts
+  src/main/room-drivers.ts
+  src/shared/room-history.ts
+  scripts/arch_check.py
+  vitest.config.ts
+  tests/unit/kind-capabilities.test.ts
+  tests/unit/context-pack.test.ts
+  tests/integration/room.test.ts
+  tests/integration/room-wiring.test.ts
+  tests/unit/site-recorder.test.ts
+  tests/scripts/test_arch_check.py
+
+SCOPE
+  + shared/kinds/capabilities.ts: `capabilitiesOf(kind, participant, catalog)` giving `attachesFiles`, `splitsSystem` and `tokenBudget` (the model's context length, when the catalog knows it)
+  + main/runs/context-pack.ts: `composePack` (providers by priority into system, text and files) and `historyProvider` (the prompt of today, the OpenRouter system/user split, the web attachment over WEB_INLINE_LIMIT)
+  + main/room.ts, room-drivers.ts: `TurnRequest` carries `system?`, `text`, `files[]` in place of `text`, `attachPath` and `historyText`; `Room.turn` composes and delivers the files into the participant's pack folder; CLI, OpenRouter and site drivers deliver
+  + scripts/arch_check.py rules `runs-electron` and `context-pack-layer` with tests in tests/scripts/test_arch_check.py run red on fixtures; vitest.config.ts coverage include gains `src/main/runs/**`; AGENTS.md Map row
+  + tests: kind-capabilities, context-pack; room.test.ts, room-wiring.test.ts and site-recorder.test.ts read the request in the pack shape with the same expectations
+  − the project map provider and its budget (13-project-map), the digest on a turn's entry, "Context sent" in the feed, a real model catalog (17), any change to a prompt, a file or a record
+
+OUTCOME
+  tests/unit/kind-capabilities.test.ts, tests/unit/context-pack.test.ts and tests/scripts/test_arch_check.py pass; scripts/neutrality_check.py against the list of the previous commit reports 0 problems.
+
+VERIFY (QA)
+  1. [fast] every fast-tier command of docs/PROJECT.md §6 exits 0
+  2. [fast] npx vitest run tests/unit/kind-capabilities.test.ts tests/unit/context-pack.test.ts tests/integration/room.test.ts exits 0
+  3. [fast] python3 scripts/neutrality_check.py d5ceac4 tasks/20-projects/12-context-pack/vitest-list.json-before exits 0
+  4. [full] electron-smoke exit 0
+
+ROLE
+  APP
+
+DEPENDS
+  20-projects

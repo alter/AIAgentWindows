@@ -380,7 +380,7 @@ describe('room archive in the service', () => {
     const seenPrompts: string[] = [];
     const watching: DriverFactory = async (participant) => ({
       turn: async (request) => {
-        seenPrompts.push(`${request.text}${request.historyText ?? ''}`);
+        seenPrompts.push(request.text);
         return `again of ${participant.label}`;
       },
       reset: async () => undefined,

@@ -4,14 +4,9 @@ import { access, appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { roomPackPath, writeRecord } from './room-archive';
 import type { RoomCwd, RoomRunContext } from './room-context';
-import {
-  buildParticipantPrompt,
-  newNonce,
-  renderEntryBlock,
-  renderHistory,
-  renderHistoryHeader,
-  type PromptPhase,
-} from '../shared/room-history';
+import { newNonce, renderEntryBlock, renderHistoryHeader, type PromptPhase } from '../shared/room-history';
+import { NO_CATALOG, capabilitiesOf } from '../shared/kinds/capabilities';
+import { composePack, historyProvider, type PackFile } from './runs/context-pack';
 import {
   MAX_ERROR_CHARS,
   MAX_HISTORY_CHARS,
@@ -40,9 +35,9 @@ export type { RoomEvent, RoomStatus, StepState } from '../shared/room-model';
 
 export interface TurnRequest {
   runId: string;
+  system?: string;
   text: string;
-  attachPath: string | null;
-  historyText: string | null;
+  files: string[];
   roomName: string;
   timeoutMs: number;
   signal: AbortSignal;
@@ -423,11 +418,15 @@ export class Room {
     return driver;
   }
 
-  private async attachment(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[]): Promise<string> {
-    const file = run.nextPackPath(participant);
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, renderHistory(run.id, seen), 'utf8');
-    return file;
+  private async deliver(run: RunState, participant: RoomParticipant, files: readonly PackFile[]): Promise<string[]> {
+    const paths: string[] = [];
+    for (const { content } of files) {
+      const file = run.nextPackPath(participant);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, content, 'utf8');
+      paths.push(file);
+    }
+    return paths;
   }
 
   private async step(run: RunState, participant: RoomParticipant, seen: readonly RoomEntry[], phase: PromptPhase, round?: number): Promise<boolean> {
@@ -453,12 +452,15 @@ export class Room {
     let driver: ParticipantDriver | null = null;
     try {
       driver = await this.driver(run, participant);
-      const prompt = buildParticipantPrompt(participant, run.id, seen, phase);
+      const pack = composePack(
+        [historyProvider({ participant, roomId: run.id, seen, phase, renderRun: (entries) => run.render(entries) })],
+        capabilitiesOf(participant.kind, participant, NO_CATALOG),
+      );
       const request: TurnRequest = {
         runId: run.id,
-        text: prompt.text,
-        attachPath: prompt.attachHistory ? await this.attachment(run, participant, seen) : null,
-        historyText: prompt.placeHistory ? run.render(seen) : null,
+        ...(pack.system === undefined ? {} : { system: pack.system }),
+        text: pack.text,
+        files: await this.deliver(run, participant, pack.files),
         roomName: run.title ?? run.id,
         timeoutMs: run.config.turnTimeoutMs,
         signal: run.signal,

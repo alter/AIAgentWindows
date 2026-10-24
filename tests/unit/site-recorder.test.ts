@@ -80,7 +80,7 @@ afterEach(async () => {
 });
 
 function request(debugSites: boolean, overrides: Partial<TurnRequest> = {}): TurnRequest {
-  return { runId: 'run1', text: SECRET_PROMPT, attachPath: null, historyText: null, roomName: 'room', timeoutMs: 5000, signal: new AbortController().signal, debugSites, ...overrides };
+  return { runId: 'run1', text: SECRET_PROMPT, files: [], roomName: 'room', timeoutMs: 5000, signal: new AbortController().signal, debugSites, ...overrides };
 }
 
 async function driverFor(adapter: SiteAdapter, runner: PageRunner, debugRoot: string | undefined, extra: { prepare?: () => Promise<void> } = {}) {

@@ -146,8 +146,8 @@ class OpenRouterDriver implements ParticipantDriver {
       const reply = await this.turns.chat(
         {
           model: this.participant.model ?? '',
-          system: request.text,
-          user: request.historyText ?? '',
+          system: request.system ?? '',
+          user: request.text,
           effort: this.participant.effort ?? null,
           web: this.participant.web === true,
         },
@@ -268,7 +268,7 @@ class SiteDriver implements ParticipantDriver {
     let trace: Readonly<Record<string, SiteLogValue>> = {};
     try {
       await this.ready(request, rec);
-      if (request.attachPath !== null) await this.seat.adapter.attachFile(this.seat.runner, request.attachPath);
+      for (const file of request.files) await this.seat.adapter.attachFile(this.seat.runner, file);
       watch = await this.watch(rec, stream);
       const reply = await runAdapterTurn(this.seat.adapter, this.seat.runner, request.text, {
         ...DEFAULT_TURN_OPTIONS,

@@ -25,6 +25,7 @@ DELETE_CALL = re.compile(r"\b(?:rm|rmdir|unlink|rmSync|rmdirSync|unlinkSync|clea
 DELETE_HOME = "src/main/store/atomic-file.ts"
 SERVICE_FILE = "src/main/projects/service.ts"
 SERVICE_HOMES = ("projects", "store")
+PACK_FILE = "src/main/runs/context-pack.ts"
 IPC_TABLE = re.compile(r"\b(?:INVOKE_CHANNELS|EVENT_CHANNELS|validateRequest)\b")
 COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
@@ -115,6 +116,16 @@ def projects_problems(rel: str, text: str) -> list[str]:
     return out
 
 
+def runs_problems(rel: str, text: str) -> list[str]:
+    out = []
+    for line, spec in specifiers(text):
+        if is_package(spec, "electron"):
+            out.append(f"{rel}:{line} [runs-electron] runs imports {spec}")
+        elif rel == PACK_FILE and not resolves_into(rel, spec, "src/shared"):
+            out.append(f"{rel}:{line} [context-pack-layer] context pack imports {spec}")
+    return out
+
+
 def delete_problems(rel: str, text: str) -> list[str]:
     return [
         f"{rel}:{line_of(text, m.start())} [no-delete] {m.group(0).strip('( ')} outside {DELETE_HOME}"
@@ -144,6 +155,8 @@ def check_file(rel: str, text: str) -> list[str]:
         out.extend(store_problems(rel, text))
     if rel.startswith("src/main/projects/"):
         out.extend(projects_problems(rel, text))
+    if rel.startswith("src/main/runs/"):
+        out.extend(runs_problems(rel, text))
     if rel.startswith("src/main/") and rel != DELETE_HOME:
         out.extend(delete_problems(rel, text))
     if rel.startswith("src/"):
