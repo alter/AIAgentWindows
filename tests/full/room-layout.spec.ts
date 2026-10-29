@@ -1,5 +1,7 @@
 // room-layout.spec.ts
 import { _electron as electron, expect, test, type ElectronApplication, type Locator, type Page } from '@playwright/test';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -21,7 +23,22 @@ function newBase(): string {
   return mkdtempSync(path.join(tmpdir(), 'aiaw-layout-'));
 }
 
-async function launch(base: string): Promise<Session> {
+async function startSite(): Promise<{ server: Server; url: string }> {
+  const server = createServer((_request, response) => {
+    response.setHeader('content-type', 'text/html');
+    response.end('<!doctype html><title>site</title>');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return { server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/` };
+}
+
+async function addSiteAgent(page: Page, kind: string): Promise<void> {
+  await page.locator('.add-button').click();
+  await page.locator(`.menu-item[data-kind="${kind}"]`).click();
+  await expect(page.locator('.agent-item')).toHaveCount(1);
+}
+
+async function launch(base: string, siteUrl?: string): Promise<Session> {
   const app = await electron.launch({
     args: [root],
     env: {
@@ -33,6 +50,7 @@ async function launch(base: string): Promise<Session> {
       AIAW_TEST_FOLDER: path.join(base, 'folder'),
       CLAUDE_CONFIG_DIR: path.join(base, 'claude'),
       CODEX_HOME: path.join(base, 'codex'),
+      ...(siteUrl === undefined ? {} : { AIAW_SITE_URL_GROK: siteUrl, AIAW_SITE_URL_CHATGPT: siteUrl }),
     },
   });
   const page = await app.firstWindow();
@@ -201,12 +219,20 @@ test('three participant rows reordered with the buttons are relayed in the table
 });
 
 test('the Add participant menu works from the keyboard and disables a site that is already a row', async () => {
-  const { app, page } = await launch(newBase());
+  const site = await startSite();
+  const { app, page } = await launch(newBase(), site.url);
   try {
     await field(page, 'open').click();
     await expect(field(page, 'pane')).toBeVisible();
     const trigger = field(page, 'add-participant');
     const items = field(page, 'add-menu').locator('[role="menuitem"]');
+    await trigger.click();
+    await expect(field(page, 'add-menu').locator('[data-add="grok"]')).toHaveAttribute('aria-disabled', 'true');
+    await expect(field(page, 'add-menu').locator('[data-add="claude"]')).not.toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Escape');
+    await addSiteAgent(page, 'grok');
+    await field(page, 'open').click();
+    await expect(field(page, 'pane')).toBeVisible();
     await trigger.focus();
     await page.keyboard.press('ArrowDown');
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
@@ -236,12 +262,15 @@ test('the Add participant menu works from the keyboard and disables a site that 
     await page.keyboard.press('Escape');
   } finally {
     await app.close();
+    site.server.close();
   }
 });
 
 test('a table is read as a table: headers with scope, buttons named after the row, focus kept after a move and a removal', async () => {
-  const { app, page } = await launch(newBase());
+  const site = await startSite();
+  const { app, page } = await launch(newBase(), site.url);
   try {
+    await addSiteAgent(page, 'chatgpt');
     await field(page, 'open').click();
     await expect(field(page, 'pane')).toBeVisible();
     await expect(table(page).locator('thead th[scope="col"]')).toHaveCount(8);
@@ -262,6 +291,7 @@ test('a table is read as a table: headers with scope, buttons named after the ro
     await expect(field(page, 'add-participant')).toBeFocused();
   } finally {
     await app.close();
+    site.server.close();
   }
 });
 

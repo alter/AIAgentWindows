@@ -90,3 +90,30 @@ Received:   360
 Fix (`src/renderer/styles.css`, `src/renderer/contrast-pairs.json`): `.projects` is `flex: 1 1 0; min-height: 0; overflow-y: auto` with no cap, so it takes exactly the height left between the header and the pinned bottom block, whatever its content; `.no-project` is `flex: 0 1 auto; min-height: 36px; max-height: 50%`, content height pinned above the bottom block, never more than half the sidebar, so the list always keeps a share. The scrollbar is drawn through `::-webkit-scrollbar` (track `--sidebar-bg`, thumb `--border`), which makes it permanent, not an overlay; the pair `--sidebar-bg` on `--border` was added to the contrast manifest (contrast_check 0 findings, both palettes). Decision: basis `0` instead of the requested `auto` for the list: with `auto` both areas shrank proportionally to their content, the list height moved with every added row by fractions of a pixel, and `openrouter-many.spec.ts` (selected row inside `.projects`) failed by 0.06 px (row bottom 440.5, list bottom 440.4375); with basis `0` the list height does not depend on its content. `revealSelected` is unchanged.
 
 Spec `tests/full/sidebar-fill.spec.ts` (two projects, six agents, window content resized to 900 and 500 px): at 900 the list is taller than 40 % of the window, scrolls and has a visible scrollbar; at 500 the list ends above the "No project" node, the node ends at the bottom block, the Theme block stays inside the window, the scrollbar is visible, the end of the list (last project node) and the last agent row are reachable by scrolling. Geometry only, no wording or exact pixels. `popup-sidebar.spec.ts`, `openrouter-many.spec.ts`, `no-project-tree.spec.ts`, `sidebar-resize.spec.ts`, `popup-placement.spec.ts` stay green.
+
+## Post-close fix: site participants of a "No project" room
+
+Owner's report: in a room that belongs to no project, "Add participant" offers Grok, ChatGPT and DeepSeek even when "No project -> Agents" has no agent of that site; the run then fails with "Grok has no open chat page" (`src/main/room-drivers.ts`).
+
+Root cause: `projectSiteKinds(agents, projectId)` (`src/shared/room-view.ts`) returned `null` ("no restriction") for `projectId === null`, so the menu never disabled a site kind in a "No project" room, while the seat lookup (`src/main/site-seats.ts`) already matches `(agent.projectId ?? null) === projectId` and so found no agent. The menu and the seat disagreed about the rule for the one case `null`.
+
+Red on HEAD 5d7fa80 (`tests/unit/room-view.test.ts`, expectation written first):
+
+```
+FAIL  tests/unit/room-view.test.ts > lists the site kinds that have an agent in the room project and the loose site agents for a room outside any project
+AssertionError: expected null to deeply equal [ 'deepseek' ]
+FAIL  tests/unit/room-view.test.ts > names a different place in the note of a room outside any project and disables the same kinds
+AssertionError: expected 'Add a ChatGPT agent to this project f...' not to be 'Add a ChatGPT agent to this project f...'
+Tests  2 failed | 103 passed (105)
+```
+
+Red on HEAD (`tests/full/room-layout.spec.ts`, the Add participant menu test, a "No project" room without a Grok agent):
+
+```
+Locator:  locator('[data-room="add-menu"]').locator('[data-add="grok"]')
+Expected: "true"   (aria-disabled)
+Received: ""
+1 failed
+```
+
+Fix: `projectSiteKinds` always returns the site kinds that have an agent whose `projectId ?? null` equals the room's project (the seat rule), never `null`; `noProjectAgentNote(kind, projectRoom)` and `addMenuOptions(..., projectRoom)` name "this project" for a project room and "No project" for a room outside any project; `RoomTable` passes its existing `projectRoom` flag. Specs: `tests/full/room-layout.spec.ts` (the two tests that added Grok / ChatGPT to a "No project" room now first add that site's agent, against a local loopback page through `AIAW_SITE_URL_GROK` / `_CHATGPT`; the first one also asserts the kind is disabled before the agent exists), the rest of the room specs that run a site participant in a "No project" room (`room.spec.ts` 315 and 419, `room-site-debug.spec.ts`, `room-hidden-views.spec.ts`, `projects-seats.spec.ts`) were green unchanged because they already create the agent.

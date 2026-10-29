@@ -367,7 +367,7 @@ export class RoomTable {
     if (this.busy) return;
     if (this.signedIn && this.openrouterModels.length === 0) void this.loadOpenRouterModels(true);
     this.menu.replaceChildren(
-      ...addMenuOptions(this.rows(), undefined, this.signedIn, this.siteKinds).map((option) => {
+      ...addMenuOptions(this.rows(), undefined, this.signedIn, this.siteKinds, this.projectRoom).map((option) => {
         const item = el('button', 'room-add-item');
         item.type = 'button';
         item.dataset['add'] = option.kind;

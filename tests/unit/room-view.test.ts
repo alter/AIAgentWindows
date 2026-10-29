@@ -6,6 +6,7 @@ import type { RoomModels } from '../../src/shared/cli-models';
 import { ROOM_PARTICIPANTS, parseRoomRecord, roomPlan } from '../../src/shared/room-model';
 import {
   addMenuOptions,
+  noProjectAgentNote,
   projectSiteKinds,
   addRow,
   defaultRows,
@@ -909,7 +910,7 @@ describe('participant row logic', () => {
     expect(addMenuOptions(defaultRows()).every((option) => option.available)).toBe(true);
   });
 
-  it('in a project room disables a site kind that has no agent in the project, with its reason, and leaves a room outside any project alone', () => {
+  it('in a project room disables a site kind that has no agent in the project, with its reason, and leaves a room with no restriction alone', () => {
     const rows = defaultRows();
     const inProject = addMenuOptions(rows, ['chatgpt', 'grok', 'deepseek'], true, ['grok']);
     expect(inProject.map((option) => option.available)).toEqual([true, true, false, true, false, true]);
@@ -922,13 +923,23 @@ describe('participant row logic', () => {
     expect(addMenuOptions(addRow(rows, 'grok'), undefined, true, ['grok'])[3]?.note).toBe('Grok is already in the table');
   });
 
-  it('lists the site kinds that have an agent in the room project and nothing for a room outside any project', () => {
+  it('names a different place in the note of a room outside any project and disables the same kinds', () => {
+    const inProject = addMenuOptions(defaultRows(), ['chatgpt', 'grok', 'deepseek'], true, ['grok'], true);
+    const outside = addMenuOptions(defaultRows(), ['chatgpt', 'grok', 'deepseek'], true, ['grok'], false);
+    expect(outside.map((option) => option.available)).toEqual(inProject.map((option) => option.available));
+    expect(outside[2]?.note).not.toBe('');
+    expect(outside[2]?.note).not.toBe(inProject[2]?.note);
+    expect(noProjectAgentNote('chatgpt', false)).not.toBe(noProjectAgentNote('chatgpt', true));
+  });
+
+  it('lists the site kinds that have an agent in the room project and the loose site agents for a room outside any project', () => {
     const agent = (id: string, kind: Agent['kind'], projectId?: string): Agent => ({ id, kind, title: id, createdAt: 0, ...(projectId === undefined ? {} : { projectId }) });
     const agents = [agent('a', 'grok', 'p1'), agent('b', 'claude', 'p1'), agent('c', 'chatgpt', 'p2'), agent('d', 'deepseek')];
     expect(projectSiteKinds(agents, 'p1')).toEqual(['grok']);
     expect(projectSiteKinds(agents, 'p2')).toEqual(['chatgpt']);
     expect(projectSiteKinds(agents, 'p3')).toEqual([]);
-    expect(projectSiteKinds(agents, null)).toBeNull();
+    expect(projectSiteKinds(agents, null)).toEqual(['deepseek']);
+    expect(projectSiteKinds([agent('x', 'claude')], null)).toEqual([]);
   });
 
   it('moves a row one place up or down and keeps every id once', () => {

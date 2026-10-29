@@ -184,19 +184,18 @@ export interface AddMenuOption {
   note: string;
 }
 
-export function noProjectAgentNote(kind: SiteKind): string {
-  return `Add a ${AGENT_LABELS[kind]} agent to this project first`;
+export function noProjectAgentNote(kind: SiteKind, projectRoom = true): string {
+  return `Add a ${AGENT_LABELS[kind]} agent ${projectRoom ? 'to this project' : 'under No project'} first`;
 }
 
-function siteNote(rows: readonly FormRow[], kind: SiteKind, withAdapter: readonly SiteKind[], projectKinds: readonly SiteKind[] | null = null): string {
+function siteNote(rows: readonly FormRow[], kind: SiteKind, withAdapter: readonly SiteKind[], projectKinds: readonly SiteKind[] | null = null, projectRoom = true): string {
   if (rows.some((row) => row.kind === kind)) return `${AGENT_LABELS[kind]} is already in the table`;
   if (!withAdapter.includes(kind)) return missingAdapterNote(AGENT_LABELS[kind]);
-  return projectKinds === null || projectKinds.includes(kind) ? '' : noProjectAgentNote(kind);
+  return projectKinds === null || projectKinds.includes(kind) ? '' : noProjectAgentNote(kind, projectRoom);
 }
 
-export function projectSiteKinds(agents: readonly Agent[], projectId: string | null): SiteKind[] | null {
-  if (projectId === null) return null;
-  return SITE_KINDS.filter((kind) => agents.some((agent) => agent.kind === kind && agent.projectId === projectId));
+export function projectSiteKinds(agents: readonly Agent[], projectId: string | null): SiteKind[] {
+  return SITE_KINDS.filter((kind) => agents.some((agent) => agent.kind === kind && (agent.projectId ?? null) === projectId));
 }
 
 export const OPENROUTER_SIGN_IN_NOTE = 'Sign in to OpenRouter first';
@@ -206,9 +205,10 @@ export function addMenuOptions(
   withAdapter: readonly SiteKind[] = SITE_KINDS_WITH_ADAPTER,
   openrouterSignedIn = true,
   projectKinds: readonly SiteKind[] | null = null,
+  projectRoom = true,
 ): AddMenuOption[] {
   const agents = ROOM_AGENT_KINDS.map((kind): AddMenuOption => {
-    const note = isSiteKind(kind) ? siteNote(rows, kind, withAdapter, projectKinds) : '';
+    const note = isSiteKind(kind) ? siteNote(rows, kind, withAdapter, projectKinds, projectRoom) : '';
     return { kind, label: AGENT_LABELS[kind], available: note === '', note };
   });
   const openrouter: AddMenuOption = { kind: OPENROUTER_KIND, label: kindLabel(OPENROUTER_KIND), available: openrouterSignedIn, note: openrouterSignedIn ? '' : OPENROUTER_SIGN_IN_NOTE };
