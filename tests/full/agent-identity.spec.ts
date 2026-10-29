@@ -208,7 +208,7 @@ test('the Rooms and Agents + buttons have one size and one right edge in both st
         list?.append(item);
       }
     });
-    expect(await page.locator('.rooms-list').evaluate((list) => list.scrollHeight > list.clientHeight)).toBe(true);
+    expect(await page.locator('.projects').evaluate((list) => list.scrollHeight > list.clientHeight)).toBe(true);
     await same();
     await page.locator('[data-room="tree-toggle"]').click();
     await expect(page.locator('[data-room="tree-toggle"]')).toHaveAttribute('aria-expanded', 'false');

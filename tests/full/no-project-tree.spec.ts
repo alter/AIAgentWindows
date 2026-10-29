@@ -44,12 +44,25 @@ test('the No project node nests its Rooms and Agents sections exactly like a pro
   });
   try {
     const page = await app.firstWindow();
+    const none = '[data-project="no-project"]';
+    const parent = page.locator(`${none} [data-project="no-project-toggle"]`);
+    await expect(parent).toHaveAttribute('aria-expanded', 'true');
+    for (const section of SECTIONS) await expect(page.locator(`${none} [data-project-section="${section}"]`)).toBeVisible();
     await page.locator('[data-project="add"]').click();
     await page.locator('[data-project="add-existing"]').click();
     await page.locator('[data-project="create"]').click();
     await expect(page.locator('[data-project="tree"] [data-project-id]')).toHaveCount(1);
     const project = '[data-project="tree"] [data-project-id]';
-    const none = '[data-project="no-project"]';
+    await expect(parent).toHaveAttribute('aria-expanded', 'false');
+    for (const section of SECTIONS) await expect(page.locator(`${none} [data-project-section="${section}"]`)).toBeHidden();
+    await parent.click();
+    await expect(parent).toHaveAttribute('aria-expanded', 'true');
+    expect(await page.evaluate(() => {
+      const node = document.querySelector('[data-project="no-project"]');
+      const first = document.querySelector('[data-project="tree"] [data-project-id]');
+      if (node === null || first === null) return false;
+      return document.querySelector('.projects')?.contains(node) === true && node.getBoundingClientRect().top < first.getBoundingClientRect().top;
+    })).toBe(true);
     for (const section of SECTIONS) {
       const own = await edges(page, project, section);
       const loose = await edges(page, none, section);
@@ -70,7 +83,6 @@ test('the No project node nests its Rooms and Agents sections exactly like a pro
       await toggle.click();
       await expect(part.locator(section === 'rooms' ? '.rooms-list' : '.agent-list')).toBeVisible();
     }
-    const parent = page.locator(`${none} [data-project="no-project-toggle"]`);
     await parent.click();
     for (const section of SECTIONS) await expect(page.locator(`${none} [data-project-section="${section}"]`)).toBeHidden();
     await parent.click();

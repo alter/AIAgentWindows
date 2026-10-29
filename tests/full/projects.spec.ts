@@ -127,6 +127,7 @@ test('creates projects from an existing and a new folder, refuses bad ones, keep
     await expect(nodes(page)).toHaveCount(2);
     await expect(node(page, 'existing-app')).toBeVisible();
     await expect(node(page, 'fresh-app')).toBeVisible();
+    await page.locator('[data-project="no-project-toggle"]').click();
     await expect(page.locator('[data-project="no-project"] [data-room="tree"]')).toBeVisible();
 
     const codeBefore = listing(world.existing);
@@ -175,6 +176,7 @@ test('renames a project and shows one whose folder is gone as missing without re
     await expect(node(page, 'Renamed app')).toHaveAttribute('data-project-missing', 'true');
     await expect(node(page, 'Renamed app').locator('[data-project="missing"]')).toBeVisible();
     expect(existsSync(path.join(world.parent, 'doomed-app'))).toBe(false);
+    await page.locator('[data-project="no-project-toggle"]').click();
     await expect(page.locator('[data-project="no-project"] [data-room="tree"]')).toBeVisible();
   } finally {
     await closeSession(session).catch(() => undefined);

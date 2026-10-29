@@ -95,6 +95,7 @@ test('a project room names who gets the map, and every turn carries a Context se
       expect(JSON.stringify(call.body)).not.toContain('smoke-canary-4411');
       expect(JSON.stringify(call.body)).toContain('src/main.ts');
     }
+    await page.locator('[data-project="no-project-toggle"]').click();
     await page.locator('[data-room="open"]').click();
     await page.locator('[data-room="new"]').first().click();
     await expect(field(page, 'recipients')).toBeHidden();

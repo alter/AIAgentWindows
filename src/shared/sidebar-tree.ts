@@ -35,6 +35,7 @@ export interface SidebarTreeState {
   selectedId: string | null;
   roomOpen: boolean;
   collapsed: readonly string[];
+  noProjectExpanded: boolean | null;
   projects: readonly ProjectView[];
 }
 
@@ -73,7 +74,7 @@ export interface TreeSection {
 }
 
 export function initialSidebarTree(): SidebarTreeState {
-  return { rooms: [], busy: false, agents: [], selectedId: null, roomOpen: false, collapsed: [], projects: [] };
+  return { rooms: [], busy: false, agents: [], selectedId: null, roomOpen: false, collapsed: [], noProjectExpanded: null, projects: [] };
 }
 
 export function reduceSidebarTree(state: SidebarTreeState, action: SidebarTreeAction): SidebarTreeState {
@@ -92,12 +93,17 @@ export function reduceSidebarTree(state: SidebarTreeState, action: SidebarTreeAc
     }
     case 'toggle': {
       if (!collapsibleKey(state, action.key)) return state;
+      if (action.key === NO_PROJECT_NODE) return { ...state, noProjectExpanded: !noProjectExpanded(state) };
       const collapsed = state.collapsed.includes(action.key)
         ? state.collapsed.filter((key) => key !== action.key)
         : [...state.collapsed, action.key];
       return { ...state, collapsed };
     }
   }
+}
+
+function noProjectExpanded(state: SidebarTreeState): boolean {
+  return state.noProjectExpanded ?? state.projects.length === 0;
 }
 
 function agentItems(state: SidebarTreeState, owned: (agent: Agent) => boolean): TreeItem[] {
@@ -172,10 +178,10 @@ export function sidebarNodes(state: SidebarTreeState): TreeNode[] {
     folder: null,
     missing: false,
     collapsible: true,
-    expanded: !state.collapsed.includes(NO_PROJECT_NODE),
+    expanded: noProjectExpanded(state),
     sections: sidebarSections(state),
   };
-  return [...state.projects.map((project) => projectNode(state, project)), noProject];
+  return [noProject, ...state.projects.map((project) => projectNode(state, project))];
 }
 
 export function sameNodes(a: readonly TreeNode[], b: readonly TreeNode[]): boolean {

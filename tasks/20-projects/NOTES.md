@@ -117,3 +117,36 @@ Received: ""
 ```
 
 Fix: `projectSiteKinds` always returns the site kinds that have an agent whose `projectId ?? null` equals the room's project (the seat rule), never `null`; `noProjectAgentNote(kind, projectRoom)` and `addMenuOptions(..., projectRoom)` name "this project" for a project room and "No project" for a room outside any project; `RoomTable` passes its existing `projectRoom` flag. Specs: `tests/full/room-layout.spec.ts` (the two tests that added Grok / ChatGPT to a "No project" room now first add that site's agent, against a local loopback page through `AIAW_SITE_URL_GROK` / `_CHATGPT`; the first one also asserts the kind is disabled before the agent exists), the rest of the room specs that run a site participant in a "No project" room (`room.spec.ts` 315 and 419, `room-site-debug.spec.ts`, `room-hidden-views.spec.ts`, `projects-seats.spec.ts`) were green unchanged because they already create the agent.
+
+## Post-close fix: "No project" inside the one scrolling projects list
+
+Owner's report: "No project" sat in its own block below the projects list (own `max-height: 50%`, nested scroll areas in its rooms and agents lists); the owner wants it as the first node of the same list, one long list with one scrollbar, collapsed by default.
+
+Root cause (layout, not a defect): `Sidebar` appended `.no-project` to the sidebar after `ProjectTree.element`, `styles.css` gave it `flex: 0 1 auto; max-height: 50%` and gave `.rooms-list` (`max-height: 30vh`) and `.agent-list` (`overflow-y: auto`) their own scrolling; `sidebarNodes` returned it last and the collapse state was a plain "collapsed" key list, so it started expanded.
+
+Decision (recorded in the plan's Assumptions): collapsed by default only when at least one project exists; with none it is expanded, otherwise the sidebar would be empty. The owner's first toggle sets `noProjectExpanded` and that choice then holds for the session whatever happens to the project list (renderer memory, as the other collapse state).
+
+Red on HEAD aa25724 (`tests/unit/sidebar-tree.test.ts`, expectations written first; 5 existing tests edited only for the new order, 3 new tests):
+
+```
+Tests  11 failed | 14 passed (25)
+FAIL  lists the No project node first and the projects after it in index order
+FAIL  starts the No project node collapsed when a project exists and expanded when none does, until the owner decides
+FAIL  keeps the owner choice for the No project node whatever happens to the project list afterwards
+(+ 8 order-dependent tests: sections, missing project, rooms of a project, agents of a project, collapse, keeps the collapse, unknown project)
+```
+
+Red on HEAD (`tests/full/no-project-tree.spec.ts` and `tests/full/sidebar-fill.spec.ts`, both rewritten for the new contract):
+
+```
+Locator:  locator('[data-project="no-project"] [data-project="no-project-toggle"]')
+Expected: "false"   (aria-expanded, a project exists)
+Received: "true"
+2 failed
+```
+
+With the old `styles.css` and the new code `sidebar-fill.spec.ts` also fails (the stale `.no-project` flex rules overlay the list: `<li class="project-section-empty"> ... intercepts pointer events` on the No project "+" button); the nested-scroll assertion alone was never seen red on its own.
+
+Fix: `shared/sidebar-tree.ts` (`noProjectExpanded` state field, `null` = default by project count, `toggle` of `no-project` flips the effective value, `sidebarNodes` returns the No project node first); `renderer/project-tree.ts` `setLeading(node)` places an element before the project list; `renderer/sidebar.ts` hands `.no-project` to it instead of appending to the sidebar; `renderer/styles.css` drops the `.no-project` flex / `max-height` / inset rules, `.rooms-list { max-height; overflow-y }` and `.agent-list { overflow-y; flex }` (the bottom block - OpenRouter account, Theme - stays pinned as before).
+
+Specs: `sidebar-fill.spec.ts` (two projects with six agents plus four loose agents; No project is inside `.projects` and above the first project node, starts collapsed with a project and is expanded after the toggle, no visible scrolling element inside it, the list ends above the bottom block, the last loose agent row and the last project node are both reachable by scrolling `.projects`, the scrollbar is visible; at 900 and 500 px); `no-project-tree.spec.ts` (expanded with no project, collapsed once one exists, then the existing nesting assertions). Other specs adapted only because the node starts collapsed (one click on `[data-project="no-project-toggle"]`, before the first use of its Rooms or "+"): `projects.spec.ts` (two places), `projects-map.spec.ts`, `projects-collection.spec.ts`; `agent-identity.spec.ts` asserted that `.rooms-list` itself overflows, now it asserts `.projects` overflows (the nested scroll area no longer exists). Green unchanged: `popup-sidebar`, `openrouter-many`, `sidebar-resize`, `popup-placement`, `projects-copy`, `projects-seats`, `projects-room`, `projects-room-return`, `projects-plan`, `projects-chat`, `design-contrast`.

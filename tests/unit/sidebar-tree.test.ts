@@ -138,18 +138,18 @@ describe('sidebar tree with projects', () => {
     expect(nodes[0]?.expanded).toBe(true);
   });
 
-  it('lists the projects in index order and the No project node last', () => {
+  it('lists the No project node first and the projects after it in index order', () => {
     const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p2', 'Beta'), view('p1', 'Alpha')] });
     expect(sidebarNodes(state).map((node) => [node.key, node.projectId, node.label])).toEqual([
+      [NO_PROJECT_NODE, null, 'No project'],
       [projectNodeKey('p2'), 'p2', 'Beta'],
       [projectNodeKey('p1'), 'p1', 'Alpha'],
-      [NO_PROJECT_NODE, null, 'No project'],
     ]);
   });
 
   it('gives a project a Rooms and an Agents section, empty and expanded', () => {
     const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
-    const node = sidebarNodes(state)[0];
+    const node = sidebarNodes(state)[1];
     expect(node?.sections.map((item) => [item.key, item.items.length, item.expanded, item.collapsible])).toEqual([
       [projectSectionKey('p1', 'rooms'), 0, true, true],
       [projectSectionKey('p1', 'agents'), 0, true, true],
@@ -158,7 +158,7 @@ describe('sidebar tree with projects', () => {
 
   it('shows a missing project as missing, with its folder and no sections', () => {
     const state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha', true), view('p2', 'Beta')] });
-    const [gone, here] = sidebarNodes(state);
+    const [, gone, here] = sidebarNodes(state);
     expect([gone?.missing, gone?.folder, gone?.sections.length]).toEqual([true, '/work/Alpha', 0]);
     expect([here?.missing, here?.sections.length]).toEqual([false, 2]);
   });
@@ -166,22 +166,22 @@ describe('sidebar tree with projects', () => {
   it('keeps the rooms and agents of today in the No project node, unchanged by projects', () => {
     const plain = withData();
     const withProjects = reduceSidebarTree(plain, { type: 'projects', projects: [view('p1', 'Alpha')] });
-    expect(sidebarNodes(withProjects).at(-1)?.sections).toEqual(sidebarSections(plain));
+    expect(sidebarNodes(withProjects)[0]?.sections).toEqual(sidebarSections(plain));
     expect(sidebarSections(withProjects)).toEqual(sidebarSections(plain));
   });
 
   it('collapses a project, one of its sections, and the No project node, each on its own', () => {
     let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
     state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
+    expect(sidebarNodes(state)[1]?.expanded).toBe(false);
     expect(sidebarNodes(state)[0]?.expanded).toBe(false);
-    expect(sidebarNodes(state).at(-1)?.expanded).toBe(true);
     state = reduceSidebarTree(state, { type: 'toggle', key: projectSectionKey('p1', 'agents') });
-    expect(sidebarNodes(state)[0]?.sections.map((item) => item.expanded)).toEqual([true, false]);
+    expect(sidebarNodes(state)[1]?.sections.map((item) => item.expanded)).toEqual([true, false]);
     state = reduceSidebarTree(state, { type: 'toggle', key: NO_PROJECT_NODE });
-    expect(sidebarNodes(state).at(-1)?.expanded).toBe(false);
-    expect(sidebarNodes(state).at(-1)?.sections).toEqual(sidebarSections(state));
-    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
     expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+    expect(sidebarNodes(state)[0]?.sections).toEqual(sidebarSections(state));
+    state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p1') });
+    expect(sidebarNodes(state)[1]?.expanded).toBe(true);
   });
 
   it('ignores a toggle for a project that is not in the tree or a section that does not exist', () => {
@@ -197,14 +197,40 @@ describe('sidebar tree with projects', () => {
     state = reduceSidebarTree(state, { type: 'projects', projects: [] });
     expect(state.collapsed).toEqual([]);
     state = reduceSidebarTree(state, { type: 'projects', projects: [view('p1', 'Alpha')] });
-    expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+    expect(sidebarNodes(state)[1]?.expanded).toBe(true);
   });
 
   it('keeps the collapse of a project that stays', () => {
     let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha'), view('p2', 'Beta')] });
     state = reduceSidebarTree(state, { type: 'toggle', key: projectNodeKey('p2') });
     state = reduceSidebarTree(state, { type: 'projects', projects: [view('p2', 'Beta')] });
+    expect(sidebarNodes(state)[1]?.expanded).toBe(false);
+  });
+
+  it('starts the No project node collapsed when a project exists and expanded when none does, until the owner decides', () => {
+    let state = withData();
+    expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+    state = reduceSidebarTree(state, { type: 'projects', projects: [view('p1', 'Alpha')] });
     expect(sidebarNodes(state)[0]?.expanded).toBe(false);
+    state = reduceSidebarTree(state, { type: 'projects', projects: [] });
+    expect(sidebarNodes(state)[0]?.expanded).toBe(true);
+  });
+
+  it('keeps the owner choice for the No project node whatever happens to the project list afterwards', () => {
+    let open = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
+    open = reduceSidebarTree(open, { type: 'toggle', key: NO_PROJECT_NODE });
+    expect(sidebarNodes(open)[0]?.expanded).toBe(true);
+    open = reduceSidebarTree(open, { type: 'projects', projects: [] });
+    open = reduceSidebarTree(open, { type: 'projects', projects: [view('p2', 'Beta'), view('p3', 'Gamma')] });
+    expect(sidebarNodes(open)[0]?.expanded).toBe(true);
+    open = reduceSidebarTree(open, { type: 'toggle', key: NO_PROJECT_NODE });
+    expect(sidebarNodes(open)[0]?.expanded).toBe(false);
+    let closed = reduceSidebarTree(withData(), { type: 'toggle', key: NO_PROJECT_NODE });
+    expect(sidebarNodes(closed)[0]?.expanded).toBe(false);
+    closed = reduceSidebarTree(closed, { type: 'projects', projects: [view('p1', 'Alpha')] });
+    expect(sidebarNodes(closed)[0]?.expanded).toBe(false);
+    closed = reduceSidebarTree(closed, { type: 'projects', projects: [] });
+    expect(sidebarNodes(closed)[0]?.expanded).toBe(false);
   });
 
   it('tells changed nodes from unchanged ones', () => {
@@ -222,7 +248,7 @@ describe('sidebar tree with projects', () => {
       busy: true,
     });
     state = reduceSidebarTree(state, { type: 'agents', agents: [], selectedId: null, roomOpen: true });
-    const [alpha, beta, none] = sidebarNodes(state);
+    const [none, alpha, beta] = sidebarNodes(state);
     const roomsOf = (node: typeof alpha) => node?.sections.find((item) => item.key.endsWith(':rooms'));
     expect(roomsOf(alpha)?.items.map((item) => `${item.id}:${item.label}:${item.selected}:${item.unreadable}:${item.kind}`)).toEqual(['q1:In Alpha:true:false:null', 'q3:Broken:false:true:null']);
     expect(roomsOf(beta)?.items.map((item) => item.id)).toEqual(['q2']);
@@ -240,7 +266,7 @@ describe('sidebar tree with projects', () => {
       selectedId: 'b3',
       roomOpen: false,
     });
-    const [alpha, beta, none] = sidebarNodes(state);
+    const [none, alpha, beta] = sidebarNodes(state);
     const agentsOf = (node: typeof alpha): string[] => node?.sections.find((item) => item.key.endsWith(':agents'))?.items.map((item) => `${item.id}:${item.kind}:${item.selected}`) ?? [];
     expect(agentsOf(alpha)).toEqual(['b1:claude:false', 'b3:codex:true']);
     expect(agentsOf(beta)).toEqual(['b2:grok:false']);
@@ -252,7 +278,7 @@ describe('sidebar tree with projects', () => {
     let state = reduceSidebarTree(withData(), { type: 'projects', projects: [view('p1', 'Alpha')] });
     const agents: Agent[] = [{ ...agent('b1', 'In Alpha'), projectId: 'p1' }, { ...agent('c1', 'Orphan'), projectId: 'gone' }];
     state = reduceSidebarTree(state, { type: 'agents', agents, selectedId: 'b1', roomOpen: true });
-    const [alpha, none] = sidebarNodes(state);
+    const [none, alpha] = sidebarNodes(state);
     expect(alpha?.sections[1]?.items.map((item) => item.selected)).toEqual([false]);
     expect(none?.sections[1]?.items).toEqual([]);
   });

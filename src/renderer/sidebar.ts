@@ -125,7 +125,8 @@ export class Sidebar {
     this.agentsBody.append(this.notice, this.menu, this.list, this.confirm);
     this.agentsSection.append(this.header, this.agentsBody);
     this.noProjectBody.append(this.rooms.element, this.agentsSection);
-    this.element.append(this.projects.element, this.noProject, this.contextMenu, this.account.element, this.theme.element);
+    this.projects.setLeading(this.noProject);
+    this.element.append(this.projects.element, this.contextMenu, this.account.element, this.theme.element);
     this.addButton.addEventListener('click', (event) => {
       event.stopPropagation();
       this.setMenuOpen(!this.menuOpen);

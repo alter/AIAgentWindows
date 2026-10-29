@@ -245,10 +245,7 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .project-agent-add { flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
 .project-agent-add:hover { background: var(--sidebar-hover); }
 .projects-menu-item { display: flex; align-items: center; gap: 10px; }
-.no-project { flex: 0 1 auto; min-height: 36px; max-height: 50%; display: flex; flex-direction: column; }
-.no-project > .project-row { padding: 2px var(--sidebar-inset-end) 2px 8px; }
-.no-project-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--sidebar-inset-end) 0 8px; }
-.no-project-body > .project-section[data-project-section="agents"] { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.no-project { flex: none; padding-bottom: 2px; }
 .project-section-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .project-section-body[hidden] { display: none; }
 .no-project-body[hidden] { display: none; }
@@ -258,7 +255,6 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 .rooms-title { border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; cursor: pointer; }
 .rooms-title:hover { background: var(--sidebar-hover); }
 .project-agent-add:disabled { border: 1px dashed var(--text); cursor: default; }
-.rooms-list { max-height: 30vh; overflow-y: auto; }
 .rooms-list[hidden] { display: none; }
 .rooms-empty { padding: 2px 6px; font-style: italic; }
 .rooms-item {
@@ -307,7 +303,6 @@ input[type="radio"]:disabled, input[type="checkbox"]:disabled { border-style: da
 }
 .menu-item:hover { background: var(--sidebar-hover); }
 
-.agent-list { overflow-y: auto; flex: 1; }
 .agent-empty { padding: 2px 6px; font-style: italic; }
 .or-account { padding: 8px 16px; border-top: 1px solid var(--border); color: var(--text); }
 .or-title { margin: 0 0 4px; font-size: inherit; font-weight: 700; }

@@ -117,6 +117,10 @@ export class ProjectTree {
       .catch(() => this.showNotice('The project list could not be read.'));
   }
 
+  setLeading(node: HTMLElement): void {
+    this.list.before(node);
+  }
+
   setNodes(nodes: readonly TreeNode[]): void {
     this.nodes = nodes.filter((node) => node.projectId !== null);
     const ids = new Set(this.nodes.map((node) => node.projectId));

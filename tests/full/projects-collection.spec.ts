@@ -168,6 +168,7 @@ test('the collection switch of an OpenRouter row, the skipped chip after a refus
     await expect(warningOf(page, 'openrouter-2')).toBeVisible();
     await expect(switchOf(page, 'openrouter')).not.toBeChecked();
     await expect(field(page, 'recipients')).toHaveAttribute('data-collection', 'allowed');
+    await page.locator('[data-project="no-project-toggle"]').click();
     await page.locator('[data-room="open"]').click();
     await page.locator('[data-room="new"]').first().click();
     await openSetup(page);
